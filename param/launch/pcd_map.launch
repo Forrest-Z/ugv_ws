@@ -1,0 +1,13 @@
+<launch>
+
+<node pkg="map_server" type="map_server" name="map_server" args="$(find param)/map/map.yaml">
+<remap from="map" to="nav_map"/>
+</node>
+
+<node pkg="pcl_ros" type="pcd_to_pointcloud" name="pcd_to_pointcloud" args="$(find param)/map/mapmap.pcd 0.1">
+</node>
+
+<node pkg="tf" type="static_transform_publisher" name="pcdmap" args="0 0 0 0 0 0 /base_link /map 100" />
+
+
+</launch>

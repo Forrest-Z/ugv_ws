@@ -1,0 +1,128 @@
+Table of index number of /joy.buttons:
+
+0 A
+
+1 B
+
+2 X
+
+3 Y
+
+4 LB
+
+5 RB
+
+6 back
+
+7 start
+
+8 power
+
+9 Button stick left
+
+10 Button stick right
+
+
+Table of index number of /joy.axis:
+
+
+0 Left/Right Axis stick left
+
+1 Up/Down Axis stick left
+
+2 Left/Right Axis stick right
+
+3 Up/Down Axis stick right
+
+4 RT
+
+5 LT
+
+6 cross key left/right
+
+7 cross key up/down 
+
+
+
+
+
+
+void SpeedManager::draw_vehicle(double center_x,double center_y)
+{ 
+  sensor_msgs::PointCloud pointcloud_vis;
+  double forward_speed  = cmd_vel_.linear.x;
+  double rotation_speed = cmd_vel_.angular.z;
+  double point_step     = 0.02;
+
+  for(double i = 0; i < 2 * PI; i+=point_step)
+  {
+    geometry_msgs::Point32 point;
+    point.x = center_x + vehicle_radius_*cos(i);
+    point.y = center_y + vehicle_radius_*sin(i);
+    point.z = 0;
+    pointcloud_vis.points.push_back(point);
+  }
+
+  // for(double i = 0; i < lookahead_time_; i+=point_step)
+  // {
+  //   geometry_msgs::Point32 point;
+  //   point.x = ( forward_speed*i ) * cos( rotation_speed*i ) - vehicle_radius_ * sin( rotation_speed*i );
+  //   point.y = ( forward_speed*i ) * sin( rotation_speed*i ) + vehicle_radius_ * cos( rotation_speed*i );
+  //   point.z = 0;
+  //   pointcloud_vis.points.push_back(point);
+
+  //   point.x = ( forward_speed*i ) * cos( rotation_speed*i ) + vehicle_radius_ * sin( rotation_speed*i );
+  //   point.y = ( forward_speed*i ) * sin( rotation_speed*i ) - vehicle_radius_ * cos( rotation_speed*i );
+  //   point.z = 0;
+  //   pointcloud_vis.points.push_back(point);
+  // }
+
+  double Rb = forward_speed/rotation_speed;
+  double Rr = Rb - vehicle_radius_;
+  double Rl = Rb + vehicle_radius_;
+  double sign_Rb = fabs(Rb)/Rb;
+
+  for(double i = 0; i < 4 * PI; i+=point_step)
+  {
+    geometry_msgs::Point32 point;
+
+    point.x = sign_Rb * Rl * sin(i);
+    point.y = Rb - Rl * cos(i);
+    point.z = 0;
+    pointcloud_vis.points.push_back(point);
+
+    point.x = sign_Rb * Rr * sin(i);
+    point.y = Rb - Rr * cos(i);
+    point.z = 0;
+    pointcloud_vis.points.push_back(point);
+
+    point.x = sign_Rb * Rb * sin(i);
+    point.y = Rb - Rb * cos(i);
+    point.z = 0;
+    pointcloud_vis.points.push_back(point);
+
+    point.x = ( forward_speed*i ) * cos( rotation_speed*i );
+    point.y = ( forward_speed*i ) * sin( rotation_speed*i );
+    point.z = 0;
+    pointcloud_vis.points.push_back(point);
+
+  }
+
+  pointcloud_vis.header.frame_id = "base_link";
+  visualization_pub.publish(pointcloud_vis);
+}
+
+
+void SpeedManager::draw_path()
+{
+  double forward_speed  = cmd_vel_.linear.x;
+  double rotation_speed = cmd_vel_.angular.z;
+
+  double move_step     = 0.1;
+  double static sim_timer = 0;
+
+  double center_x = sim_timer * forward_speed * cos( rotation_speed*sim_timer );
+  double center_y = sim_timer * forward_speed * sin( rotation_speed*sim_timer );
+  draw_vehicle(center_x,center_y);
+  (sim_timer < lookahead_time_) ? sim_timer+=move_step : sim_timer = 0 ;
+}

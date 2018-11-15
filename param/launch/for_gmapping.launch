@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<launch>
+
+   <include file = "$(find imu_integration)/launch/tf.launch"/> 
+
+   <include file = "$(find pointcloud_to_laserscan)/launch/sample_node.launch"/> 
+
+   <node name="speed_control" pkg="speed_test" type="speed_control" output="screen"/>
+
+   
+   <node name="gmapping" pkg="gmapping" type="slam_gmapping" output="screen">
+     <remap from="scan" to="base_scan" />
+   </node>
+</launch>
