@@ -29,6 +29,8 @@ SpeedManager::SpeedManager():pn("~"),
   visualization_pub = n.advertise<sensor_msgs::PointCloud> ("/visualization_points", 1);
   visualization_pub_2 = n.advertise<sensor_msgs::PointCloud> ("/visualization_points_safe", 1);
   log_pub = n.advertise<std_msgs::String> ("/ugv_log", 1);
+  move_base_goal_pub = n.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal",1);
+  move_base_cancel_pub = n.advertise<actionlib_msgs::GoalID>("/move_base/cancel",1);
 
 
   sleep(1);
@@ -253,21 +255,21 @@ void SpeedManager::collisionAvoid()
 
   double certainty = 0.01;
 
-  bool isEmergency = false;
+  bool static isEmergency = false;
+
   if( !collision_points_.points.empty() )
-  {
+  { 
+    isEmergency = false;
+
     for (int i = 0; i < collision_points_.points.size(); ++i)
     {
       double distance = hypot(collision_points_.points[i].x,collision_points_.points[i].y);
       double coordinate_x = collision_points_.points[i].x;
       double coordinate_y = collision_points_.points[i].y;
+
       if ( distance > safe_zone_ ) continue;
 
-      if ( distance < vehicle_radius_ ) 
-      {
-        recordLog("Too Close to Obstacle",LogState::ERROR);
-        isEmergency = true;
-      }
+      if ( distance < vehicle_radius_ ) isEmergency = true;
 
       virtual_force_x += (certainty*force_constant_x_*coordinate_x)/pow(distance,3);
       virtual_force_y += (certainty*force_constant_y_*coordinate_y)/pow(distance,3);
@@ -278,13 +280,14 @@ void SpeedManager::collisionAvoid()
 
     if(cmd_vel_.linear.x >= 0) cmd_vel_safe_.angular.z -= virtual_force_y;
     else cmd_vel_safe_.angular.z += virtual_force_y;
-
-    if(isEmergency) 
-    {
-      cmd_vel_safe_.linear.x = 0;
-      cmd_vel_safe_.angular.z = 0;
-    }
     //ROS_INFO_STREAM("SPE = "<<cmd_vel_safe_.linear.x<<","<<cmd_vel_safe_.angular.z);
+  }
+
+  if(isEmergency) 
+  {
+    recordLog("Too Close to Obstacle",LogState::ERROR);
+    cmd_vel_safe_.linear.x = 0;
+    cmd_vel_safe_.angular.z = 0;
   }
 
 }
@@ -364,6 +367,16 @@ void SpeedManager::recordLog(string input,LogState level)
     case LogState::INITIALIZATION:
     {
       state = "Initialization";
+      event = input;
+      schedule_selected = 0;
+      log_gap_sec = -1;
+      color = WHITE;
+    }
+    break;
+    
+    case LogState::INFOMATION:
+    {
+      state = "Infomation";
       event = input;
       schedule_selected = 0;
       log_gap_sec = -1;

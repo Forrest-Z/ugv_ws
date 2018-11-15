@@ -1,50 +1,26 @@
+
 Table of index number of /joy.buttons:
-
 0 A
-
 1 B
-
 2 X
-
 3 Y
-
 4 LB
-
 5 RB
-
 6 back
-
 7 start
-
 8 power
-
 9 Button stick left
-
 10 Button stick right
 
-
 Table of index number of /joy.axis:
-
-
 0 Left/Right Axis stick left
-
 1 Up/Down Axis stick left
-
 2 Left/Right Axis stick right
-
 3 Up/Down Axis stick right
-
 4 RT
-
 5 LT
-
 6 cross key left/right
-
 7 cross key up/down 
-
-
-
-
 
 
 void SpeedManager::draw_vehicle(double center_x,double center_y)

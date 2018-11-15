@@ -8,14 +8,16 @@
 #include <time.h>
 
 #include <geometry_msgs/Twist.h>
+#include <geometry_msgs/Point32.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <sensor_msgs/Joy.h>
 #include <sensor_msgs/LaserScan.h>
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
-#include <geometry_msgs/Point32.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/String.h>
+#include <actionlib_msgs/GoalID.h>
 
 
 const std::string ORIGIN = "\033[0m";
@@ -49,6 +51,7 @@ enum class ControlState
 enum class LogState 
 {
 	INITIALIZATION,
+	INFOMATION,
 	STATE_REPORT,
 	WARNNING,
 	ERROR
@@ -75,6 +78,8 @@ private:
 	ros::Publisher visualization_pub;
 	ros::Publisher visualization_pub_2;
 	ros::Publisher log_pub;
+	ros::Publisher move_base_goal_pub;
+	ros::Publisher move_base_cancel_pub;
 
 	/** Subscriber **/
 	ros::Subscriber joy_sub;
@@ -250,21 +255,45 @@ private:
 		string msg = input->data;
 		if(msg == "1")
 		{
-			ROS_INFO("Button 1");
+			double goal_x = 5;
+			double goal_y = 5;
+
+			geometry_msgs::PoseStamped msg;
+			msg.header.frame_id = "map";
+      msg.header.stamp = ros::Time::now();
+      msg.pose.position.x = goal_x;
+      msg.pose.position.y = goal_y; 
+      msg.pose.orientation.w =1.0;
+      //move_base_goal_pub.publish(msg);
+
+			recordLog("Button 1 | Goal at (" + std::to_string(int(goal_x)) 
+				+ "," + std::to_string(int(goal_y))+ ")",LogState::INFOMATION);
 		}
 		else if(msg == "2")
 		{
-			ROS_INFO("Button 2");
+			double goal_x = 10;
+			double goal_y = 10;
+			
+			geometry_msgs::PoseStamped msg;
+			msg.header.frame_id = "map";
+      msg.header.stamp = ros::Time::now();
+      msg.pose.position.x = goal_x;
+      msg.pose.position.y = goal_y; 
+      msg.pose.orientation.w =1.0;
+      //move_base_goal_pub.publish(msg);
+
+			recordLog("Button 2 | Goal at (" + std::to_string(int(goal_x)) 
+				+ "," + std::to_string(int(goal_y))+ ")",LogState::INFOMATION);
 		}
 		else if(msg == "3")
 		{
-			ROS_INFO("Button 3");
+			recordLog("Button 3",LogState::INFOMATION);
 		}
 		else if(msg == "4")
 		{
-			ROS_INFO("Button 4");
+			recordLog("Button 4",LogState::INFOMATION);
 		} else {
-			ROS_INFO("Unregister Button");
+			recordLog("Unregister Button",LogState::INFOMATION);
 		}
 
 	}

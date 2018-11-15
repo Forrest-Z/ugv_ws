@@ -7,10 +7,6 @@ project(mission_control)
 find_package(catkin REQUIRED COMPONENTS
     roscpp
     tf
-    geometry_msgs
-    std_msgs 
-    sensor_msgs
-    nav_msgs
 ) 
 
 ## System dependencies are found with CMake's conventions
@@ -67,8 +63,6 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate added messages and services with any dependencies listed here
  generate_messages(
    DEPENDENCIES
-   std_msgs
-   geometry_msgs
    # Or other packages containing msgs
  )
 

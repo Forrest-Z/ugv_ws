@@ -1,8 +1,0 @@
-<?xml version="1.0"?>
-<launch>
-
-   <include file = "$(find rslidar_pointcloud)/launch/rs_lidar_16.launch"/> 
-
-   <include file = "$(find autolabor_pro1_driver)/launch/driver.launch"/> 
-
-</launch>
