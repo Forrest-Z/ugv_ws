@@ -4,11 +4,18 @@ Package Description
 ### Genius Pros - UGV Project
 ### Update
 ##### v0.1 - Initial Version <br>
-* Include base control node allows both planner, XBOX and Android. <br>
+* Include base control node allows both planner, XBOX and Android.
 * Simple log system, record and print log in 4 level (Initialization, State, Warning, Error) with changeable color and period
 * Basic obstacle avoidance system, based on Virtual Force Field (VFF) combine with path prediction to optimize 
 efficiency
 * Navigation planner is totally base on ROS Navigation Stack, only slightly change for report planner state at each stage
+
+##### v0.2 - Way-point Visualization Version <br>
+* Analyze global path extract way point by chosen lookahead distances.
+* Display way-point estimate pass-through speed on each way-point based on curvature.
+* Adding "super control" mode to XBOX in case facing narrow path algorithm would allow robot to pass.
+* Android App is able to sending preset goal to robot. 
+
 
 
 ---
