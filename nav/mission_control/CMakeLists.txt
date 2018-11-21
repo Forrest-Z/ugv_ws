@@ -1,0 +1,28 @@
+cmake_minimum_required(VERSION 2.8.3)
+project(mission_control)
+
+find_package(catkin REQUIRED COMPONENTS
+    roscpp
+    tf
+) 
+
+ generate_messages(
+   DEPENDENCIES
+ )
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+
+catkin_package(
+)
+
+include_directories(
+  ${catkin_INCLUDE_DIRS}
+)
+
+add_executable(speed_manager src/speed_manager/SpeedManager.cpp src/speed_manager/libSpeedManager.cpp)
+add_executable(navi_manager src/navi_manager/NaviManager.cpp src/navi_manager/libNaviManager.cpp)
+
+
+target_link_libraries(speed_manager ${catkin_LIBRARIES})
+target_link_libraries(navi_manager ${catkin_LIBRARIES})
+

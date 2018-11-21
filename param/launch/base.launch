@@ -9,6 +9,12 @@
       <param name="safe_zone"  value="5"/> 
       <param name="force_constant_x"  value="1"/> 
       <param name="force_constant_y"  value="1"/> 
+
+      <param name="max_height"  value="1"/>
+      <param name="min_height"  value="-0.2"/>
+      <param name="max_range"  value="8"/>
+      <param name="min_range"  value="0.2"/>
+
   </node>
 
   <node pkg="joy" type="joy_node" name="joystick" respawn="true">
