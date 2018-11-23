@@ -39,6 +39,11 @@ const string WHITE  = "\033[97m";
 const int BUTTON_LB             = 4;
 const int BUTTON_RB             = 5;
 
+const int BUTTON_A             = 0;
+const int BUTTON_B             = 1;
+const int BUTTON_X             = 2;
+const int BUTTON_Y             = 3;
+
 const int AXIS_LEFT_LEFT_RIGHT  = 0;
 const int AXIS_LEFT_UP_DOWN     = 1;
 const int AXIS_RIGHT_LEFT_RIGHT = 3;
@@ -49,14 +54,6 @@ const int ROS_RATE_HZ   = 20;
 const int STOP_TIME_SEC = 3;
 const int ZERO          = 0;
 const double PI = 3.14159265359;
-
-
-enum class ControlState 
-{
-	JOY_CONTROL,
-	ANDROID_CONTROL,
-	NAV_CONTROL
-}; 
 
 enum class LogState 
 {
@@ -101,6 +98,7 @@ private:
 	ros::Subscriber android_sub;
 	ros::Subscriber nav_state_sub;
 	ros::Subscriber button_sub;
+	ros::Subscriber wall_sub;
 
 	/** Services **/
 	ros::ServiceClient clear_costmap_client;
@@ -129,6 +127,8 @@ private:
 	bool isNav_;
 	bool isAndroid_;
 	bool isSupJoy_;
+	bool isOneHand_;
+	bool isRecovery_;
 
 
 	/** Variables **/
@@ -145,6 +145,7 @@ private:
 	geometry_msgs::Twist cmd_vel_safe_;
 
 	sensor_msgs::PointCloud collision_points_;
+	sensor_msgs::PointCloud collision_wall_points_;
 
 	/** Functions **/
 	void drawVehicle(double center_x,double center_y,int seq);
@@ -155,11 +156,13 @@ private:
 	void debugFunction();
 	void clearCostmap();
 	void recordLog(string input,LogState level);
+	void superCommand();
+	void recoveryAcion();
 
 	bool isReceiveJoyCommand();
 	bool isReceiveAndroidCommand();
 	bool isReceiveNavCommand();
-	bool isReceiveCommand(const ControlState input);
+	bool isReceiveCommand();
 
 
 	inline double sign(double input)
@@ -185,11 +188,24 @@ private:
 	  double joy_y;
 	  double min_axis = 0.1;
 
-	  (input->buttons[BUTTON_LB]) ? isJoy_ = true : isJoy_ = false;
-	  (input->buttons[BUTTON_LB] && input->buttons[BUTTON_RB]) ? isSupJoy_ = true : isSupJoy_ = false;
+	  static bool poweron = true;
 
-	  joy_x = input->axes[AXIS_LEFT_UP_DOWN];
-	  joy_y = input->axes[AXIS_RIGHT_LEFT_RIGHT];
+	  ( input->buttons[BUTTON_LB] ) ? isJoy_ = true : isJoy_ = false;
+	  ( input->buttons[BUTTON_LB] && input->buttons[BUTTON_RB] ) 
+	  	? isSupJoy_ = true : isSupJoy_ = false;
+
+	  if( input->buttons[BUTTON_B] && input->buttons[BUTTON_LB] ) poweron = false;
+	  if( input->buttons[BUTTON_X] && input->buttons[BUTTON_LB] ) poweron = true;
+
+	  if(isOneHand_)
+	  {
+	  	joy_x = input->axes[AXIS_LEFT_UP_DOWN];
+	  	joy_y = input->axes[AXIS_LEFT_LEFT_RIGHT];
+	  } else {
+	  	joy_x = input->axes[AXIS_LEFT_UP_DOWN];
+	  	joy_y = input->axes[AXIS_RIGHT_LEFT_RIGHT];
+	  }
+
 
 	  if( fabs(joy_x)<min_axis ) joy_x = 0;
 	  if( fabs(joy_y)<min_axis ) joy_y = 0;
@@ -203,14 +219,24 @@ private:
 	    joy_rotation_ = 0;
 	    // ROS_INFO("JOY CLEAR CMD");
 	  }
+
+	  if(!poweron)
+	  {
+	  	isJoy_ = true;
+	  	joy_speed_    = 0;
+	    joy_rotation_ = 0;
+	    recordLog("Power off",LogState::WARNNING);
+	  }
 	}
 
 
 	void cmd_callback(const geometry_msgs::Twist::ConstPtr& input)
 	{
+
 		nav_speed_    = input->linear.x;
 	  nav_rotation_ = input->angular.z;
 	  isNav_ = true;
+	  isRecovery_ = false;
 	}
 
 	void android_callback(const geometry_msgs::Twist::ConstPtr& input)
@@ -254,10 +280,8 @@ private:
 	  pointcloud_lidar.header = input->header;
 	  //pointcloud_lidar.header.stamp = ros::Time::now();
 
-
 	  collision_points_.points.clear();
-
-
+	  
 	  sensor_msgs::LaserScan output;
 	  output.header = pointcloud_lidar.header;
 	  output.angle_min = -PI;
@@ -302,7 +326,7 @@ private:
 	    collision_points_.points.push_back(point);
 	  }
 	  pointcloud_pub.publish(pointcloud_lidar);
-	  scan_pub.publish(output);
+	  //scan_pub.publish(output);
 	  
 	}
 
@@ -371,17 +395,38 @@ private:
 			case 1:
 			{
 				isNav_ = false;
+				recordLog("Goal Reached",LogState::STATE_REPORT);
 			}
 			break;
 
 			case 2:
 			{
-				isAndroid_ = false;
+				isNav_ = false;
+				recordLog("Plan Failed",LogState::STATE_REPORT);
+				isRecovery_ = true;
 			}
 
 			default: 
 			break;
 		}
+	}
+
+	void wall_callback(const sensor_msgs::PointCloud::ConstPtr& input)
+	{
+		collision_wall_points_.points.clear();
+		geometry_msgs::Point32 point;
+
+		for (int i = 0; i < input->points.size(); ++i)
+		{
+			if(!collisionCheck(input->points[i].x,input->points[i].y)) continue;
+
+			point.x = input->points[i].x;
+			point.y = input->points[i].y;
+
+			collision_wall_points_.points.push_back(point);
+		}
+
+
 	}
 
 };

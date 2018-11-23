@@ -14,7 +14,10 @@
       <param name="min_height"  value="-0.2"/>
       <param name="max_range"  value="8"/>
       <param name="min_range"  value="0.2"/>
+  </node>
 
+  <node name="navi_manager" pkg="mission_control" type="navi_manager" output="screen" respawn="true">      
+      <param name="use_sim"  value="false"/>
   </node>
 
   <node pkg="joy" type="joy_node" name="joystick" respawn="true">

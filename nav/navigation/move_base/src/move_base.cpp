@@ -332,8 +332,8 @@ namespace move_base {
     boost::unique_lock<costmap_2d::Costmap2D::mutex_t> lock_controller(*(controller_costmap_ros_->getCostmap()->getMutex()));
     controller_costmap_ros_->resetLayers();
 
-    boost::unique_lock<costmap_2d::Costmap2D::mutex_t> lock_planner(*(planner_costmap_ros_->getCostmap()->getMutex()));
-    planner_costmap_ros_->resetLayers();
+    // boost::unique_lock<costmap_2d::Costmap2D::mutex_t> lock_planner(*(planner_costmap_ros_->getCostmap()->getMutex()));
+    // planner_costmap_ros_->resetLayers();
     return true;
   }
 
@@ -604,6 +604,10 @@ namespace move_base {
       }
       //if we didn't get a plan and we are in the planning state (the robot isn't moving)
       else if(state_==PLANNING){
+        
+        nav_state_.data = 2;
+        nav_state_pub.publish(nav_state_);
+
         ROS_DEBUG_NAMED("move_base_plan_thread","No Plan...");
         ros::Time attempt_end = last_valid_plan_ + ros::Duration(planner_patience_);
 
@@ -945,6 +949,19 @@ namespace move_base {
       case CLEARING:
         ROS_DEBUG_NAMED("move_base","In clearing/recovery state");
         //we'll invoke whatever recovery behavior we're currently on if they're enabled
+        ROS_DEBUG_NAMED("move_base_recovery","Executing behavior %u of %zu", recovery_index_, recovery_behaviors_.size());
+        recovery_behaviors_[recovery_index_]->runBehavior();
+
+        //we at least want to give the robot some time to stop oscillating after executing the behavior
+        last_oscillation_reset_ = ros::Time::now();
+
+        //we'll check if the recovery behavior actually worked
+        ROS_DEBUG_NAMED("move_base_recovery","Going back to planning state");
+        last_valid_plan_ = ros::Time::now();
+        planning_retries_ = 0;
+        state_ = PLANNING;
+        
+        /**
         if(recovery_behavior_enabled_ && recovery_index_ < recovery_behaviors_.size()){
           ROS_DEBUG_NAMED("move_base_recovery","Executing behavior %u of %zu", recovery_index_, recovery_behaviors_.size());
           recovery_behaviors_[recovery_index_]->runBehavior();
@@ -985,6 +1002,9 @@ namespace move_base {
           resetState();
           return true;
         }
+
+
+        **/
         break;
       default:
         ROS_ERROR("This case should never be reached, something is wrong, aborting");

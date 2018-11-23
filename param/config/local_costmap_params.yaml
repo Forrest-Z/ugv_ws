@@ -7,12 +7,12 @@ local_costmap:
    rolling_window: true
    width: 10
    height: 10
-   resolution: 0.05
+   resolution: 0.1
    transform_tolerance: 1
    inflation_layer_local:
      enabled:              true
-     cost_scaling_factor:  5.0  # exponential rate at which the obstacle cost drops off (default: 10)
-     inflation_radius:     0.4  # max. distance from an obstacle at which costs are incurred for planning paths.
+     cost_scaling_factor:  3  # exponential rate at which the obstacle cost drops off (default: 10)
+     inflation_radius:     1  # max. distance from an obstacle at which costs are incurred for planning paths.
    plugins:
     - {name: static_layer,            type: "costmap_2d::StaticLayer"}
     - {name: obstacle_layer,      type: "costmap_2d::ObstacleLayer"}

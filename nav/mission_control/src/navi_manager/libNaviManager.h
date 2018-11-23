@@ -8,16 +8,18 @@
 #include <time.h>
 
 #include <tf/transform_broadcaster.h>
+#include <tf/transform_listener.h>
 #include <geometry_msgs/TransformStamped.h>
 
 #include <std_msgs/String.h>
 #include <nav_msgs/Path.h>
+#include <nav_msgs/OccupancyGrid.h>
+#include <nav_msgs/MapMetaData.h>
 #include <sensor_msgs/PointCloud.h>
 #include <geometry_msgs/Point32.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <visualization_msgs/Marker.h>
-
 
 using std::string;
 using std::cout;
@@ -74,29 +76,39 @@ private:
 	ros::Publisher path_pub;
 	ros::Publisher waypoint_pub;
   ros::Publisher vis_pub;
+  ros::Publisher wall_pub;
 
 	tf::TransformBroadcaster tf_odom;
+	tf::TransformListener listener;
+	tf::TransformListener listener_local;
 
 	/** Subscribers **/
 	ros::Subscriber plan_sub;
 	ros::Subscriber vel_sub;
 	ros::Subscriber goal_sub;
+	ros::Subscriber map_sub;
 
 	/** Parameters **/
 
 
 	/** Flags **/
-	bool isNewGoal;
-	bool isShowBand;
+	bool isNewGoal_;
+	bool isGetPath_;
+	bool isUseSim_;
+	bool isMapSave_;
 
 	/** Variables **/
+	nav_msgs::OccupancyGrid static_map_;
+
+	nav_msgs::MapMetaData static_map_info_;
+
 	vector<double> robot_position_;
 
 
 	/** Functions **/
 	void recordLog(string input,LogState level);
-
 	void simDriving(bool flag);
+	void publishStaticLayer();
 
 	/** Callbacks **/
 	void plan_callback(const nav_msgs::Path::ConstPtr& input)
@@ -106,121 +118,122 @@ private:
 		sensor_msgs::PointCloud pointcloud_waypoint;
 		pointcloud_path.header = input->header;
 		pointcloud_waypoint.header = input->header;
-		
+
 		double assume_acc;
 		double assume_spd;
 		double max_speed = 2;
 
 		vector<double> speed_box;
 
-		if(isNewGoal)
-		{			
-			int unit_step = input->poses.size()/100;
-			int startup_points = input->poses.size()/5;
-			int lookahead_step = startup_points - unit_step;
+		if(input->poses.size() <= 0) return;
+		isGetPath_ = true;
 
-			double threshold_curve = 0.05;
+		if(!isNewGoal_) return;
+		isNewGoal_ = false;
 
-			double diff_x;
-			double diff_y;
-			double per_curve;
-			double aft_curve;
+		int unit_step = input->poses.size()/100;
+		int startup_points = input->poses.size()/5;
+		int lookahead_step = startup_points - unit_step;
 
-			for ( int i = 0; i < input->poses.size(); ++i )
+		double threshold_curve = 0.05;
+
+		double diff_x;
+		double diff_y;
+		double per_curve;
+		double aft_curve;
+
+		for ( int i = 0; i < input->poses.size(); ++i )
+		{
+			if( i <= startup_points )
 			{
-				if( i <= startup_points )
-				{
-					assume_acc = max_speed/startup_points;
-					assume_spd += assume_acc;
-				}
-				else if( i > input->poses.size() - startup_points )
-				{
-					assume_acc = -max_speed/startup_points;
-					assume_spd += assume_acc;
-				} else {
-					diff_x = input->poses[i+lookahead_step].pose.position.x 
-						- input->poses[i+lookahead_step-10*unit_step].pose.position.x;
+				assume_acc = max_speed/startup_points;
+				assume_spd += assume_acc;
+			}
+			else if( i > input->poses.size() - startup_points )
+			{
+				assume_acc = -max_speed/startup_points;
+				assume_spd += assume_acc;
+			} else {
+				diff_x = input->poses[i+lookahead_step].pose.position.x 
+					- input->poses[i+lookahead_step-10*unit_step].pose.position.x;
 
-					diff_y = input->poses[i+lookahead_step].pose.position.y 
-						- input->poses[i+lookahead_step-10*unit_step].pose.position.y;
+				diff_y = input->poses[i+lookahead_step].pose.position.y 
+					- input->poses[i+lookahead_step-10*unit_step].pose.position.y;
 
-					per_curve = std::atan2(diff_y,diff_x);
+				per_curve = std::atan2(diff_y,diff_x);
 
-					diff_x = input->poses[i+lookahead_step+unit_step].pose.position.x 
-						- input->poses[i+lookahead_step].pose.position.x;
-					diff_y = input->poses[i+lookahead_step+unit_step].pose.position.y 
-						- input->poses[i+lookahead_step].pose.position.y;
-					aft_curve = std::atan2(diff_y,diff_x);
+				diff_x = input->poses[i+lookahead_step+unit_step].pose.position.x 
+					- input->poses[i+lookahead_step].pose.position.x;
+				diff_y = input->poses[i+lookahead_step+unit_step].pose.position.y 
+					- input->poses[i+lookahead_step].pose.position.y;
+				aft_curve = std::atan2(diff_y,diff_x);
 
-					//cout << fabs(aft_curve-per_curve) << endl;	
-		
-					( fabs(per_curve - aft_curve) < threshold_curve ) ? 
-						assume_acc = max_speed/startup_points : 
-							assume_acc = -max_speed/startup_points;
+				//cout << fabs(aft_curve-per_curve) << endl;	
+	
+				( fabs(per_curve - aft_curve) < threshold_curve ) ? 
+					assume_acc = max_speed/startup_points : 
+						assume_acc = -max_speed/startup_points;
 
-					assume_spd += assume_acc;
-				}
-
-
-				if(assume_spd < 0.1) assume_spd = 0.1;
-				if(assume_spd > max_speed) assume_spd = max_speed;
-
-				point.x = input->poses[i].pose.position.x;
-				point.y = input->poses[i].pose.position.y;
-				point.z = assume_spd;
-				pointcloud_path.points.push_back(point);
-				speed_box.push_back(assume_spd);
+				assume_spd += assume_acc;
 			}
 
 
-			double lookahead_distance = 20;
-			visualization_msgs::Marker marker;
-			marker.action = visualization_msgs::Marker::DELETEALL;
-			vis_pub.publish( marker );
+			if(assume_spd < 0.1) assume_spd = 0.1;
+			if(assume_spd > max_speed) assume_spd = max_speed;
 
-			double travel_distance_x = input->poses[0].pose.position.x - input->poses[1].pose.position.x;
-			double travel_distance_y = input->poses[0].pose.position.y - input->poses[1].pose.position.y;
-			double travel_distance_unit = hypot(travel_distance_x,travel_distance_y); 
-
-			int step = lookahead_distance / travel_distance_unit;
-
-			for ( int i = 0; i < input->poses.size(); i+=step )
-			{
-				point.x = input->poses[i].pose.position.x;
-				point.y = input->poses[i].pose.position.y;
-				point.z = speed_box[i];
-				pointcloud_waypoint.points.push_back(point);
-
-				// Create an output string stream
-				std::ostringstream streamObj3;
-				streamObj3 << std::fixed;
-				streamObj3 << std::setprecision(2);
-				streamObj3 << speed_box[i];
-
-
-				marker.header.frame_id = "map";
-				marker.header.stamp = ros::Time();
-				marker.ns = "waypoint_speed";
-				marker.id = i;
-				marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
-				marker.action = visualization_msgs::Marker::ADD;
-				marker.pose.position.x = point.x + 1;
-				marker.pose.position.y = point.y + 1;
-				marker.scale.x = 1;
-				marker.scale.y = 1;
-				marker.scale.z = 1;
-				marker.color.a = 1.0;
-				marker.color.r = 1.0;
-				marker.color.g = 0.0;
-				marker.color.b = 0.0;
-				marker.text = streamObj3.str();//to_string(round(speed_box[i]*100)/100);
-				vis_pub.publish( marker );
-			}
-
-			waypoint_pub.publish(pointcloud_waypoint);
-			path_pub.publish(pointcloud_path);
-			isNewGoal = false;
+			point.x = input->poses[i].pose.position.x;
+			point.y = input->poses[i].pose.position.y;
+			point.z = assume_spd;
+			pointcloud_path.points.push_back(point);
+			speed_box.push_back(assume_spd);
 		}
+
+
+		double lookahead_distance = 20;
+		visualization_msgs::Marker marker;
+		marker.action = visualization_msgs::Marker::DELETEALL;
+		vis_pub.publish( marker );
+
+		double travel_distance_x = input->poses[0].pose.position.x - input->poses[1].pose.position.x;
+		double travel_distance_y = input->poses[0].pose.position.y - input->poses[1].pose.position.y;
+		double travel_distance_unit = hypot(travel_distance_x,travel_distance_y); 
+
+		int step = lookahead_distance / travel_distance_unit;
+
+		for ( int i = 0; i < input->poses.size(); i+=step )
+		{
+			point.x = input->poses[i].pose.position.x;
+			point.y = input->poses[i].pose.position.y;
+			point.z = speed_box[i];
+			pointcloud_waypoint.points.push_back(point);
+
+			// Create an output string stream
+			std::ostringstream streamObj3;
+			streamObj3 << std::fixed;
+			streamObj3 << std::setprecision(2);
+			streamObj3 << speed_box[i];
+
+
+			marker.header.frame_id = "map";
+			marker.header.stamp = ros::Time();
+			marker.ns = "waypoint_speed";
+			marker.id = i;
+			marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+			marker.action = visualization_msgs::Marker::ADD;
+			marker.pose.position.x = point.x + 1;
+			marker.pose.position.y = point.y + 1;
+			marker.scale.x = 1;
+			marker.scale.y = 1;
+			marker.scale.z = 1;
+			marker.color.a = 1.0;
+			marker.color.r = 1.0;
+			marker.color.g = 0.0;
+			marker.color.b = 0.0;
+			marker.text = streamObj3.str();//to_string(round(speed_box[i]*100)/100);
+			vis_pub.publish( marker );
+		}
+		waypoint_pub.publish(pointcloud_waypoint);
+		path_pub.publish(pointcloud_path);
 
 	}
 
@@ -240,19 +253,32 @@ private:
 		static double last_goal_x = 0;
 		static double last_goal_y = 0;
 
-		if ( input->pose.position.x == last_goal_x && input->pose.position.y == last_goal_y ) isNewGoal = false;
-		else isNewGoal = true;
+		if(!isGetPath_) return;
 
+		if ( input->pose.position.x == last_goal_x && input->pose.position.y == last_goal_y )
+		{
+		 	isNewGoal_ = false;
+		} else {
+			isNewGoal_ = true;
+			last_goal_x = input->pose.position.x;
+			last_goal_y = input->pose.position.y;
+		}
+		
 	}
 
+	void map_callback(const nav_msgs::OccupancyGrid::ConstPtr& input)
+	{
+		if( isMapSave_ ) return;
 
+		recordLog("Map Received",LogState::INFOMATION);
+		recordLog("Map Size " + to_string(input->info.width)
+			+ "x" + to_string(input->info.height),LogState::INFOMATION);
 
+		if(input->info.width > 0 && input->info.height > 0) isMapSave_ = true;
 
-
-
-
-
-
+		static_map_ = *input;
+		static_map_info_ = input->info;
+	}
 
 
 

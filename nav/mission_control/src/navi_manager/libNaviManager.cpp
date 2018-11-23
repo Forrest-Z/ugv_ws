@@ -2,17 +2,22 @@
 
 
 NaviManager::NaviManager():pn("~"),
-isNewGoal(true),isShowBand(false)
+isNewGoal_(true),isGetPath_(false),
+isMapSave_(false)
 {
+  pn.param<bool>("use_sim", isUseSim_, true);
+
 
   plan_sub = n.subscribe("/move_base/GlobalPlanner/plan",1, &NaviManager::plan_callback,this);
   vel_sub = n.subscribe("/base_cmd_vel",1, &NaviManager::vel_callback,this);
   goal_sub = n.subscribe("/move_base_simple/goal",1, &NaviManager::goal_callback,this);
+  map_sub = n.subscribe("/nav_map",1, &NaviManager::map_callback,this);
 
   log_pub = n.advertise<std_msgs::String> ("/ugv_log", 1);
   path_pub = n.advertise<sensor_msgs::PointCloud> ("/path_points", 1);
   waypoint_pub = n.advertise<sensor_msgs::PointCloud> ("/waypoint_points", 1);
   vis_pub = n.advertise<visualization_msgs::Marker>( "/waypoint_marker", 0 );
+  wall_pub = n.advertise<sensor_msgs::PointCloud> ("/wall_points", 1);
 
   sleep(1);
 
@@ -38,13 +43,16 @@ void NaviManager::Manager()
 
 void NaviManager::paramInitialization()
 {
-  recordLog("Parameter Initialization Done",LogState::INITIALIZATION);
+  //recordLog("Parameter Initialization Done",LogState::INITIALIZATION);
   robot_position_ = {0,0,0};
 }
 
 void NaviManager::Mission()
 {
-  simDriving(true);
+  simDriving(isUseSim_);
+
+  publishStaticLayer();
+
 }
 
 void NaviManager::simDriving(bool flag)
@@ -66,6 +74,104 @@ void NaviManager::simDriving(bool flag)
     tf_odom.sendTransform(odom_trans);
 
   }
+  else 
+  {
+    recordLog("Show WayPoint and Path Only",LogState::STATE_REPORT);
+  }
+
+}
+
+
+void NaviManager::publishStaticLayer()
+{
+  
+  tf::StampedTransform transform;
+  geometry_msgs::Point32 point;
+  sensor_msgs::PointCloud pointcloud_map;
+
+
+  tf::StampedTransform transform_local;
+  geometry_msgs::PoseStamped map_point;
+  map_point.header.frame_id = "/map";
+  geometry_msgs::PoseStamped base_point;
+  base_point.header.frame_id = "/base_link";
+  tf::Stamped<tf::Pose> tf_map;
+  tf::Stamped<tf::Pose> tf_base;
+
+  pointcloud_map.header.frame_id = "/base_link";
+
+  try{
+    listener.lookupTransform("/map", "/base_link",  
+                             ros::Time(0), transform);
+  }
+  catch (tf::TransformException ex){
+    recordLog("Waiting for TF",LogState::WARNNING);
+
+  }
+
+
+  vector<double> vehicle_in_map = {transform.getOrigin().x(),transform.getOrigin().y()};
+
+  double window_size = 10;
+
+
+
+  int search_unit = window_size/static_map_info_.resolution;
+
+  int vehicle_in_grid_x = (vehicle_in_map[0] - static_map_info_.origin.position.x) 
+  / static_map_info_.resolution;
+
+  int vehicle_in_grid_y = (vehicle_in_map[1] - static_map_info_.origin.position.y) 
+  / static_map_info_.resolution;
+
+
+  int search_row_begin; 
+  int search_row_end;
+  int search_col_begin;
+  int search_col_end;
+
+  (vehicle_in_grid_x > search_unit) ? search_row_begin = vehicle_in_grid_x - search_unit
+  : search_row_begin = 0;
+  (vehicle_in_grid_y > search_unit) ? search_col_begin = vehicle_in_grid_y - search_unit 
+  : search_col_begin = 0;    
+
+  (vehicle_in_grid_x < static_map_info_.width - search_unit) ? search_row_end = vehicle_in_grid_x + search_unit
+  : search_row_end = static_map_info_.width;
+  (vehicle_in_grid_y < static_map_info_.height - search_unit) ? search_col_end = vehicle_in_grid_y + search_unit
+  : search_col_end = static_map_info_.height;
+
+
+  for (int i = search_row_begin; i < search_row_end; ++i)
+  {
+    for (int j = search_col_begin; j < search_col_end; ++j)
+    {
+      if(static_map_.data[i+j*static_map_info_.width] == 0) continue;
+
+      map_point.pose.position.x = i * static_map_info_.resolution + static_map_info_.origin.position.x;
+      map_point.pose.position.y = j * static_map_info_.resolution + static_map_info_.origin.position.y;
+
+      
+      try{
+        listener_local.lookupTransform("/base_link", "/map",  
+                         ros::Time(0), transform_local);
+      }
+      catch (tf::TransformException ex){
+        recordLog("Waiting for TF for Wall",LogState::WARNNING);
+
+      }
+
+      tf::poseStampedMsgToTF(map_point,tf_map);
+      listener_local.transformPose("/base_link",ros::Time(0),tf_map,"/map",tf_base);
+      tf::poseStampedTFToMsg(tf_base,base_point);
+
+      point.x = base_point.pose.position.x;
+      point.y = base_point.pose.position.y;
+      point.z = 1;
+      pointcloud_map.points.push_back(point);
+    }
+  }
+
+  wall_pub.publish(pointcloud_map);
 
 }
 

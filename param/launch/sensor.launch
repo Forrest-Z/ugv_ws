@@ -15,7 +15,7 @@
     <param name="channel_path" value="$(find rslidar_pointcloud)/data/rs_lidar_16/ChannelNum.csv" />
   </node>
 
-<!--   <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan">
+  <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan">
 
     <remap from="cloud_in" to="/rslidar_points"/>
     <rosparam>
@@ -39,7 +39,7 @@
         # 2->inf : Parallelism level
         concurrency_level: 1
     </rosparam>
-  </node> -->
+  </node>
 
   <node name="rviz" pkg="rviz" type="rviz"  args="-d $(find param)/config/nav_test.rviz" />
 

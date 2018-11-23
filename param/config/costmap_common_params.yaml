@@ -32,5 +32,6 @@ obstacle_layer:
 
 static_layer:
   enabled:              true
+
   
 
