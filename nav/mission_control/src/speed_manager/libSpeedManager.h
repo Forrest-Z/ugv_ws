@@ -120,6 +120,8 @@ private:
 	double max_range_;
 	double min_range_;
 
+	double oscillation_;
+
 	/** Flags **/
 	int lost_signal_ct_;
 
@@ -165,24 +167,20 @@ private:
 	bool isReceiveCommand();
 
 
-	inline double sign(double input)
-	{
+	inline double sign(double input) {
 		return input < 0.0 ? -1.0 : 1.0;
 	}
 
-	inline void zeroVelocity()
-	{
+	inline void zeroVelocity() {
     cmd_vel_.linear.x = 0.0;
     cmd_vel_.angular.z = 0.0;
     cmd_vel_safe_.linear.x = 0.0;
     cmd_vel_safe_.angular.z = 0.0;
   }
 
-
 	/** Callbacks **/
 
-	void joy_callback(const sensor_msgs::Joy::ConstPtr& input)
-	{
+	void joy_callback(const sensor_msgs::Joy::ConstPtr& input) {
 		// ROS_INFO_ONCE("Joy Message Received");
 	  double joy_x;
 	  double joy_y;
@@ -190,15 +188,14 @@ private:
 
 	  static bool poweron = true;
 
-	  ( input->buttons[BUTTON_LB] ) ? isJoy_ = true : isJoy_ = false;
-	  ( input->buttons[BUTTON_LB] && input->buttons[BUTTON_RB] ) 
+	  (input->buttons[BUTTON_LB]) ? isJoy_ = true : isJoy_ = false;
+	  (input->buttons[BUTTON_LB] && input->buttons[BUTTON_RB]) 
 	  	? isSupJoy_ = true : isSupJoy_ = false;
 
-	  if( input->buttons[BUTTON_B] && input->buttons[BUTTON_LB] ) poweron = false;
-	  if( input->buttons[BUTTON_X] && input->buttons[BUTTON_LB] ) poweron = true;
+	  if (input->buttons[BUTTON_B] && input->buttons[BUTTON_LB]) poweron = false;
+	  if (input->buttons[BUTTON_X] && input->buttons[BUTTON_LB]) poweron = true;
 
-	  if(isOneHand_)
-	  {
+	  if (isOneHand_) {
 	  	joy_x = input->axes[AXIS_LEFT_UP_DOWN];
 	  	joy_y = input->axes[AXIS_LEFT_LEFT_RIGHT];
 	  } else {
@@ -207,11 +204,10 @@ private:
 	  }
 
 
-	  if( fabs(joy_x)<min_axis ) joy_x = 0;
-	  if( fabs(joy_y)<min_axis ) joy_y = 0;
+	  if (fabs(joy_x)<min_axis) joy_x = 0;
+	  if (fabs(joy_y)<min_axis) joy_y = 0;
 
-	  if( isJoy_ )
-	  {
+	  if (isJoy_) {
 	    joy_speed_    = joy_x * max_speed_;
 	    joy_rotation_ = joy_y * max_rotation_;
 	  } else {
@@ -220,8 +216,7 @@ private:
 	    // ROS_INFO("JOY CLEAR CMD");
 	  }
 
-	  if(!poweron)
-	  {
+	  if (!poweron) {
 	  	isJoy_ = true;
 	  	joy_speed_    = 0;
 	    joy_rotation_ = 0;
@@ -230,8 +225,7 @@ private:
 	}
 
 
-	void cmd_callback(const geometry_msgs::Twist::ConstPtr& input)
-	{
+	void cmd_callback(const geometry_msgs::Twist::ConstPtr& input) {
 
 		nav_speed_    = input->linear.x;
 	  nav_rotation_ = input->angular.z;
@@ -239,27 +233,24 @@ private:
 	  isRecovery_ = false;
 	}
 
-	void android_callback(const geometry_msgs::Twist::ConstPtr& input)
-	{
+	void android_callback(const geometry_msgs::Twist::ConstPtr& input) {
 	  android_speed_    = input->linear.x;
 	  android_rotation_ = input->angular.z;
 
-	  if( android_speed_ == 0 && android_rotation_ == 0) isAndroid_ = false;
+	  if (android_speed_ == 0 && android_rotation_ == 0) isAndroid_ = false;
 	  else isAndroid_ = true;
 
 	}
 
 
-	void scan_callback(const sensor_msgs::LaserScan::ConstPtr& input)
-	{
+	void scan_callback(const sensor_msgs::LaserScan::ConstPtr& input) {
 	  geometry_msgs::Point32 point;
 	  sensor_msgs::PointCloud pointcloud_scan;
 
 	  pointcloud_scan.header = input->header;
 
 	  //collision_points_.points.clear();
-
-	  for (int i = 0; i < input->ranges.size(); i++){
+	  for (int i = 0; i < input->ranges.size(); i++) {
 	    double angle = input->angle_min + i * input->angle_increment;
 	    point.x = input->ranges[i] * cos(angle);
 	    point.y = input->ranges[i] * sin(angle);
@@ -269,13 +260,11 @@ private:
 	    //collision_points_.points.push_back(point);
 	    pointcloud_scan.points.push_back(point);
 	  }
-
 	  //pointcloud_pub.publish(pointcloud_scan);		
 	}
 
 
-	void lidar_callback(const sensor_msgs::PointCloud2::ConstPtr& input)
-	{
+	void lidar_callback(const sensor_msgs::PointCloud2::ConstPtr& input) {
 		sensor_msgs::PointCloud pointcloud_lidar;
 	  pointcloud_lidar.header = input->header;
 	  //pointcloud_lidar.header.stamp = ros::Time::now();
@@ -296,26 +285,19 @@ private:
 	  for (sensor_msgs::PointCloud2ConstIterator<float>
 	          iter_x(*input, "x"), iter_y(*input, "y"), iter_z(*input, "z");
 	          iter_x != iter_x.end();
-	          ++iter_x, ++iter_y, ++iter_z)
-	  { 
-	    if ( isnan(*iter_x) || isnan(*iter_y) || isnan(*iter_z) ) continue;
-
+	          ++iter_x, ++iter_y, ++iter_z) { 
+	    if (isnan(*iter_x) || isnan(*iter_y) || isnan(*iter_z)) continue;
 	    if (*iter_z > max_height_ || *iter_z < min_height_) continue;
-
-
 
 	    double angle = atan2(*iter_y, *iter_x);
 	    double range = hypot(*iter_x, *iter_y);
       int index = (angle - output.angle_min) / output.angle_increment;
-      if (range < output.ranges[index])
-      {
+      if (range < output.ranges[index]) {
         output.ranges[index] = range;
       }    
 
-
-
-	    if ( hypot(*iter_x,*iter_y) > 2 * safe_zone_ ) continue;
-	    if ( !collisionCheck(*iter_x,*iter_y) ) continue;
+	    if (hypot(*iter_x,*iter_y) > 2 * safe_zone_) continue;
+	    if ( collisionCheck(*iter_x,*iter_y)) continue;
 
 	    geometry_msgs::Point32 point;
 	    point.x = *iter_x;
@@ -326,16 +308,13 @@ private:
 	    collision_points_.points.push_back(point);
 	  }
 	  pointcloud_pub.publish(pointcloud_lidar);
-	  //scan_pub.publish(output);
-	  
+	  //scan_pub.publish(output);  
 	}
 
 
-	void button_callback(const std_msgs::String::ConstPtr& input)
-	{
+	void button_callback(const std_msgs::String::ConstPtr& input) {
 		string msg = input->data;
-		if( msg == "1" )
-		{
+		if (msg == "1") {
 			double goal_x = 126.1;
 			double goal_y = 11.9;
 
@@ -350,8 +329,7 @@ private:
 			recordLog("Button 1 | Goal at (" + to_string(int(goal_x)) 
 				+ "," + to_string(int(goal_y))+ ")",LogState::INFOMATION);
 		}
-		else if( msg == "2" )
-		{
+		else if (msg == "2") {
 			double goal_x = 157.7;
 			double goal_y = 57.5;
 			
@@ -366,58 +344,50 @@ private:
 			recordLog("Button 2 | Goal at (" + to_string(int(goal_x)) 
 				+ "," + to_string(int(goal_y))+ ")",LogState::INFOMATION);
 		}
-		else if( msg == "3" )
-		{
+		else if (msg == "3") {
 			recordLog("Button 3",LogState::INFOMATION);
 		}
-		else if( msg == "4" )
-		{
+		else if(msg == "4") {
 			recordLog("Button 4",LogState::INFOMATION);
 		} else {
 			recordLog("Unregister Button",LogState::INFOMATION);
 		}
-
 	}
 
 
-	void nav_state_callback(const std_msgs::Int32::ConstPtr& input)
-	{
+	void nav_state_callback(const std_msgs::Int32::ConstPtr& input) {
 		int nav_state = input->data;
 
-		switch( nav_state )
+		switch(nav_state)
 		{
-			case 0:
-			{
+			case 0: {
 
-			}
 			break;
+			}
 
-			case 1:
-			{
+			case 1:{
 				isNav_ = false;
 				recordLog("Goal Reached",LogState::STATE_REPORT);
-			}
 			break;
+			}
 
-			case 2:
-			{
+			case 2:{
 				isNav_ = false;
 				recordLog("Plan Failed",LogState::STATE_REPORT);
 				isRecovery_ = true;
+			break;
 			}
 
 			default: 
-			break;
+				assert(false);
 		}
 	}
 
-	void wall_callback(const sensor_msgs::PointCloud::ConstPtr& input)
-	{
+	void wall_callback(const sensor_msgs::PointCloud::ConstPtr& input) {
 		collision_wall_points_.points.clear();
 		geometry_msgs::Point32 point;
 
-		for (int i = 0; i < input->points.size(); ++i)
-		{
+		for (int i = 0; i < input->points.size(); ++i) {
 			if(!collisionCheck(input->points[i].x,input->points[i].y)) continue;
 
 			point.x = input->points[i].x;
@@ -425,8 +395,6 @@ private:
 
 			collision_wall_points_.points.push_back(point);
 		}
-
-
 	}
 
 };

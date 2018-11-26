@@ -1,6 +1,6 @@
 <launch>
   
-  <node name="speed_manager" pkg="mission_control" type="speed_manager" output="screen" respawn="true">      
+<!--   <node name="speed_manager" pkg="mission_control" type="speed_manager" output="screen" respawn="true">      
       <param name="max_rotation"  value="0.6"/>     
       <param name="max_speed"  value="0.8"/>
       <param name="vehicle_radius"  value="0.4"/>
@@ -14,10 +14,15 @@
       <param name="min_height"  value="-0.2"/>
       <param name="max_range"  value="8"/>
       <param name="min_range"  value="0.2"/>
-  </node>
+      <param name="oscillation"  value="0.05"/>
+
+      <param name="one_hand"  value="false"/>      
+      
+  </node> -->
 
   <node name="navi_manager" pkg="mission_control" type="navi_manager" output="screen" respawn="true">    
       <param name="use_sim"  value="true"/>
+      <param name="junction_file"  value="$(find param)/map/junction.txt"/>
   </node>
 
   

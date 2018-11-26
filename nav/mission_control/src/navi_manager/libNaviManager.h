@@ -3,6 +3,7 @@
 
 #include <ros/ros.h>
 #include <iostream>
+#include <fstream>
 #include <cmath>
 #include <vector>
 #include <time.h>
@@ -26,6 +27,8 @@ using std::cout;
 using std::endl;
 using std::vector;
 using std::to_string;
+using std::getline;
+using std::ifstream;
 
 const int ROS_RATE_HZ   = 20;
 const int ZERO          = 0;
@@ -77,6 +80,7 @@ private:
 	ros::Publisher waypoint_pub;
   ros::Publisher vis_pub;
   ros::Publisher wall_pub;
+  ros::Publisher junction_pub;
 
 	tf::TransformBroadcaster tf_odom;
 	tf::TransformListener listener;
@@ -89,13 +93,14 @@ private:
 	ros::Subscriber map_sub;
 
 	/** Parameters **/
-
+	string junction_file_;
 
 	/** Flags **/
 	bool isNewGoal_;
 	bool isGetPath_;
 	bool isUseSim_;
 	bool isMapSave_;
+	bool isJunSave_;
 
 	/** Variables **/
 	nav_msgs::OccupancyGrid static_map_;
@@ -103,16 +108,18 @@ private:
 	nav_msgs::MapMetaData static_map_info_;
 
 	vector<double> robot_position_;
+	//vector<vector<double>> waypoint_list_;
+	sensor_msgs::PointCloud junction_list_;
 
 
 	/** Functions **/
 	void recordLog(string input,LogState level);
 	void simDriving(bool flag);
 	void publishStaticLayer();
+	void loadJunctionFile(string filename);
 
 	/** Callbacks **/
-	void plan_callback(const nav_msgs::Path::ConstPtr& input)
-	{
+	void plan_callback(const nav_msgs::Path::ConstPtr& input) {
 		geometry_msgs::Point32 point;
 		sensor_msgs::PointCloud pointcloud_path;
 		sensor_msgs::PointCloud pointcloud_waypoint;
@@ -142,15 +149,12 @@ private:
 		double per_curve;
 		double aft_curve;
 
-		for ( int i = 0; i < input->poses.size(); ++i )
-		{
-			if( i <= startup_points )
-			{
+		for (int i = 0; i < input->poses.size(); ++i) {
+			if (i <= startup_points) {
 				assume_acc = max_speed/startup_points;
 				assume_spd += assume_acc;
 			}
-			else if( i > input->poses.size() - startup_points )
-			{
+			else if (i > input->poses.size() - startup_points) {
 				assume_acc = -max_speed/startup_points;
 				assume_spd += assume_acc;
 			} else {
@@ -177,7 +181,6 @@ private:
 				assume_spd += assume_acc;
 			}
 
-
 			if(assume_spd < 0.1) assume_spd = 0.1;
 			if(assume_spd > max_speed) assume_spd = max_speed;
 
@@ -200,8 +203,7 @@ private:
 
 		int step = lookahead_distance / travel_distance_unit;
 
-		for ( int i = 0; i < input->poses.size(); i+=step )
-		{
+		for (int i = 0; i < input->poses.size(); i+=step) {
 			point.x = input->poses[i].pose.position.x;
 			point.y = input->poses[i].pose.position.y;
 			point.z = speed_box[i];
@@ -212,7 +214,6 @@ private:
 			streamObj3 << std::fixed;
 			streamObj3 << std::setprecision(2);
 			streamObj3 << speed_box[i];
-
 
 			marker.header.frame_id = "map";
 			marker.header.stamp = ros::Time();
@@ -237,8 +238,7 @@ private:
 
 	}
 
-	void vel_callback(const geometry_msgs::Twist::ConstPtr& input)
-	{
+	void vel_callback(const geometry_msgs::Twist::ConstPtr& input) {
 		double scale = 0.1;
 		double rotation = scale * input->angular.z;
 		double speed = scale * input->linear.x;
@@ -248,40 +248,32 @@ private:
 		robot_position_[1] += speed * sin(robot_position_[2]);
 	}
 
-	void goal_callback(const geometry_msgs::PoseStamped::ConstPtr& input)
-	{
+	void goal_callback(const geometry_msgs::PoseStamped::ConstPtr& input) {
 		static double last_goal_x = 0;
 		static double last_goal_y = 0;
 
-		if(!isGetPath_) return;
+		if (!isGetPath_) return;
 
-		if ( input->pose.position.x == last_goal_x && input->pose.position.y == last_goal_y )
-		{
+		if (input->pose.position.x == last_goal_x && input->pose.position.y == last_goal_y) {
 		 	isNewGoal_ = false;
 		} else {
 			isNewGoal_ = true;
 			last_goal_x = input->pose.position.x;
 			last_goal_y = input->pose.position.y;
-		}
-		
+		}	
 	}
 
-	void map_callback(const nav_msgs::OccupancyGrid::ConstPtr& input)
-	{
-		if( isMapSave_ ) return;
+	void map_callback(const nav_msgs::OccupancyGrid::ConstPtr& input) {
+		if (isMapSave_) return;
 
 		recordLog("Map Received",LogState::INFOMATION);
 		recordLog("Map Size " + to_string(input->info.width)
 			+ "x" + to_string(input->info.height),LogState::INFOMATION);
 
-		if(input->info.width > 0 && input->info.height > 0) isMapSave_ = true;
-
+		if (input->info.width > 0 && input->info.height > 0) isMapSave_ = true;
 		static_map_ = *input;
 		static_map_info_ = input->info;
 	}
-
-
-
 
 
 };
