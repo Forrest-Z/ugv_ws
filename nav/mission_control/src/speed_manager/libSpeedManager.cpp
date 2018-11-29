@@ -22,6 +22,10 @@ SpeedManager::SpeedManager():pn("~"),
   pn.param<double>("min_range",min_range_,0.2);
   pn.param<double>("oscillation",oscillation_,0.1);
   pn.param<bool>("one_hand", isOneHand_, false);
+  pn.param<vector<double>>("goal_a",goal_a_,{0,0});
+  pn.param<vector<double>>("goal_b",goal_b_,{0,0});
+
+
 
 
   joy_sub = n.subscribe("/joy",1, &SpeedManager::joy_callback,this);
@@ -242,6 +246,11 @@ void SpeedManager::collisionAvoid()
   double coordinate_x;
   double coordinate_y;
 
+  double free_space_right = 0;
+  double free_space_left = 0;
+  double free_space_last = -100;
+  double free_space_resolution = 0.01;
+
   double virtual_force_x = 0;
   double virtual_force_y = 0;
 
@@ -260,6 +269,9 @@ void SpeedManager::collisionAvoid()
 
       virtual_force_x += (certainty*force_constant_x_*coordinate_x)/pow(distance,3);
       virtual_force_y += (certainty*force_constant_y_*coordinate_y)/pow(distance,3);
+
+      if (coordinate_y >= 0) free_space_right++;
+      else free_space_left++;
     }
   }
 
@@ -271,8 +283,14 @@ void SpeedManager::collisionAvoid()
 
       virtual_force_x += (certainty*force_constant_x_*coordinate_x)/pow(distance,3);
       virtual_force_y += (certainty*force_constant_y_*coordinate_y)/pow(distance,3);
+
+        if (coordinate_y >= 0) free_space_right+=5;
+        else free_space_left+=5;
+
     }
   }
+
+
 
   //ROS_INFO_STREAM("FOC = "<<virtual_force_x<<","<<virtual_force_y);
   if (fabs(cmd_vel_.linear.x) < fabs(virtual_force_x)) cmd_vel_safe_.linear.x = 0;
@@ -281,6 +299,10 @@ void SpeedManager::collisionAvoid()
   if (cmd_vel_.linear.x >= 0) cmd_vel_safe_.angular.z -= virtual_force_y;
   else cmd_vel_safe_.angular.z += virtual_force_y;
   //ROS_INFO_STREAM("SPE = "<<cmd_vel_safe_.linear.x<<","<<cmd_vel_safe_.angular.z);
+
+  if (virtual_force_x != 0) {
+    cmd_vel_safe_.angular.z += (free_space_left - free_space_right) * 0.1;
+  }
 
 
   if (isEmergency) {

@@ -1,24 +1,29 @@
 <launch>
   
-<!--   <node name="speed_manager" pkg="mission_control" type="speed_manager" output="screen" respawn="true">      
-      <param name="max_rotation"  value="0.6"/>     
-      <param name="max_speed"  value="0.8"/>
-      <param name="vehicle_radius"  value="0.4"/>
-      <param name="lookahead_time"  value="2"/>   
-      <param name="log_gap_sec"  value="0"/> 
-      <param name="safe_zone"  value="5"/> 
-      <param name="force_constant_x"  value="1"/> 
-      <param name="force_constant_y"  value="1"/> 
+  <node name="speed_manager" pkg="mission_control" type="speed_manager" output="screen" respawn="true">
+      <rosparam>
+        max_rotation: 0.6
+        max_speed: 0.8
+        vehicle_radius: 0.4
+        lookahead_time: 2
+        safe_zone: 8
+        force_constant_x: 0.1
+        force_constant_y: 10
 
-      <param name="max_height"  value="1"/>
-      <param name="min_height"  value="-0.2"/>
-      <param name="max_range"  value="8"/>
-      <param name="min_range"  value="0.2"/>
-      <param name="oscillation"  value="0.05"/>
+        max_height: 2
+        min_height: 0.5
+        max_range: 8
+        min_range: 0.2
+        oscillation: 0.1
 
-      <param name="one_hand"  value="false"/>      
+        one_hand: false
+
+        goal_a: [1.5,28]
+        goal_b: [61,121]
+
+      </rosparam>  
       
-  </node> -->
+  </node>
 
   <node name="navi_manager" pkg="mission_control" type="navi_manager" output="screen" respawn="true">    
       <param name="use_sim"  value="true"/>

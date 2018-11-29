@@ -18,6 +18,7 @@ obstacle_layer:
   raytrace_range: 15.0
   publish_voxel_map: false
   observation_sources:  scan  #scan  
+  footprint_padding: 0.0
 
   scan:
     data_type: LaserScan

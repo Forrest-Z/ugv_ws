@@ -21,6 +21,14 @@
 #include <std_srvs/Empty.h>
 #include <actionlib_msgs/GoalID.h>
 
+#include <tf/transform_broadcaster.h>
+#include <tf/transform_listener.h>
+#include <geometry_msgs/TransformStamped.h>
+
+#include <pcl_ros/transforms.h>
+#include <pcl_conversions/pcl_conversions.h>
+#include <boost/make_shared.hpp>
+
 using std::string;
 using std::cout;
 using std::endl;
@@ -122,6 +130,9 @@ private:
 
 	double oscillation_;
 
+	vector<double> goal_a_;
+	vector<double> goal_b_;
+
 	/** Flags **/
 	int lost_signal_ct_;
 
@@ -148,6 +159,8 @@ private:
 
 	sensor_msgs::PointCloud collision_points_;
 	sensor_msgs::PointCloud collision_wall_points_;
+
+	tf::TransformListener listener;
 
 	/** Functions **/
 	void drawVehicle(double center_x,double center_y,int seq);
@@ -192,8 +205,8 @@ private:
 	  (input->buttons[BUTTON_LB] && input->buttons[BUTTON_RB]) 
 	  	? isSupJoy_ = true : isSupJoy_ = false;
 
-	  if (input->buttons[BUTTON_B] && input->buttons[BUTTON_LB]) poweron = false;
-	  if (input->buttons[BUTTON_X] && input->buttons[BUTTON_LB]) poweron = true;
+	  if (input->buttons[BUTTON_X] && input->buttons[BUTTON_LB]) poweron = false;
+	  if (input->buttons[BUTTON_Y] && input->buttons[BUTTON_LB]) poweron = true;
 
 	  if (isOneHand_) {
 	  	joy_x = input->axes[AXIS_LEFT_UP_DOWN];
@@ -222,6 +235,19 @@ private:
 	    joy_rotation_ = 0;
 	    recordLog("Power off",LogState::WARNNING);
 	  }
+
+
+	  boost::shared_ptr<std_msgs::String> sim_button(new std_msgs::String());
+
+	  if (input->buttons[BUTTON_A] && input->buttons[BUTTON_LB]) {
+	  	sim_button->data = "1";
+	  	button_callback(sim_button);
+	  }
+	  if (input->buttons[BUTTON_B] && input->buttons[BUTTON_LB]) {
+	  	sim_button->data = "2";
+	  	button_callback(sim_button);
+	  }
+
 	}
 
 
@@ -264,10 +290,33 @@ private:
 	}
 
 
-	void lidar_callback(const sensor_msgs::PointCloud2::ConstPtr& input) {
+	void lidar_callback(const sensor_msgs::PointCloud2::ConstPtr& msg) {
+		tf::StampedTransform transform;
+		try {
+			listener.lookupTransform("/base_link", "/rslidar", ros::Time(0), transform);
+		} catch (tf::TransformException ex) {
+	    recordLog("Waiting for Lidar to Base",LogState::WARNNING);
+	    return;
+		}
+
+		pcl::PointCloud<pcl::PointXYZ> cloud_in;
+		pcl::PointCloud<pcl::PointXYZ> cloud_trans;
+		cloud_trans.header.frame_id="base_link";
+		sensor_msgs::PointCloud2 cloud_out; 
+
+		pcl::fromROSMsg(*msg,cloud_in);
+
+		pcl_ros::transformPointCloud (cloud_in,cloud_trans,transform);  
+		pcl::toROSMsg(cloud_trans,cloud_out);
+
+
+		//boost::shared_ptr<sensor_msgs::PointCloud2> input(new sensor_msgs::PointCloud2());
+
+		auto input = boost::make_shared<sensor_msgs::PointCloud2>(cloud_out);
+
+
 		sensor_msgs::PointCloud pointcloud_lidar;
-	  pointcloud_lidar.header = input->header;
-	  //pointcloud_lidar.header.stamp = ros::Time::now();
+	  pointcloud_lidar.header.frame_id = "/base_link";
 
 	  collision_points_.points.clear();
 	  
@@ -297,7 +346,7 @@ private:
       }    
 
 	    if (hypot(*iter_x,*iter_y) > 2 * safe_zone_) continue;
-	    if ( collisionCheck(*iter_x,*iter_y)) continue;
+	    if (!collisionCheck(*iter_x,*iter_y)) continue;
 
 	    geometry_msgs::Point32 point;
 	    point.x = *iter_x;
@@ -315,34 +364,28 @@ private:
 	void button_callback(const std_msgs::String::ConstPtr& input) {
 		string msg = input->data;
 		if (msg == "1") {
-			double goal_x = 126.1;
-			double goal_y = 11.9;
-
 			geometry_msgs::PoseStamped msg;
 			msg.header.frame_id = "map";
       msg.header.stamp = ros::Time::now();
-      msg.pose.position.x = goal_x;
-      msg.pose.position.y = goal_y; 
+      msg.pose.position.x = goal_a_[0];
+      msg.pose.position.y = goal_a_[1]; 
       msg.pose.orientation.w =1.0;
       move_base_goal_pub.publish(msg);
 
-			recordLog("Button 1 | Goal at (" + to_string(int(goal_x)) 
-				+ "," + to_string(int(goal_y))+ ")",LogState::INFOMATION);
+			recordLog("Button 1 | Goal at (" + to_string(int(msg.pose.position.x)) 
+				+ "," + to_string(int(msg.pose.position.y))+ ")",LogState::INFOMATION);
 		}
-		else if (msg == "2") {
-			double goal_x = 157.7;
-			double goal_y = 57.5;
-			
+		else if (msg == "2") {		
 			geometry_msgs::PoseStamped msg;
 			msg.header.frame_id = "map";
       msg.header.stamp = ros::Time::now();
-      msg.pose.position.x = goal_x;
-      msg.pose.position.y = goal_y; 
+      msg.pose.position.x = goal_b_[0];
+      msg.pose.position.y = goal_b_[1]; 
       msg.pose.orientation.w =1.0;
       move_base_goal_pub.publish(msg);
 
-			recordLog("Button 2 | Goal at (" + to_string(int(goal_x)) 
-				+ "," + to_string(int(goal_y))+ ")",LogState::INFOMATION);
+			recordLog("Button 2 | Goal at (" + to_string(int(msg.pose.position.x)) 
+				+ "," + to_string(int(msg.pose.position.y))+ ")",LogState::INFOMATION);
 		}
 		else if (msg == "3") {
 			recordLog("Button 3",LogState::INFOMATION);

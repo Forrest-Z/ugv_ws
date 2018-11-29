@@ -117,6 +117,7 @@ private:
 	void simDriving(bool flag);
 	void publishStaticLayer();
 	void loadJunctionFile(string filename);
+	void publishJunctionPoints();
 
 	/** Callbacks **/
 	void plan_callback(const nav_msgs::Path::ConstPtr& input) {

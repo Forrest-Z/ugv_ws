@@ -6,7 +6,7 @@ isNewGoal_(true),isGetPath_(false),
 isMapSave_(false),isJunSave_(false)
 {
   pn.param<bool>("use_sim", isUseSim_, true);
-  pn.param<string>("junction_file",junction_file_,"");
+  pn.param<string>("junction_file",junction_file_,"Node");
 
 
   plan_sub = n.subscribe("/move_base/GlobalPlanner/plan",1, &NaviManager::plan_callback,this);
@@ -95,8 +95,8 @@ void NaviManager::publishStaticLayer() {
   }
   catch (tf::TransformException ex) {
     recordLog("Waiting for TF",LogState::WARNNING);
+    return;
   }
-
 
   vector<double> vehicle_in_map = {transform.getOrigin().x(),transform.getOrigin().y()};
 
@@ -137,6 +137,7 @@ void NaviManager::publishStaticLayer() {
       }
       catch (tf::TransformException ex){
         recordLog("Waiting for TF for Wall",LogState::WARNNING);
+        return;
       }
 
       tf::poseStampedMsgToTF(map_point,tf_map);
@@ -150,6 +151,8 @@ void NaviManager::publishStaticLayer() {
     }
   }
   wall_pub.publish(pointcloud_map);
+
+  publishJunctionPoints();
 }
 
 
@@ -237,7 +240,7 @@ void NaviManager::loadJunctionFile(string filename) {
   ifstream my_file;
   my_file.open(filename);
   if (!my_file) {
-    recordLog("Unabel to Locate Junction File from" + filename,LogState::WARNNING);
+    recordLog("Unabel to Locate Junction File from " + filename,LogState::WARNNING);
     return;
   }
 
@@ -246,13 +249,7 @@ void NaviManager::loadJunctionFile(string filename) {
   int line_num = 1;
   while (my_file >> point.z >> point.x >> point.y) {
     junction_list_.points.push_back(point);
-    if (line_num == point.z) {
-      line_num++;
-    } else {
-      recordLog("Data is Invaild at line " + to_string(line_num) 
-        + " index is " + to_string(int(point.z)),LogState::WARNNING);
-      return;
-    }
+    line_num++;
   }
   recordLog("Junction Points Saved, include " + to_string(line_num) 
     + " points",LogState::INITIALIZATION);
@@ -265,7 +262,7 @@ void NaviManager::publishJunctionPoints() {
     recordLog("Unabel to Load Junction Point",LogState::WARNNING);
     return;
   }
-
-
+  junction_list_.header.frame_id = "map";
+  junction_pub.publish(junction_list_);
 
 }

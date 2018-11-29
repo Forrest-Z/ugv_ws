@@ -4,6 +4,8 @@ project(mission_control)
 find_package(catkin REQUIRED COMPONENTS
     roscpp
     tf
+		PCL
+		pcl_ros
 ) 
 
  generate_messages(
@@ -17,6 +19,7 @@ catkin_package(
 
 include_directories(
   ${catkin_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIR} 
 )
 
 add_executable(speed_manager src/speed_manager/SpeedManager.cpp src/speed_manager/libSpeedManager.cpp)

@@ -1,8 +1,12 @@
 <launch>
 
-  <node pkg="map_server" type="map_server" name="map_server" args="$(find param)/map/test1final.yaml">
+  <node pkg="map_server" type="map_server" name="map_server_nav" args="$(find param)/map/map_2.yaml">
     <remap from="map" to="nav_map"/>
   </node>
+
+<!--   <node pkg="map_server" type="map_server" name="map_server_vis" args="$(find param)/map/map_2_2.yaml">
+    <remap from="map" to="vis_map"/>
+  </node> -->
 
 <!--launch move_base-->
   <arg name="odom_frame_id"   default="odom"/>

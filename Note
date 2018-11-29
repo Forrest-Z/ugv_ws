@@ -22,6 +22,11 @@ Table of index number of /joy.axis:
 6 cross key left/right
 7 cross key up/down 
 
+ros-kinetic-tf2-sensor-msgs ros-kinetic-navigation ros-kinetic-costmap-converter
+ros-kinetic-teb-local-planner
+
+
+
 
 void SpeedManager::draw_vehicle(double center_x,double center_y)
 { 
