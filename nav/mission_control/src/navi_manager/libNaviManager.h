@@ -85,12 +85,14 @@ private:
 	tf::TransformBroadcaster tf_odom;
 	tf::TransformListener listener;
 	tf::TransformListener listener_local;
+	tf::TransformListener listener_obs;
 
 	/** Subscribers **/
 	ros::Subscriber plan_sub;
 	ros::Subscriber vel_sub;
 	ros::Subscriber goal_sub;
 	ros::Subscriber map_sub;
+	ros::Subscriber obs_sub;
 
 	/** Parameters **/
 	string junction_file_;
@@ -101,17 +103,17 @@ private:
 	bool isUseSim_;
 	bool isMapSave_;
 	bool isJunSave_;
+	bool isRecObs_;
 
 	/** Variables **/
 	nav_msgs::OccupancyGrid static_map_;
-
 	nav_msgs::MapMetaData static_map_info_;
-
+	
 	vector<double> robot_position_;
 	//vector<vector<double>> waypoint_list_;
 	sensor_msgs::PointCloud junction_list_;
 
-
+	geometry_msgs::Point32 obs_point_;
 	/** Functions **/
 	void recordLog(string input,LogState level);
 	void simDriving(bool flag);
@@ -274,6 +276,17 @@ private:
 		if (input->info.width > 0 && input->info.height > 0) isMapSave_ = true;
 		static_map_ = *input;
 		static_map_info_ = input->info;
+	}
+
+	void obs_callback(const geometry_msgs::PointStamped::ConstPtr& input) {
+		recordLog("Simulation Obstacle Received",LogState::INFOMATION);
+		recordLog("Point at ( " + to_string(input->point.x)
+			+ "," + to_string(input->point.y) + " )",LogState::INFOMATION);
+		isRecObs_ = true;
+
+		obs_point_.x = input->point.x;
+		obs_point_.y = input->point.y;
+
 	}
 
 

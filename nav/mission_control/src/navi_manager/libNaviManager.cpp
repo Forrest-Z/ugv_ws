@@ -3,7 +3,8 @@
 
 NaviManager::NaviManager():pn("~"),
 isNewGoal_(true),isGetPath_(false),
-isMapSave_(false),isJunSave_(false)
+isMapSave_(false),isJunSave_(false),
+isRecObs_(false)
 {
   pn.param<bool>("use_sim", isUseSim_, true);
   pn.param<string>("junction_file",junction_file_,"Node");
@@ -13,6 +14,7 @@ isMapSave_(false),isJunSave_(false)
   vel_sub = n.subscribe("/base_cmd_vel",1, &NaviManager::vel_callback,this);
   goal_sub = n.subscribe("/move_base_simple/goal",1, &NaviManager::goal_callback,this);
   map_sub = n.subscribe("/nav_map",1, &NaviManager::map_callback,this);
+  obs_sub = n.subscribe("//clicked_point",1,&NaviManager::obs_callback,this);
 
   log_pub = n.advertise<std_msgs::String> ("/ugv_log", 1);
   path_pub = n.advertise<sensor_msgs::PointCloud> ("/path_points", 1);
@@ -80,10 +82,14 @@ void NaviManager::publishStaticLayer() {
   sensor_msgs::PointCloud pointcloud_map;
 
   tf::StampedTransform transform_local;
+  tf::StampedTransform transform_obs;
+
   geometry_msgs::PoseStamped map_point;
-  map_point.header.frame_id = "/map";
   geometry_msgs::PoseStamped base_point;
+
+  map_point.header.frame_id = "/map";
   base_point.header.frame_id = "/base_link";
+
   tf::Stamped<tf::Pose> tf_map;
   tf::Stamped<tf::Pose> tf_base;
 
@@ -150,6 +156,55 @@ void NaviManager::publishStaticLayer() {
       pointcloud_map.points.push_back(point);
     }
   }
+
+  if (isUseSim_ && isRecObs_) {
+
+
+    try {
+      listener_obs.lookupTransform("/map", "/base_link",  
+                       ros::Time(0), transform_obs);
+    }
+    catch (tf::TransformException ex){
+      recordLog("Waiting for TF for Obstacle",LogState::WARNNING);
+      return;
+    }
+
+    map_point.pose.position.x = obs_point_.x;
+    map_point.pose.position.y = obs_point_.y;
+
+    tf::poseStampedMsgToTF(map_point,tf_map);
+    listener_obs.transformPose("/base_link",ros::Time(0),tf_map,"/map",tf_base);
+    tf::poseStampedTFToMsg(tf_base,base_point);
+
+    point.x = base_point.pose.position.x;
+    point.y = base_point.pose.position.y;
+    point.z = 1;
+    pointcloud_map.points.push_back(point);
+
+    point.x = base_point.pose.position.x+0.2;
+    point.y = base_point.pose.position.y;
+    point.z = 1;
+    pointcloud_map.points.push_back(point);
+
+    point.x = base_point.pose.position.x;
+    point.y = base_point.pose.position.y+0.2;
+    point.z = 1;
+    pointcloud_map.points.push_back(point);
+
+    point.x = base_point.pose.position.x-0.2;
+    point.y = base_point.pose.position.y;
+    point.z = 1;
+    pointcloud_map.points.push_back(point);
+
+    point.x = base_point.pose.position.x;
+    point.y = base_point.pose.position.y-0.2;
+    point.z = 1;
+    pointcloud_map.points.push_back(point);
+
+  }
+
+
+
   wall_pub.publish(pointcloud_map);
 
   publishJunctionPoints();

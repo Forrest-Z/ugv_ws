@@ -3,7 +3,8 @@ Panels:
     Help Height: 81
     Name: Displays
     Property Tree Widget:
-      Expanded: ~
+      Expanded:
+        - /wall_point1
       Splitter Ratio: 0.5
     Tree Height: 811
   - Class: rviz/Selection
@@ -24,7 +25,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: ""
+    SyncSource: vehicle
 Visualization Manager:
   Class: ""
   Displays:
@@ -266,7 +267,7 @@ Visualization Manager:
       Color: 170; 85; 0
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 4096
@@ -277,13 +278,13 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.100000001
+      Size (m): 0.300000012
       Style: Flat Squares
       Topic: /wall_points
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -493,11 +494,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Scale: 18.0993385
+      Scale: 50.7864494
       Target Frame: base_link
       Value: TopDownOrtho (rviz)
-      X: 1.24529898
-      Y: -1.52479136
+      X: 3.10210919
+      Y: 1.15137661
     Saved: ~
 Window Geometry:
   Displays:
