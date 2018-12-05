@@ -198,8 +198,6 @@ void NaviManager::publishStaticLayer() {
       point.z = 1;
       pointcloud_map.points.push_back(point);
     }
-
-
   }
 
 
