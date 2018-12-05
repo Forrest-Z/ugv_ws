@@ -18,8 +18,8 @@
 
         one_hand: false
 
-        goal_a: [89.7,9.0]
-        goal_b: [185.1,-38.0]
+        goal_a: [99.4,9.0]
+        goal_b: [204,-36.6]
 
       </rosparam>  
       

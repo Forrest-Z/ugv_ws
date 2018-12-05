@@ -8,9 +8,9 @@
     <remap from="map" to="vis_map"/>
   </node> -->
 
-  <node pkg="pcl_ros" type="pcd_to_pointcloud" name="pcd_to_pointcloud" args="$(find param)/map/withimu_11_30_02aft.pcd 0.1">
+<!--   <node pkg="pcl_ros" type="pcd_to_pointcloud" name="pcd_to_pointcloud" args="$(find param)/map/withimu_11_30_02aft.pcd 0.1">
     <param name="frame_id" value = "/map" />
-  </node>
+  </node> -->
   
 
 <!--launch move_base-->
