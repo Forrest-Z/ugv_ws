@@ -1,7 +1,7 @@
 global_costmap:
    global_frame: /map
    robot_base_frame: /base_link
-   update_frequency: 0.1
+   update_frequency: 0.5
    publish_frequency: 10
    static_map: true
    transform_tolerance: 0.5
@@ -12,6 +12,7 @@ global_costmap:
    plugins:
      - {name: static_layer,            type: "costmap_2d::StaticLayer"}
      - {name: inflation_layer_global,         type: "costmap_2d::InflationLayer"}
+     #- {name: pc_layer,      type: "costmap_2d::ObstacleLayer"}
 
 
  

@@ -258,6 +258,16 @@ void SpeedManager::collisionAvoid()
 
   bool isEmergency = false;
 
+  // sensor_msgs::PointCloud pointcloud_lidar;
+  // pointcloud_lidar.header.frame_id = "/base_link";
+
+  // pointcloud_lidar.points.points = *collision_points_.points;
+
+  // pointcloud_pub.publish(pointcloud_lidar);
+  collision_wall_points_.header.frame_id = "/base_link";
+  collision_points_.header.frame_id = "/base_link";
+  pointcloud_pub.publish(collision_points_);
+
   if (!collision_points_.points.empty()) { 
     for (int i = 0; i < collision_points_.points.size(); ++i) {
       distance = hypot(collision_points_.points[i].x,collision_points_.points[i].y);
@@ -284,8 +294,8 @@ void SpeedManager::collisionAvoid()
       virtual_force_x += (certainty*force_constant_x_*coordinate_x)/pow(distance,3);
       virtual_force_y += (certainty*force_constant_y_*coordinate_y)/pow(distance,3);
 
-        if (coordinate_y >= 0) free_space_right+=5;
-        else free_space_left+=5;
+        if (coordinate_y >= 0) free_space_right+=10;
+        else free_space_left+=10;
 
     }
   }
@@ -293,11 +303,16 @@ void SpeedManager::collisionAvoid()
 
 
   //ROS_INFO_STREAM("FOC = "<<virtual_force_x<<","<<virtual_force_y);
+
   if (fabs(cmd_vel_.linear.x) < fabs(virtual_force_x)) cmd_vel_safe_.linear.x = 0;
   else cmd_vel_safe_.linear.x -= virtual_force_x;
+  // cmd_vel_safe_.linear.x -= virtual_force_x;
 
-  if (cmd_vel_.linear.x >= 0) cmd_vel_safe_.angular.z -= virtual_force_y;
-  else cmd_vel_safe_.angular.z += virtual_force_y;
+  // if (cmd_vel_.linear.x >= 0) cmd_vel_safe_.angular.z -= virtual_force_y;
+  // else cmd_vel_safe_.angular.z += virtual_force_y;
+  cmd_vel_safe_.angular.z += virtual_force_y;
+
+
   //ROS_INFO_STREAM("SPE = "<<cmd_vel_safe_.linear.x<<","<<cmd_vel_safe_.angular.z);
 
   if (virtual_force_x != 0) {
@@ -324,6 +339,8 @@ void SpeedManager::limitCommand()
     = sign(cmd_vel_safe_.angular.z) * max_rotation_;
 
   if (fabs(cmd_vel_safe_.angular.z) < oscillation_) cmd_vel_safe_.angular.z = 0;
+
+  // if (fabs(cmd_vel_safe_.linear.x) < oscillation_) cmd_vel_safe_.linear.x = 0;
 
 }
 

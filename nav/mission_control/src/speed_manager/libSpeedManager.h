@@ -430,6 +430,8 @@ private:
 		collision_wall_points_.points.clear();
 		geometry_msgs::Point32 point;
 
+  	// pointcloud_pub.publish(input);
+
 		for (int i = 0; i < input->points.size(); ++i) {
 			if(!collisionCheck(input->points[i].x,input->points[i].y)) continue;
 

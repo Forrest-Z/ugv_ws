@@ -31,7 +31,6 @@
   </node>
 
 
-
   <arg name="model" />
   <arg name="gui" default="false" />
 
@@ -44,11 +43,6 @@
   <node pkg="tf" type="static_transform_publisher" name="localiztion" args="0 0 0 0 0 0 /map /odom 100" />
 
   <node name="rviz" pkg="rviz" type="rviz"  args="-d $(find param)/config/nav_test.rviz" />
-
-
-<!--   <node pkg="pcl_ros" type="pcd_to_pointcloud" name="pcd_to_pointcloud" args="$(find param)/map/11_27_1.pcd 0.1">
-    <param name="frame_id" value = "/map" />
-  </node> -->
 
     <node pkg="tf" type="static_transform_publisher" name="rslidar" args="0.1 0 0.7 0 0 0 /base_link /rslidar 100" />
 
