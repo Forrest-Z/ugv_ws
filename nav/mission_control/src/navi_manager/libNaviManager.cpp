@@ -2,9 +2,9 @@
 
 
 NaviManager::NaviManager():pn("~"),
-isNewGoal_(true),isGetPath_(false),
+isNewGoal_(true),pp_path_index_(0),
 isMapSave_(false),isJunSave_(false),
-isRecObs_(false)
+isRecObs_(false),isGoalReached_(true)
 {
   pn.param<bool>("use_sim", isUseSim_, true);
   pn.param<string>("junction_file",junction_file_,"Node");
@@ -14,7 +14,7 @@ isRecObs_(false)
   vel_sub = n.subscribe("/base_cmd_vel",1, &NaviManager::vel_callback,this);
   goal_sub = n.subscribe("/move_base_simple/goal",1, &NaviManager::goal_callback,this);
   map_sub = n.subscribe("/nav_map",1, &NaviManager::map_callback,this);
-  obs_sub = n.subscribe("//clicked_point",1,&NaviManager::obs_callback,this);
+  obs_sub = n.subscribe("/clicked_point",1,&NaviManager::obs_callback,this);
 
   log_pub = n.advertise<std_msgs::String> ("/ugv_log", 1);
   path_pub = n.advertise<sensor_msgs::PointCloud> ("/path_points", 1);
@@ -22,7 +22,7 @@ isRecObs_(false)
   vis_pub = n.advertise<visualization_msgs::Marker>( "/waypoint_marker", 0 );
   wall_pub = n.advertise<sensor_msgs::PointCloud> ("/wall_points", 1);
   junction_pub = n.advertise<sensor_msgs::PointCloud> ("/junction_points", 1);
-
+  vel_pub = n.advertise<geometry_msgs::Twist> ("/local_cmd_vel", 1);
   sleep(1);
 
   paramInitialization();
@@ -47,17 +47,26 @@ void NaviManager::paramInitialization() {
   //recordLog("Parameter Initialization Done",LogState::INITIALIZATION);
   robot_position_ = {0,0,0};
   loadJunctionFile(junction_file_);
+  if (isUseSim_) {
+    recordLog("Runing Simulation Mode",LogState::INITIALIZATION);
+  } else {
+    recordLog("Show WayPoint and Path Only",LogState::INITIALIZATION);
+  }
 }
 
 void NaviManager::Mission() {
   simDriving(isUseSim_);
   publishStaticLayer();
+  if (!followPurePursuit()) {
+    local_cmd_vel_.linear.x = 0;
+    local_cmd_vel_.angular.z = 0;
+  }
+
+  vel_pub.publish(local_cmd_vel_);
 }
 
 void NaviManager::simDriving(bool flag) {
   if (flag) {
-    recordLog("Runing Simulation Mode",LogState::STATE_REPORT);
-
     geometry_msgs::TransformStamped odom_trans;
     odom_trans.header.stamp = ros::Time::now();
     odom_trans.header.frame_id = "odom";
@@ -69,9 +78,6 @@ void NaviManager::simDriving(bool flag) {
     odom_trans.transform.rotation = tf::createQuaternionMsgFromRollPitchYaw(0,0,robot_position_[2]);
 
     tf_odom.sendTransform(odom_trans);
-
-  } else {
-    recordLog("Show WayPoint and Path Only",LogState::STATE_REPORT);
   }
 }
 
@@ -105,6 +111,7 @@ void NaviManager::publishStaticLayer() {
   }
 
   vector<double> vehicle_in_map = {transform.getOrigin().x(),transform.getOrigin().y()};
+  if(!isUseSim_) robot_position_ = vehicle_in_map;
 
   double window_size = 10;
 
@@ -158,8 +165,6 @@ void NaviManager::publishStaticLayer() {
   }
 
   if (isUseSim_ && isRecObs_) {
-
-
     try {
       listener_obs.lookupTransform("/map", "/base_link",  
                        ros::Time(0), transform_obs);
@@ -177,19 +182,6 @@ void NaviManager::publishStaticLayer() {
     tf::poseStampedTFToMsg(tf_base,base_point);
 
     double obs_rad = 0.2;
-
-    // for (double i = -obs_rad; i <= obs_rad; i+=0.1)
-    // {
-    //   point.x = base_point.pose.position.x+i;
-    //   point.y = base_point.pose.position.y;
-    //   point.z = 1;
-    //   pointcloud_map.points.push_back(point);
-
-    //   point.x = base_point.pose.position.x;
-    //   point.y = base_point.pose.position.y+i;
-    //   point.z = 1;
-    //   pointcloud_map.points.push_back(point);
-    // }
 
     for (double i = 0; i < 2 * PI; i+=0.01) {
       geometry_msgs::Point32 point;
@@ -314,7 +306,92 @@ void NaviManager::publishJunctionPoints() {
     recordLog("Unabel to Load Junction Point",LogState::WARNNING);
     return;
   }
+  junction_list_.points.clear();
   junction_list_.header.frame_id = "map";
+  junction_list_.points.push_back(next_goal_);
   junction_pub.publish(junction_list_);
+}
+
+void NaviManager::findPurePursuitGoal() {
+  double lookahead_distance = 5;
+  double goal_distance_from_robot;
+
+
+  if (global_path_.poses.size() <= 0) return;
+
+  for (int i = pp_path_index_; i < global_path_.poses.size(); i++)
+  {
+    goal_distance_from_robot = hypot((global_path_.poses[i].pose.position.x - robot_position_[0]),
+      (global_path_.poses[i].pose.position.y - robot_position_[1]));
+    if (goal_distance_from_robot < lookahead_distance) continue;
+    next_goal_.x = global_path_.poses[i].pose.position.x;
+    next_goal_.y = global_path_.poses[i].pose.position.y;
+    pp_path_index_ = i;
+    return;
+  }
+
+  next_goal_.x = global_path_.poses[global_path_.poses.size()-1].pose.position.x;
+  next_goal_.y = global_path_.poses[global_path_.poses.size()-1].pose.position.y;
+  
+}
+
+bool NaviManager::followPurePursuit() {
+  double goal_tolerance = 0.5;
+  double rotation_threshold = PI;
+  double speed_scale = 0.3;
+  double rotation_scale = 1;
+
+  findPurePursuitGoal();
+  if (isGoalReached_) {
+    recordLog("Waiting for Plan",LogState::STATE_REPORT);
+    return false;
+  }
+
+  if (hypot(next_goal_.x - robot_position_[0],
+       next_goal_.y - robot_position_[1]) < goal_tolerance) {
+    // recordLog("Pure Pursuit Goal Reached",LogState::STATE_REPORT);
+    global_path_.poses.clear();
+    isGoalReached_ = true;
+    return false;
+  }
+
+  recordLog("Using Pure Pursuit",LogState::STATE_REPORT);
+  double goal_distance = hypot(next_goal_.x - robot_position_[0],
+    next_goal_.y - robot_position_[1]);
+  double goal_yaw = atan2(next_goal_.y - robot_position_[1],
+    next_goal_.x - robot_position_[0]);
+
+  // cout << "robot x y yaw = (" <<  robot_position_[0] << "," << 
+  //   robot_position_[1] << "," <<  robot_position_[2] << ")" << endl;
+  // cout << "goal  x y yaw = (" << next_goal_.x << "," << next_goal_.y <<
+  //   "," << goal_yaw <<")" << endl;
+
+
+  double temp_index = 0;
+  if (goal_yaw < 0) temp_index = 2;
+  if (robot_position_[2] < 0) temp_index = -2;
+
+  double rotation = goal_yaw  - robot_position_[2] + temp_index*PI;
+  if (rotation < -PI) rotation += 2*PI;
+  else if (rotation > PI) rotation -= 2*PI;
+  // cout << "yaw different raw = " << rotation << endl;
+
+  if (fabs(rotation) > rotation_threshold) {
+    rotation = 0.6;
+    goal_distance = 1;
+  }
+
+  // cout << "yaw different after = " << rotation << endl;
+
+
+  local_cmd_vel_.linear.x =  speed_scale * goal_distance;
+  local_cmd_vel_.angular.z = rotation_scale * rotation;
+
+  if (local_cmd_vel_.linear.x > 1) local_cmd_vel_.linear.x = 1;
+
+
+
+  return true;
+
 
 }

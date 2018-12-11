@@ -43,4 +43,38 @@
 
   <node name="rviz" pkg="rviz" type="rviz"  args="-d $(find param)/config/nav_test.rviz" />
 
+
+  <node name="autolabor_driver" pkg="autolabor_pro1_driver" type="autolabor_pro1_driver" output="screen">
+      <param name="port_name" value="/dev/ttyUSB0" />
+      <param name="odom_frame" value="odom" />
+      <param name="base_frame" value="base_link" />
+
+      <param name="baud_rate" value="115200" />
+      <param name="control_rate" value="10" />
+      <param name="sensor_rate" value="5" />
+
+      <param name="reduction_ratio" value="1.0" />
+      <param name="encoder_resolution" value="1600.0" />
+
+      <param name="wheel_diameter" value="0.25" />
+      <param name="model_param" value="0.83" />
+      <param name="pid_rate" value="50.0" />
+      <param name="maximum_encoding" value="32.0" />
+  </node>
+
+  <arg name="model" />
+  <arg name="gui" default="false" />
+
+  <param name="robot_description" textfile="$(find autolabor_description)/urdf/autolabor_pro1.urdf" />
+  <param name="use_gui" value="$(arg gui)" />
+
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" />
+
+  <node pkg="tf" type="static_transform_publisher" name="rslidar" args="0.1 0 0.7 0 0 0 /base_link /rslidar 100" />
+
+  <node pkg="tf" type="static_transform_publisher" name="base_laser" args="0.1 0 0.7 0 0 0 /base_link /base_laser 100" />
+
+  
+
 </launch>
