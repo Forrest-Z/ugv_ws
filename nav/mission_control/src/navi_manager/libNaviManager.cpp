@@ -111,8 +111,10 @@ void NaviManager::publishStaticLayer() {
   }
 
   vector<double> vehicle_in_map = {transform.getOrigin().x(),transform.getOrigin().y()};
-  if(!isUseSim_) robot_position_ = vehicle_in_map;
-
+  if(!isUseSim_) { 
+    robot_position_ = vehicle_in_map;
+    robot_position_[2] = tf::getYaw(transform.getRotation());
+  }
   double window_size = 10;
 
   int search_unit = window_size/static_map_info_.resolution;
@@ -361,10 +363,10 @@ bool NaviManager::followPurePursuit() {
   double goal_yaw = atan2(next_goal_.y - robot_position_[1],
     next_goal_.x - robot_position_[0]);
 
-  // cout << "robot x y yaw = (" <<  robot_position_[0] << "," << 
-  //   robot_position_[1] << "," <<  robot_position_[2] << ")" << endl;
-  // cout << "goal  x y yaw = (" << next_goal_.x << "," << next_goal_.y <<
-  //   "," << goal_yaw <<")" << endl;
+  cout << "robot x y yaw = (" <<  robot_position_[0] << "," << 
+    robot_position_[1] << "," <<  robot_position_[2] << ")" << endl;
+  cout << "goal  x y yaw = (" << next_goal_.x << "," << next_goal_.y <<
+    "," << goal_yaw <<")" << endl;
 
 
   double temp_index = 0;

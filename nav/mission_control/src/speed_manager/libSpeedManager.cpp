@@ -220,7 +220,7 @@ bool SpeedManager::collisionCheck(double input_x, double input_y) {
 
   if (linear_speed != 0 && angluar_speed != 0) {
     double distance = hypot(input_x,input_y);
-    if (distance <  3 * radius_scale_ * vehicle_radius_ && 
+    if (distance <  2 * radius_scale_ * vehicle_radius_ && 
       sign(linear_speed) == sign(input_x)) return true;
 
     double moving_radius       = linear_speed/angluar_speed;
@@ -294,8 +294,8 @@ void SpeedManager::collisionAvoid()
       virtual_force_x += (certainty*force_constant_x_*coordinate_x)/pow(distance,3);
       virtual_force_y += (certainty*force_constant_y_*coordinate_y)/pow(distance,2);
 
-      if (coordinate_y >= 0) free_space_right+=1/distance;
-      else free_space_left+=1/distance;
+      if (coordinate_y >= 0) free_space_right++;
+      else free_space_left++;
     }
     isFreeDrive_ = false;
   }
@@ -314,8 +314,8 @@ void SpeedManager::collisionAvoid()
       virtual_force_x += (certainty*force_constant_x_*coordinate_x)/pow(distance,3);
       virtual_force_y += (certainty*force_constant_y_*coordinate_y)/pow(distance,2);
 
-      if (coordinate_y >= 0) free_space_right+=1/distance;
-      else free_space_left+=1/distance;
+      if (coordinate_y >= 0) free_space_right++;
+      else free_space_left++;
 
     }
     isFreeDrive_ = false;

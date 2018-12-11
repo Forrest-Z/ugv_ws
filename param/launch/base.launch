@@ -4,11 +4,11 @@
       <rosparam>
         max_rotation: 0.6
         max_speed: 0.8
-        vehicle_radius: 0.5
+        vehicle_radius: 0.4
         lookahead_time: 2
         safe_zone: 8
         force_constant_x: 0.1
-        force_constant_y: 1
+        force_constant_y: 0.5
 
         max_height: 2
         min_height: 0.5
@@ -19,7 +19,7 @@
         one_hand: false
 
         goal_a: [99.4,9.0]
-        goal_b: [204,-36.6]]
+        goal_b: [204,-36.6]
 
       </rosparam>  
       
