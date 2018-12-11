@@ -350,7 +350,7 @@ bool NaviManager::followPurePursuit() {
   }
 
   if (hypot(next_goal_.x - robot_position_[0],
-       next_goal_.y - robot_position_[1]) < goal_tolerance) {
+    next_goal_.y - robot_position_[1]) < goal_tolerance) {
     // recordLog("Pure Pursuit Goal Reached",LogState::STATE_REPORT);
     global_path_.poses.clear();
     isGoalReached_ = true;
@@ -363,10 +363,10 @@ bool NaviManager::followPurePursuit() {
   double goal_yaw = atan2(next_goal_.y - robot_position_[1],
     next_goal_.x - robot_position_[0]);
 
-  cout << "robot x y yaw = (" <<  robot_position_[0] << "," << 
-    robot_position_[1] << "," <<  robot_position_[2] << ")" << endl;
-  cout << "goal  x y yaw = (" << next_goal_.x << "," << next_goal_.y <<
-    "," << goal_yaw <<")" << endl;
+  // cout << "robot x y yaw = (" <<  robot_position_[0] << "," << 
+  //   robot_position_[1] << "," <<  robot_position_[2] << ")" << endl;
+  // cout << "goal  x y yaw = (" << next_goal_.x << "," << next_goal_.y <<
+  //   "," << goal_yaw <<")" << endl;
 
 
   double temp_index = 0;
