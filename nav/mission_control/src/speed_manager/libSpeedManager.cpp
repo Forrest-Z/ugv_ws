@@ -276,9 +276,9 @@ void SpeedManager::collisionAvoid()
   // pointcloud_lidar.points.points = *collision_points_.points;
 
   // pointcloud_pub.publish(pointcloud_lidar);
-   collision_wall_points_.header.frame_id = "/base_link";
-  // collision_points_.header.frame_id = "/base_link";
-   pointcloud_pub.publish(collision_wall_points_);
+  // collision_wall_points_.header.frame_id = "/base_link";
+   collision_points_.header.frame_id = "/base_link";
+   pointcloud_pub.publish(collision_points_);
 
   if (!collision_points_.points.empty()) { 
     for (int i = 0; i < collision_points_.points.size(); ++i) {
@@ -289,11 +289,13 @@ void SpeedManager::collisionAvoid()
       if (distance > safe_zone_) continue;
       if (distance < vehicle_radius_) isEmergency = true;
 
+      if (coordinate_y > radius_scale_ * vehicle_radius_) coordinate_y = 0;
+
       virtual_force_x += (certainty*force_constant_x_*coordinate_x)/pow(distance,3);
       virtual_force_y += (certainty*force_constant_y_*coordinate_y)/pow(distance,2);
 
-      if (coordinate_y >= 0) free_space_right++;
-      else free_space_left++;
+      if (coordinate_y >= 0) free_space_right+=1/distance;
+      else free_space_left+=1/distance;
     }
     isFreeDrive_ = false;
   }
@@ -312,8 +314,8 @@ void SpeedManager::collisionAvoid()
       virtual_force_x += (certainty*force_constant_x_*coordinate_x)/pow(distance,3);
       virtual_force_y += (certainty*force_constant_y_*coordinate_y)/pow(distance,2);
 
-        if (coordinate_y >= 0) free_space_right+=1/distance;
-        else free_space_left+=1/distance;
+      if (coordinate_y >= 0) free_space_right+=1/distance;
+      else free_space_left+=1/distance;
 
     }
     isFreeDrive_ = false;
