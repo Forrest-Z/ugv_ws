@@ -25,6 +25,33 @@
 #define VOLTAGE_MSG_ID 0x08
 #define ERROR_MSG_ID 0xFF
 
+boost::array<double,36> odom_pose_covariance_1 = {  1e-1, 0, 0, 0, 0, 0,//运功时候
+                                                    0, 1e-1, 0, 0, 0, 0,
+                                                    0, 0, 1e-1, 0, 0, 0,
+                                                    0, 0, 0, 1e-1, 0, 0,
+                                                    0, 0, 0, 0, 1e-1, 0,
+                                                    0, 0, 0, 0, 0, 1e-1 };
+
+boost::array<double,36> odom_pose_covariance_2 = {  1e-1, 0, 0, 0, 0, 0,//运功时候
+                                                    0, 1e-1, 0, 0, 0, 0,
+                                                    0, 0, 1e-1, 0, 0, 0,
+                                                    0, 0, 0, 1e-1, 0, 0,
+                                                    0, 0, 0, 0, 1e-1, 0,
+                                                    0, 0, 0, 0, 0, 1e-1 };
+boost::array<double,36> odom_twist_covariance_1 = {  1e-1, 0, 0, 0, 0, 0,//运动时候的twist协方差
+                                                    0, 1e-1, 0, 0, 0, 0,
+                                                    0, 0, 1e-1, 0, 0, 0,
+                                                    0, 0, 0, 1e-1, 0, 0,
+                                                    0, 0, 0, 0, 1e-1, 0,
+                                                    0, 0, 0, 0, 0, 1e-1 };
+boost::array<double,36> odom_twist_covariance_2 = {  1e-1, 0, 0, 0, 0, 0,//运动时候的twist协方差
+                                                    0, 1e-1, 0, 0, 0, 0,
+                                                    0, 0, 1e-1, 0, 0, 0,
+                                                    0, 0, 0, 1e-1, 0, 0,
+                                                    0, 0, 0, 0, 1e-1, 0,
+                                                    0, 0, 0, 0, 0, 1e-1 };
+
+
 typedef boost::shared_ptr<boost::asio::serial_port> serial_port_ptr;
 
 class ChassisDriver
@@ -294,6 +321,16 @@ void ChassisDriver::handle_speed_msg(uint8_t* buffer_data){
     odom_.twist.twist.linear.x = v_dis;
     odom_.twist.twist.linear.y = 0;
     odom_.twist.twist.angular.z = v_theta;
+
+      if(abs(v_dis) < 0.0000001f)
+      {
+          odom_.pose.covariance = odom_pose_covariance_2;
+          odom_.twist.covariance = odom_twist_covariance_2;
+      } else{
+
+          odom_.pose.covariance = odom_pose_covariance_1;
+          odom_.twist.covariance = odom_twist_covariance_1;
+      }
 
     odom_pub_.publish(odom_);
 
