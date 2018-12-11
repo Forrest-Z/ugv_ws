@@ -101,6 +101,7 @@ private:
 	/** Subscribers **/
 	ros::Subscriber joy_sub;
 	ros::Subscriber cmd_sub;
+	ros::Subscriber local_cmd_sub;
 	ros::Subscriber scan_sub;
 	ros::Subscriber lidar_sub;
 	ros::Subscriber android_sub;
@@ -119,6 +120,7 @@ private:
 	double safe_zone_;
 	double vehicle_radius_;
 	double lookahead_time_;
+	double radius_scale_;
 
 	double force_constant_x_;
 	double force_constant_y_;
@@ -142,6 +144,7 @@ private:
 	bool isSupJoy_;
 	bool isOneHand_;
 	bool isRecovery_;
+	bool isFreeDrive_;
 
 
 	/** Variables **/
@@ -173,6 +176,7 @@ private:
 	void recordLog(string input,LogState level);
 	void superCommand();
 	void recoveryAcion();
+	void speedSmoother();
 
 	bool isReceiveJoyCommand();
 	bool isReceiveAndroidCommand();
@@ -252,11 +256,19 @@ private:
 
 
 	void cmd_callback(const geometry_msgs::Twist::ConstPtr& input) {
-
+		//if(!isFreeDrive_) return;
 		nav_speed_    = input->linear.x;
 	  nav_rotation_ = input->angular.z;
 	  isNav_ = true;
 	  isRecovery_ = false;
+	}
+
+	void local_cmd_callback(const geometry_msgs::Twist::ConstPtr& input) {
+		//if(isFreeDrive_) return;
+		android_speed_    = input->linear.x;
+	  android_rotation_ = input->angular.z;
+	  isAndroid_ = true;
+	  //isRecovery_ = false;
 	}
 
 	void android_callback(const geometry_msgs::Twist::ConstPtr& input) {

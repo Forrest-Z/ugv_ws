@@ -81,11 +81,8 @@ private:
   ros::Publisher vis_pub;
   ros::Publisher wall_pub;
   ros::Publisher junction_pub;
+  ros::Publisher vel_pub;
 
-	tf::TransformBroadcaster tf_odom;
-	tf::TransformListener listener;
-	tf::TransformListener listener_local;
-	tf::TransformListener listener_obs;
 
 	/** Subscribers **/
 	ros::Subscriber plan_sub;
@@ -97,29 +94,43 @@ private:
 	/** Parameters **/
 	string junction_file_;
 
+	tf::TransformBroadcaster tf_odom;
+	tf::TransformListener listener;
+	tf::TransformListener listener_local;
+	tf::TransformListener listener_obs;
 	/** Flags **/
 	bool isNewGoal_;
-	bool isGetPath_;
 	bool isUseSim_;
 	bool isMapSave_;
 	bool isJunSave_;
 	bool isRecObs_;
+	bool isGoalReached_;
 
 	/** Variables **/
 	nav_msgs::OccupancyGrid static_map_;
 	nav_msgs::MapMetaData static_map_info_;
+	geometry_msgs::Twist local_cmd_vel_;
+	nav_msgs::Path global_path_;
+	int pp_path_index_;
 	
 	vector<double> robot_position_;
 	//vector<vector<double>> waypoint_list_;
 	sensor_msgs::PointCloud junction_list_;
 
 	geometry_msgs::Point32 obs_point_;
+	geometry_msgs::Point32 next_goal_;
 	/** Functions **/
 	void recordLog(string input,LogState level);
 	void simDriving(bool flag);
 	void publishStaticLayer();
 	void loadJunctionFile(string filename);
 	void publishJunctionPoints();
+	bool followPurePursuit();
+	void findPurePursuitGoal();
+
+	inline double sign(double input) {
+		return input < 0.0 ? -1.0 : 1.0;
+	} 
 
 	/** Callbacks **/
 	void plan_callback(const nav_msgs::Path::ConstPtr& input) {
@@ -136,10 +147,13 @@ private:
 		vector<double> speed_box;
 
 		if(input->poses.size() <= 0) return;
-		isGetPath_ = true;
+		isGoalReached_ = false;
 
 		if(!isNewGoal_) return;
-		isNewGoal_ = false;
+		recordLog("New Plan Received",LogState::INFOMATION);
+		pp_path_index_ = 0;
+		global_path_ = *input;
+
 
 		int unit_step = input->poses.size()/100;
 		int startup_points = input->poses.size()/5;
@@ -198,7 +212,7 @@ private:
 		double lookahead_distance = 20;
 		visualization_msgs::Marker marker;
 		marker.action = visualization_msgs::Marker::DELETEALL;
-		vis_pub.publish( marker );
+		vis_pub.publish(marker);
 
 		double travel_distance_x = input->poses[0].pose.position.x - input->poses[1].pose.position.x;
 		double travel_distance_y = input->poses[0].pose.position.y - input->poses[1].pose.position.y;
@@ -236,8 +250,10 @@ private:
 			marker.text = streamObj3.str();//to_string(round(speed_box[i]*100)/100);
 			vis_pub.publish( marker );
 		}
+
 		waypoint_pub.publish(pointcloud_waypoint);
 		path_pub.publish(pointcloud_path);
+		isNewGoal_ = false;
 
 	}
 
@@ -247,6 +263,7 @@ private:
 		double speed = scale * input->linear.x;
 
 		robot_position_[2] += rotation;
+		robot_position_[2] = remainder(robot_position_[2],2*PI);
 		robot_position_[0] += speed * cos(robot_position_[2]);
 		robot_position_[1] += speed * sin(robot_position_[2]);
 	}
@@ -255,14 +272,14 @@ private:
 		static double last_goal_x = 0;
 		static double last_goal_y = 0;
 
-		if (!isGetPath_) return;
-
 		if (input->pose.position.x == last_goal_x && input->pose.position.y == last_goal_y) {
 		 	isNewGoal_ = false;
 		} else {
 			isNewGoal_ = true;
+			recordLog("New Goal Received",LogState::INFOMATION);
 			last_goal_x = input->pose.position.x;
 			last_goal_y = input->pose.position.y;
+
 		}	
 	}
 
