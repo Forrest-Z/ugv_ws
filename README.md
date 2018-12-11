@@ -18,6 +18,13 @@ efficiency
 * Adding "super control" mode to XBOX in case facing narrow path algorithm would allow robot to pass.
 * Android App is able to sending preset goal to robot. 
 
+##### v0.3 - Pure-Pursuit Plus VFF Version <br>
+* Using Pure-Pursuit Method to follow a static path, which planed base on navigation map's costmap.
+* Recording global path only once then set it to static until finish or receive new goal.
+* User could us RViz "Publish Point" button to publish a simulation obstacle when running test mode.
+* Using Obstacle Avoidance Algorithm base on VFF (Virtual Force Field).
+* Currently version are no longer using costmap and TEB as local planner due to slow process speed.
+
 
 
 ---
