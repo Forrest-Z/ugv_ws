@@ -380,7 +380,7 @@ bool NaviManager::followPurePursuit() {
 
   if (fabs(rotation) > rotation_threshold) {
     rotation = 0.6;
-    goal_distance = 1;
+    goal_distance = 0.3;
   }
 
   // cout << "yaw different after = " << rotation << endl;

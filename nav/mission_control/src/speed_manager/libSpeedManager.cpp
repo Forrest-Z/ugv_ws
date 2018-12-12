@@ -250,8 +250,6 @@ void SpeedManager::collisionAvoid()
   // Virtual force field
   // F(i,j) = [Fcr * C(i,j)/d(i,j)^2]  *  [xt-xo/d(i,j) + yt-yo/d(i,j)]
 
-
-
   cmd_vel_safe_ = cmd_vel_;
 
   double distance;
@@ -380,8 +378,6 @@ void SpeedManager::speedSmoother()
     cmd_vel_safe_.angular.z = last_cmd_anglar - max_acc_loop;
     last_cmd_anglar = cmd_vel_safe_.angular.z;
   }
-
-
 
 }
 
