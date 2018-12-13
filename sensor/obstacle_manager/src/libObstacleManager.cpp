@@ -1,6 +1,7 @@
 #include "libObstacleManager.h"
 
-ObstacleManager::ObstacleManager():pn("~")
+ObstacleManager::ObstacleManager():pn("~"),
+isBuild_(true)
 {
   cam_obs_sub = n.subscribe("/power2_point_result",1, &ObstacleManager::cam_obs_pub_callback,this);
   cam_obs_pub = n.advertise<sensor_msgs::PointCloud> ("/cam_obs", 1);

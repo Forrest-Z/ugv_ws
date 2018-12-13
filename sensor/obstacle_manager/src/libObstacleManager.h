@@ -61,6 +61,7 @@ private:
 	tf2_ros::TransformBroadcaster br3_;
 
 	sensor_msgs::PointCloud camera_obs_points_;
+	bool isBuild_;
 
 	void tfPublish();
 	void obstaclePublish();
@@ -68,19 +69,26 @@ private:
 	void cam_obs_pub_callback(const sensor_msgs::PointCloud::ConstPtr& input) {
 		camera_obs_points_.points.clear();
 		geometry_msgs::Point32 point;
-		double point_step = 0.1;
+		double point_step = 0.05;
 
   	camera_obs_points_.header.frame_id  = input->header.frame_id;
 
-		for (int i = 0; i < input->points.size() - 2; i+=3) {
-			for (int r = input->points[i+1].x; r < input->points[i+2].x; r+=point_step) {
-				for (int c = input->points[i+1].y; c < input->points[i+2].y; c+=point_step) {
-					point.x = r;
-					point.y = c;
-					point.z = input->points[i].z;
-					camera_obs_points_.points.push_back(point);
-				}
-			}			
+  	if(isBuild_) {
+  		isBuild_ = false;
+			for (int i = 0; i < input->points.size() - 2; i+=3) {
+				if(fabs(input->points[i+1].x-input->points[i+2].x) > 2) continue;
+				if(fabs(input->points[i+1].y-input->points[i+2].y) > 2) continue;
+
+				for (double r = input->points[i+1].x; r < input->points[i+2].x; r+=point_step) {
+					for (double c = input->points[i+1].y; c < input->points[i+2].y; c+=point_step) {
+						point.x = r;
+						point.y = c;
+						point.z = input->points[i].z;
+						camera_obs_points_.points.push_back(point);
+					}
+				}			
+			}
+			isBuild_ = true;
 		}
 
 	}
