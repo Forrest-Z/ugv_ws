@@ -33,11 +33,11 @@ void ObstacleManager::tfPublish() {
 
 	roll1 = atan2(R13[1],R13[2]);
   pitch1 = atan2(-R13[0],hypot(R13[1],R13[2]));
-  yaw1 = atan2(R12[0],R11[0]);
-
+  yaw1 = atan2(R12[0],R11[0]) - 0.55;
+  
   transformStamped1.header.stamp = ros::Time::now();
   transformStamped1.header.frame_id = "/rslidar";
-  transformStamped1.child_frame_id = "/power2_left";
+  transformStamped1.child_frame_id = "/power2_point";
   transformStamped1.transform.translation.x = invert_index * T1[0];
   transformStamped1.transform.translation.y = invert_index * T1[1];
   transformStamped1.transform.translation.z = invert_index * T1[2];
@@ -71,7 +71,7 @@ void ObstacleManager::tfPublish() {
 
 
   transformStamped2.header.stamp = ros::Time::now();
-  transformStamped2.header.frame_id = "/power2_left";
+  transformStamped2.header.frame_id = "/power2_point";
   transformStamped2.child_frame_id = "/plane";
   transformStamped2.transform.translation.x = invert_index * T2[0]/1000;
   transformStamped2.transform.translation.y = invert_index * T2[1]/1000;
