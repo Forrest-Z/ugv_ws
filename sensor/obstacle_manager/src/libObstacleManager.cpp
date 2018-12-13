@@ -2,6 +2,8 @@
 
 ObstacleManager::ObstacleManager():pn("~")
 {
+  cam_obs_sub = n.subscribe("/power2_point_result",1, &ObstacleManager::cam_obs_pub_callback,this);
+  cam_obs_pub = n.advertise<sensor_msgs::PointCloud> ("/cam_obs", 1);
   sleep(1);
 }
 
@@ -21,6 +23,13 @@ void ObstacleManager::Manager() {
 
 void ObstacleManager::Mission() {
 	tfPublish();
+  obstaclePublish();
+}
+
+void ObstacleManager::obstaclePublish() {
+  if (camera_obs_points_.points.empty()) return;
+
+  cam_obs_pub.publish(camera_obs_points_);
 }
 
 void ObstacleManager::tfPublish() {
@@ -60,77 +69,73 @@ void ObstacleManager::tfPublish() {
     	 << roll1 << endl;
 
 
-	geometry_msgs::TransformStamped transformStamped2;
-	tf2::Quaternion q2;	
-	double roll2,pitch2,yaw2;
-	invert_index = 1;
+	// geometry_msgs::TransformStamped transformStamped2;
+	// tf2::Quaternion q2;	
+	// double roll2,pitch2,yaw2;
+	// invert_index = 1;
 
-	roll2 = atan2(R23[1],R23[2]);
-  pitch2 = atan2(-R23[0],hypot(R23[1],R23[2]));
-  yaw2 = atan2(R22[0],R21[0]);
-
-
-  transformStamped2.header.stamp = ros::Time::now();
-  transformStamped2.header.frame_id = "/power2_point";
-  transformStamped2.child_frame_id = "/plane";
-  transformStamped2.transform.translation.x = invert_index * T2[0]/1000;
-  transformStamped2.transform.translation.y = invert_index * T2[1]/1000;
-  transformStamped2.transform.translation.z = invert_index * T2[2]/1000;
-  q2.setRPY(roll2, pitch2, yaw2);
-  transformStamped2.transform.rotation.x = invert_index * q2.x();
-  transformStamped2.transform.rotation.y = invert_index * q2.y();
-  transformStamped2.transform.rotation.z = invert_index * q2.z();
-  transformStamped2.transform.rotation.w = invert_index * q2.w();
-  br2_.sendTransform(transformStamped2);
-
-  cout << "x y z yaw pitch roll " 
-  	   << transformStamped2.header.frame_id 
-  	   <<" to "
-  		 <<transformStamped2.child_frame_id <<endl;
-  cout << transformStamped2.transform.translation.x << " " 
-  		 << transformStamped2.transform.translation.y << " "
-  		 << transformStamped2.transform.translation.z << " " 
-    	 << yaw2 << " " 
-    	 << pitch2 << " " 
-    	 << roll2 << endl;
+	// roll2 = atan2(R23[1],R23[2]);
+ //  pitch2 = atan2(-R23[0],hypot(R23[1],R23[2]));
+ //  yaw2 = atan2(R22[0],R21[0]);
 
 
+ //  transformStamped2.header.stamp = ros::Time::now();
+ //  transformStamped2.header.frame_id = "/power2_point";
+ //  transformStamped2.child_frame_id = "/plane";
+ //  transformStamped2.transform.translation.x = invert_index * T2[0]/1000;
+ //  transformStamped2.transform.translation.y = invert_index * T2[1]/1000;
+ //  transformStamped2.transform.translation.z = invert_index * T2[2]/1000;
+ //  q2.setRPY(roll2, pitch2, yaw2);
+ //  transformStamped2.transform.rotation.x = invert_index * q2.x();
+ //  transformStamped2.transform.rotation.y = invert_index * q2.y();
+ //  transformStamped2.transform.rotation.z = invert_index * q2.z();
+ //  transformStamped2.transform.rotation.w = invert_index * q2.w();
+ //  br2_.sendTransform(transformStamped2);
 
-	geometry_msgs::TransformStamped transformStamped3;
-	tf2::Quaternion q3;	
-	double roll3,pitch3,yaw3;
-	invert_index = -1;
-
-	roll3 = atan2(R33[1],R33[2]);
-  pitch3 = atan2(-R33[0],hypot(R33[1],R33[2]));
-  yaw3 = atan2(R32[0],R31[0]);
-
-
-  transformStamped3.header.stamp = ros::Time::now();
-  transformStamped3.header.frame_id = "/plane";
-  transformStamped3.child_frame_id = "/power2_right";
-  transformStamped3.transform.translation.x = invert_index * T3[0]/1000;
-  transformStamped3.transform.translation.y = invert_index * T3[1]/1000;
-  transformStamped3.transform.translation.z = invert_index * T3[2]/1000;
-  q3.setRPY(roll3, pitch3, yaw3);
-  transformStamped3.transform.rotation.x = invert_index * q3.x();
-  transformStamped3.transform.rotation.y = invert_index * q3.y();
-  transformStamped3.transform.rotation.z = invert_index * q3.z();
-  transformStamped3.transform.rotation.w = invert_index * q3.w();
-  br3_.sendTransform(transformStamped3);
-
-  cout << "x y z yaw pitch roll " 
-  	   << transformStamped3.header.frame_id 
-  	   <<" to "
-  		 <<transformStamped3.child_frame_id <<endl;
-  cout << transformStamped3.transform.translation.x << " " 
-  		 << transformStamped3.transform.translation.y << " "
-  		 << transformStamped3.transform.translation.z << " " 
-    	 << yaw3 << " " 
-    	 << pitch3 << " " 
-    	 << roll3 << endl << endl;
+ //  cout << "x y z yaw pitch roll " 
+ //  	   << transformStamped2.header.frame_id 
+ //  	   <<" to "
+ //  		 <<transformStamped2.child_frame_id <<endl;
+ //  cout << transformStamped2.transform.translation.x << " " 
+ //  		 << transformStamped2.transform.translation.y << " "
+ //  		 << transformStamped2.transform.translation.z << " " 
+ //    	 << yaw2 << " " 
+ //    	 << pitch2 << " " 
+ //    	 << roll2 << endl;
 
 
 
+	// geometry_msgs::TransformStamped transformStamped3;
+	// tf2::Quaternion q3;	
+	// double roll3,pitch3,yaw3;
+	// invert_index = -1;
 
+	// roll3 = atan2(R33[1],R33[2]);
+ //  pitch3 = atan2(-R33[0],hypot(R33[1],R33[2]));
+ //  yaw3 = atan2(R32[0],R31[0]);
+
+
+ //  transformStamped3.header.stamp = ros::Time::now();
+ //  transformStamped3.header.frame_id = "/plane";
+ //  transformStamped3.child_frame_id = "/power2_right";
+ //  transformStamped3.transform.translation.x = invert_index * T3[0]/1000;
+ //  transformStamped3.transform.translation.y = invert_index * T3[1]/1000;
+ //  transformStamped3.transform.translation.z = invert_index * T3[2]/1000;
+ //  q3.setRPY(roll3, pitch3, yaw3);
+ //  transformStamped3.transform.rotation.x = invert_index * q3.x();
+ //  transformStamped3.transform.rotation.y = invert_index * q3.y();
+ //  transformStamped3.transform.rotation.z = invert_index * q3.z();
+ //  transformStamped3.transform.rotation.w = invert_index * q3.w();
+ //  br3_.sendTransform(transformStamped3);
+
+ //  cout << "x y z yaw pitch roll " 
+ //  	   << transformStamped3.header.frame_id 
+ //  	   <<" to "
+ //  		 <<transformStamped3.child_frame_id <<endl;
+ //  cout << transformStamped3.transform.translation.x << " " 
+ //  		 << transformStamped3.transform.translation.y << " "
+ //  		 << transformStamped3.transform.translation.z << " " 
+ //    	 << yaw3 << " " 
+ //    	 << pitch3 << " " 
+ //    	 << roll3 << endl << endl;
 }

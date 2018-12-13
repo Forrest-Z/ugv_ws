@@ -9,11 +9,15 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
 
+
+#include <sensor_msgs/PointCloud.h>
+#include <geometry_msgs/Point32.h>
+
 using std::vector;
 using std::cout;
 using std::endl;
 
-const int ROS_RATE_HZ   = 10;
+const int ROS_RATE_HZ   = 20;
 
 const vector<double> R11 = {4.619579111799e-01, 1.120235603441e-01, 8.797986191318e-01};
 const vector<double> R12 = {-8.847258557293e-01, -1.123975717332e-02, 4.659762097605e-01};
@@ -46,11 +50,40 @@ private:
 	ros::NodeHandle n;
 	ros::NodeHandle pn;
 
+	/** Publishers **/
+	ros::Publisher cam_obs_pub;
+
+	/** Subscribers **/
+	ros::Subscriber cam_obs_sub;
+
 	tf2_ros::TransformBroadcaster br1_;
 	tf2_ros::TransformBroadcaster br2_;
 	tf2_ros::TransformBroadcaster br3_;
 
+	sensor_msgs::PointCloud camera_obs_points_;
+
 	void tfPublish();
+	void obstaclePublish();
+
+	void cam_obs_pub_callback(const sensor_msgs::PointCloud::ConstPtr& input) {
+		camera_obs_points_.points.clear();
+		geometry_msgs::Point32 point;
+		double point_step = 0.1;
+
+  	camera_obs_points_.header.frame_id  = input->header.frame_id;
+
+		for (int i = 0; i < input->points.size() - 2; i+=3) {
+			for (int r = input->points[i+1].x; r < input->points[i+2].x; r+=point_step) {
+				for (int c = input->points[i+1].y; c < input->points[i+2].y; c+=point_step) {
+					point.x = r;
+					point.y = c;
+					point.z = input->points[i].z;
+					camera_obs_points_.points.push_back(point);
+				}
+			}			
+		}
+
+	}
 	
 };
 
