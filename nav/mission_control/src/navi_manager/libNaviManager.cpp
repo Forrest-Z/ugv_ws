@@ -8,6 +8,10 @@ isRecObs_(false),isGoalReached_(true)
 {
   pn.param<bool>("use_sim", isUseSim_, true);
   pn.param<string>("junction_file",junction_file_,"Node");
+  pn.param<string>("base_frame", base_frame_, "/base_link");
+  pn.param<string>("camera_frame", camera_frame_, "/power2_point");
+  pn.param<string>("lidar_frame", lidar_frame_, "/rslidar");
+  pn.param<string>("map_frame", map_frame_, "/map");
 
 
   plan_sub = n.subscribe("/move_base/GlobalPlanner/plan",1, &NaviManager::plan_callback,this);
@@ -70,7 +74,7 @@ void NaviManager::simDriving(bool flag) {
     geometry_msgs::TransformStamped odom_trans;
     odom_trans.header.stamp = ros::Time::now();
     odom_trans.header.frame_id = "odom";
-    odom_trans.child_frame_id = "base_link";
+    odom_trans.child_frame_id = base_frame_;
 
     odom_trans.transform.translation.x = robot_position_[0];
     odom_trans.transform.translation.y = robot_position_[1];
@@ -93,16 +97,16 @@ void NaviManager::publishStaticLayer() {
   geometry_msgs::PoseStamped map_point;
   geometry_msgs::PoseStamped base_point;
 
-  map_point.header.frame_id = "/map";
-  base_point.header.frame_id = "/base_link";
+  map_point.header.frame_id = map_frame_;
+  base_point.header.frame_id = base_frame_;
 
   tf::Stamped<tf::Pose> tf_map;
   tf::Stamped<tf::Pose> tf_base;
 
-  pointcloud_map.header.frame_id = "/base_link";
+  pointcloud_map.header.frame_id = base_frame_;
 
   try {
-    listener.lookupTransform("/map", "/base_link",  
+    listener.lookupTransform(map_frame_, base_frame_,  
                              ros::Time(0), transform);
   }
   catch (tf::TransformException ex) {
@@ -147,7 +151,7 @@ void NaviManager::publishStaticLayer() {
       map_point.pose.position.y = j * static_map_info_.resolution + static_map_info_.origin.position.y;
      
       try {
-        listener_local.lookupTransform("/base_link", "/map",  
+        listener_local.lookupTransform(base_frame_,map_frame_,  
                          ros::Time(0), transform_local);
       }
       catch (tf::TransformException ex){
@@ -156,7 +160,7 @@ void NaviManager::publishStaticLayer() {
       }
 
       tf::poseStampedMsgToTF(map_point,tf_map);
-      listener_local.transformPose("/base_link",ros::Time(0),tf_map,"/map",tf_base);
+      listener_local.transformPose(base_frame_,ros::Time(0),tf_map,map_frame_,tf_base);
       tf::poseStampedTFToMsg(tf_base,base_point);
 
       point.x = base_point.pose.position.x;
@@ -168,7 +172,7 @@ void NaviManager::publishStaticLayer() {
 
   if (isUseSim_ && isRecObs_) {
     try {
-      listener_obs.lookupTransform("/map", "/base_link",  
+      listener_obs.lookupTransform(map_frame_, base_frame_,  
                        ros::Time(0), transform_obs);
     }
     catch (tf::TransformException ex){
@@ -180,7 +184,7 @@ void NaviManager::publishStaticLayer() {
     map_point.pose.position.y = obs_point_.y;
 
     tf::poseStampedMsgToTF(map_point,tf_map);
-    listener_obs.transformPose("/base_link",ros::Time(0),tf_map,"/map",tf_base);
+    listener_obs.transformPose(base_frame_,ros::Time(0),tf_map,map_frame_,tf_base);
     tf::poseStampedTFToMsg(tf_base,base_point);
 
     double obs_rad = 0.2;
@@ -309,7 +313,7 @@ void NaviManager::publishJunctionPoints() {
     return;
   }
   junction_list_.points.clear();
-  junction_list_.header.frame_id = "map";
+  junction_list_.header.frame_id = map_frame_;
   junction_list_.points.push_back(next_goal_);
   junction_pub.publish(junction_list_);
 }

@@ -3,8 +3,17 @@
 ObstacleManager::ObstacleManager():pn("~"),
 isBuild_(true)
 {
+  pn.param<string>("base_frame", base_frame_, "/base_link");
+  pn.param<string>("camera_frame", camera_frame_, "/power2_point");
+  pn.param<string>("lidar_frame", lidar_frame_, "/rslidar");
+  pn.param<string>("map_frame", map_frame_, "/map");
+
   cam_obs_sub = n.subscribe("/power2_point_result",1, &ObstacleManager::cam_obs_pub_callback,this);
-  cam_obs_pub = n.advertise<sensor_msgs::PointCloud> ("/cam_obs", 1);
+  lidar_sub = n.subscribe("/rslidar_points",1, &ObstacleManager::lidar_callback,this);
+
+  cam_obs_pub = n.advertise<sensor_msgs::PointCloud> ("/power_points", 1);
+  pointcloud_pub = n.advertise<sensor_msgs::PointCloud> ("/partial_rslidar_points", 1);
+
   sleep(1);
 }
 
@@ -58,16 +67,16 @@ void ObstacleManager::tfPublish() {
   transformStamped1.transform.rotation.w = invert_index * q1.w();
   br1_.sendTransform(transformStamped1);
 
-  cout << "x y z yaw pitch roll " 
-  	   << transformStamped1.header.frame_id 
-  	   <<" to "
-  		 <<transformStamped1.child_frame_id <<endl;
-  cout << transformStamped1.transform.translation.x << " " 
-  		 << transformStamped1.transform.translation.y << " "
-  		 << transformStamped1.transform.translation.z << " " 
-    	 << yaw1 << " " 
-    	 << pitch1 << " " 
-    	 << roll1 << endl;
+  // cout << "x y z yaw pitch roll " 
+  // 	   << transformStamped1.header.frame_id 
+  // 	   <<" to "
+  // 		 <<transformStamped1.child_frame_id <<endl;
+  // cout << transformStamped1.transform.translation.x << " " 
+  // 		 << transformStamped1.transform.translation.y << " "
+  // 		 << transformStamped1.transform.translation.z << " " 
+  //   	 << yaw1 << " " 
+  //   	 << pitch1 << " " 
+  //   	 << roll1 << endl;
 
 
 	// geometry_msgs::TransformStamped transformStamped2;

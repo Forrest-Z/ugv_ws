@@ -25,19 +25,22 @@ SpeedManager::SpeedManager():pn("~"),
   pn.param<bool>("one_hand", isOneHand_, false);
   pn.param<vector<double>>("goal_a",goal_a_,{0,0});
   pn.param<vector<double>>("goal_b",goal_b_,{0,0});
-
+  pn.param<string>("base_frame", base_frame_, "/base_link");
+  pn.param<string>("camera_frame", camera_frame_, "/power2_point");
+  pn.param<string>("lidar_frame", lidar_frame_, "/rslidar");
+  pn.param<string>("map_frame", map_frame_, "/map");
 
 
 
   joy_sub = n.subscribe("/joy",1, &SpeedManager::joy_callback,this);
   cmd_sub = n.subscribe("/cmd_vel",1, &SpeedManager::cmd_callback,this);
   local_cmd_sub = n.subscribe("/local_cmd_vel",1, &SpeedManager::local_cmd_callback,this);
-  //scan_sub = n.subscribe("/scan",1, &SpeedManager::scan_callback,this);
   lidar_sub = n.subscribe("/rslidar_points",1, &SpeedManager::lidar_callback,this);
   wall_sub = n.subscribe("/wall_points",1, &SpeedManager::wall_callback,this);
   android_sub = n.subscribe("/virtual_joystick/cmd_vel",1, &SpeedManager::android_callback,this);
   nav_state_sub = n.subscribe("/nav_state",1,&SpeedManager::nav_state_callback,this);
   button_sub = n.subscribe("/button",1,&SpeedManager::button_callback,this);
+  power_sub = n.subscribe("/power_points",1,&SpeedManager::power_callback,this);
 
   vel_pub = n.advertise<geometry_msgs::Twist> ("/base_cmd_vel", 1);
   pointcloud_pub = n.advertise<sensor_msgs::PointCloud> ("/filtered_points", 1);
@@ -46,7 +49,6 @@ SpeedManager::SpeedManager():pn("~"),
   log_pub = n.advertise<std_msgs::String> ("/ugv_log", 1);
   move_base_goal_pub = n.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal",1);
   move_base_cancel_pub = n.advertise<actionlib_msgs::GoalID>("/move_base/cancel",1);
-  //scan_pub = n.advertise<sensor_msgs::LaserScan>("/scan",1);
 
 
   clear_costmap_client = n.serviceClient<std_srvs::EmptyRequest>("/move_base/clear_costmaps");
@@ -90,8 +92,8 @@ void SpeedManager::Mission() {
     superCommand();
   }
 
-  limitCommand();
-  speedSmoother();
+  limitCommand(cmd_vel_safe_);
+  speedSmoother(cmd_vel_safe_);
   vel_pub.publish(cmd_vel_safe_);
   clearCostmap();
 
@@ -156,7 +158,7 @@ void SpeedManager::drawVehicle(double center_x,double center_y,int seq) {
       }
     }
   }
-  pointcloud_vis.header.frame_id = "base_link";
+  pointcloud_vis.header.frame_id = base_frame_;
   if (seq == 1) visualization_pub.publish(pointcloud_vis);
   else if (seq == 2) visualization_pub_2.publish(pointcloud_vis);
 }
@@ -241,9 +243,37 @@ bool SpeedManager::collisionCheck(double input_x, double input_y) {
     return input_y < safe_y_right && input_y > safe_y_left && sign(input_x) == sign(linear_speed);
   }
 
+}
 
+void SpeedManager::computeForce(sensor_msgs::PointCloud& points,
+  double& force_x,double& force_y,double& freespace,bool& isEmergency) {
+
+  double distance;
+  double coordinate_x;
+  double coordinate_y;
+  double certainty = 0.01;
+
+  if (!points.points.empty()) { 
+    for (int i = 0; i < points.points.size(); ++i) {
+      distance = hypot(points.points[i].x,points.points[i].y);
+      coordinate_x = points.points[i].x;
+      coordinate_y = points.points[i].y;
+
+      if (distance > safe_zone_) continue;
+      if (distance < vehicle_radius_) isEmergency = true;
+
+      if (coordinate_y > radius_scale_ * vehicle_radius_) coordinate_y = 0;
+
+      force_x += (certainty*force_constant_x_*coordinate_x)/pow(distance,3);
+      force_y += (certainty*force_constant_y_*coordinate_y)/pow(distance,2);
+
+      if (coordinate_y >= 0) freespace++;
+      else freespace--;
+    }
+  }
 
 }
+
 
 void SpeedManager::collisionAvoid()
 {
@@ -252,77 +282,24 @@ void SpeedManager::collisionAvoid()
 
   cmd_vel_safe_ = cmd_vel_;
 
-  double distance;
-  double coordinate_x;
-  double coordinate_y;
-
-  double free_space_right = 0;
-  double free_space_left = 0;
-  double free_space_last = -100;
-  double free_space_resolution = 0.01;
-
-  double virtual_force_x = 0;
-  double virtual_force_y = 0;
-
-  double certainty = 0.01;
+  double free_space_index = 0;
+  double virtual_force_x  = 0;
+  double virtual_force_y  = 0;
 
   bool isEmergency = false;
 
-  // sensor_msgs::PointCloud pointcloud_lidar;
-  // pointcloud_lidar.header.frame_id = "/base_link";
+  // pointcloud_lidar.header.frame_id = base_frame_;
+  collision_wall_points_.header.frame_id = base_frame_;
+  //collision_lidar_points_.header.frame_id = base_frame_;
+  pointcloud_pub.publish(collision_wall_points_);
 
-  // pointcloud_lidar.points.points = *collision_points_.points;
+  computeForce(collision_lidar_points_,virtual_force_x,virtual_force_y,free_space_index,isEmergency);
+  computeForce(collision_wall_points_,virtual_force_x,virtual_force_y,free_space_index,isEmergency);
+  computeForce(collision_power_points_,virtual_force_x,virtual_force_y,free_space_index,isEmergency);
+  //ROS_INFO_STREAM("FOC = "<<virtual_force_x<<","<<virtual_force_y);
 
-  // pointcloud_pub.publish(pointcloud_lidar);
-  // collision_wall_points_.header.frame_id = "/base_link";
-   collision_points_.header.frame_id = "/base_link";
-   pointcloud_pub.publish(collision_points_);
+  isFreeDrive_ = (collision_wall_points_.points.empty() && collision_lidar_points_.points.empty());
 
-  if (!collision_points_.points.empty()) { 
-    for (int i = 0; i < collision_points_.points.size(); ++i) {
-      distance = hypot(collision_points_.points[i].x,collision_points_.points[i].y);
-      coordinate_x = collision_points_.points[i].x;
-      coordinate_y = collision_points_.points[i].y;
-
-      if (distance > safe_zone_) continue;
-      if (distance < vehicle_radius_) isEmergency = true;
-
-      if (coordinate_y > radius_scale_ * vehicle_radius_) coordinate_y = 0;
-
-      virtual_force_x += (certainty*force_constant_x_*coordinate_x)/pow(distance,3);
-      virtual_force_y += (certainty*force_constant_y_*coordinate_y)/pow(distance,2);
-
-      if (coordinate_y >= 0) free_space_right++;
-      else free_space_left++;
-    }
-    isFreeDrive_ = false;
-  }
-
-  if (!collision_wall_points_.points.empty()) { 
-    for (int i = 0; i < collision_wall_points_.points.size(); ++i) {
-      distance = hypot(collision_wall_points_.points[i].x,collision_wall_points_.points[i].y);
-      coordinate_x = collision_wall_points_.points[i].x;
-      coordinate_y = collision_wall_points_.points[i].y;
-
-      if (distance > safe_zone_) continue;
-      if (distance < vehicle_radius_) isEmergency = true;
-
-      if (coordinate_y > radius_scale_ * vehicle_radius_) coordinate_y = 0;
-
-      virtual_force_x += (certainty*force_constant_x_*coordinate_x)/pow(distance,3);
-      virtual_force_y += (certainty*force_constant_y_*coordinate_y)/pow(distance,2);
-
-      if (coordinate_y >= 0) free_space_right++;
-      else free_space_left++;
-
-    }
-    isFreeDrive_ = false;
-  }
-
-
-  if (collision_wall_points_.points.empty() && collision_points_.points.empty()) isFreeDrive_ = true;
-
-  // ROS_INFO_STREAM("FOC = "<<virtual_force_x<<","<<virtual_force_y);
 
   // if (fabs(cmd_vel_.linear.x) < fabs(virtual_force_x)) cmd_vel_safe_.linear.x = 0;
   // else cmd_vel_safe_.linear.x -= virtual_force_x;
@@ -330,13 +307,11 @@ void SpeedManager::collisionAvoid()
 
   if (cmd_vel_.linear.x >= 0) cmd_vel_safe_.angular.z -= virtual_force_y;
   else cmd_vel_safe_.angular.z += virtual_force_y;
-  //cmd_vel_safe_.angular.z += virtual_force_y;
-
 
   //ROS_INFO_STREAM("SPE = "<<cmd_vel_safe_.linear.x<<","<<cmd_vel_safe_.angular.z);
 
   if (virtual_force_x != 0) {
-    cmd_vel_safe_.angular.z += (free_space_left - free_space_right) * 0.01;
+    cmd_vel_safe_.angular.z -= free_space_index * 0.01;
   }
 
   if (isEmergency) {
@@ -348,17 +323,17 @@ void SpeedManager::collisionAvoid()
 }
 
 
-void SpeedManager::limitCommand()
+void SpeedManager::limitCommand(geometry_msgs::Twist& input_cmd)
 {
-  if (fabs(cmd_vel_safe_.linear.x) > fabs(max_speed_)) cmd_vel_safe_.linear.x 
-    = sign(cmd_vel_safe_.linear.x) * max_speed_;
-  if (fabs(cmd_vel_safe_.angular.z) > fabs(max_rotation_)) cmd_vel_safe_.angular.z 
-    = sign(cmd_vel_safe_.angular.z) * max_rotation_;
-  if (fabs(cmd_vel_safe_.angular.z) < oscillation_) cmd_vel_safe_.angular.z = 0;
-  // if (fabs(cmd_vel_safe_.linear.x) < oscillation_) cmd_vel_safe_.linear.x = 0;
+  if (fabs(input_cmd.linear.x) > fabs(max_speed_)) input_cmd.linear.x 
+    = sign(input_cmd.linear.x) * max_speed_;
+  if (fabs(input_cmd.angular.z) > fabs(max_rotation_)) input_cmd.angular.z 
+    = sign(input_cmd.angular.z) * max_rotation_;
+  if (fabs(input_cmd.angular.z) < oscillation_) input_cmd.angular.z = 0;
+  // if (fabs(input_cmd.linear.x) < oscillation_) input_cmd.linear.x = 0;
 }
 
-void SpeedManager::speedSmoother()
+void SpeedManager::speedSmoother(geometry_msgs::Twist& input_cmd)
 {
   static double last_cmd_linear = 0;
   static double last_cmd_anglar = 0;
@@ -366,17 +341,17 @@ void SpeedManager::speedSmoother()
   double max_acc_rt = 5;
   double max_acc_loop = max_acc_rt/ROS_RATE_HZ;
 
-  if (cmd_vel_safe_.linear.x > last_cmd_linear) {
-    cmd_vel_safe_.linear.x = last_cmd_linear + max_acc_loop;
-    last_cmd_linear = cmd_vel_safe_.linear.x;
+  if (input_cmd.linear.x > last_cmd_linear) {
+    input_cmd.linear.x = last_cmd_linear + max_acc_loop;
+    last_cmd_linear = input_cmd.linear.x;
   }
-  if (cmd_vel_safe_.angular.z > last_cmd_anglar && cmd_vel_safe_.angular.z >= 0) {
-    cmd_vel_safe_.angular.z = last_cmd_anglar + max_acc_loop;
-    last_cmd_anglar = cmd_vel_safe_.angular.z;
+  if (input_cmd.angular.z > last_cmd_anglar && input_cmd.angular.z >= 0) {
+    input_cmd.angular.z = last_cmd_anglar + max_acc_loop;
+    last_cmd_anglar = input_cmd.angular.z;
   }
-  else if (cmd_vel_safe_.angular.z < last_cmd_anglar && cmd_vel_safe_.angular.z < 0) {
-    cmd_vel_safe_.angular.z = last_cmd_anglar - max_acc_loop;
-    last_cmd_anglar = cmd_vel_safe_.angular.z;
+  else if (input_cmd.angular.z < last_cmd_anglar && input_cmd.angular.z < 0) {
+    input_cmd.angular.z = last_cmd_anglar - max_acc_loop;
+    last_cmd_anglar = input_cmd.angular.z;
   }
 
 }

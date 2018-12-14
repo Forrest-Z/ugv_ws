@@ -94,6 +94,11 @@ private:
 	/** Parameters **/
 	string junction_file_;
 
+	string base_frame_;
+	string camera_frame_;
+	string lidar_frame_;
+	string map_frame_;
+
 	tf::TransformBroadcaster tf_odom;
 	tf::TransformListener listener;
 	tf::TransformListener listener_local;

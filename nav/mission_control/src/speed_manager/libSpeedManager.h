@@ -96,18 +96,17 @@ private:
 	ros::Publisher log_pub;
 	ros::Publisher move_base_goal_pub;
 	ros::Publisher move_base_cancel_pub;
-	ros::Publisher scan_pub;
 
 	/** Subscribers **/
 	ros::Subscriber joy_sub;
 	ros::Subscriber cmd_sub;
 	ros::Subscriber local_cmd_sub;
-	ros::Subscriber scan_sub;
 	ros::Subscriber lidar_sub;
 	ros::Subscriber android_sub;
 	ros::Subscriber nav_state_sub;
 	ros::Subscriber button_sub;
 	ros::Subscriber wall_sub;
+	ros::Subscriber power_sub;
 
 	/** Services **/
 	ros::ServiceClient clear_costmap_client;
@@ -131,6 +130,11 @@ private:
 	double min_range_;
 
 	double oscillation_;
+
+	string base_frame_;
+	string camera_frame_;
+	string lidar_frame_;
+	string map_frame_;
 
 	vector<double> goal_a_;
 	vector<double> goal_b_;
@@ -160,8 +164,9 @@ private:
 	geometry_msgs::Twist cmd_vel_;
 	geometry_msgs::Twist cmd_vel_safe_;
 
-	sensor_msgs::PointCloud collision_points_;
+	sensor_msgs::PointCloud collision_lidar_points_;
 	sensor_msgs::PointCloud collision_wall_points_;
+	sensor_msgs::PointCloud collision_power_points_;
 
 	tf::TransformListener listener;
 
@@ -169,18 +174,15 @@ private:
 	void drawVehicle(double center_x,double center_y,int seq);
 	void drawPath(int seq);
 	bool collisionCheck(double input_x, double input_y);
+	void computeForce(sensor_msgs::PointCloud& points,double& force_x,double& force_y,double& freespace,bool& flag);
 	void collisionAvoid();
-	void limitCommand();
+	void limitCommand(geometry_msgs::Twist& input_cmd);
 	void debugFunction();
 	void clearCostmap();
 	void recordLog(string input,LogState level);
 	void superCommand();
 	void recoveryAcion();
-	void speedSmoother();
-
-	bool isReceiveJoyCommand();
-	bool isReceiveAndroidCommand();
-	bool isReceiveNavCommand();
+	void speedSmoother(geometry_msgs::Twist& input_cmd);
 	bool isReceiveCommand();
 
 
@@ -280,32 +282,10 @@ private:
 
 	}
 
-
-	void scan_callback(const sensor_msgs::LaserScan::ConstPtr& input) {
-	  geometry_msgs::Point32 point;
-	  sensor_msgs::PointCloud pointcloud_scan;
-
-	  pointcloud_scan.header = input->header;
-
-	  //collision_points_.points.clear();
-	  for (int i = 0; i < input->ranges.size(); i++) {
-	    double angle = input->angle_min + i * input->angle_increment;
-	    point.x = input->ranges[i] * cos(angle);
-	    point.y = input->ranges[i] * sin(angle);
-
-	    if ( !collisionCheck(point.x,point.y) ) continue;
-
-	    //collision_points_.points.push_back(point);
-	    pointcloud_scan.points.push_back(point);
-	  }
-	  //pointcloud_pub.publish(pointcloud_scan);		
-	}
-
-
 	void lidar_callback(const sensor_msgs::PointCloud2::ConstPtr& msg) {
 		tf::StampedTransform transform;
 		try {
-			listener.lookupTransform("/base_link", "/rslidar", ros::Time(0), transform);
+			listener.lookupTransform(base_frame_, lidar_frame_, ros::Time(0), transform);
 		} catch (tf::TransformException ex) {
 	    recordLog("Waiting for Lidar to Base",LogState::WARNNING);
 	    return;
@@ -313,7 +293,7 @@ private:
 
 		pcl::PointCloud<pcl::PointXYZ> cloud_in;
 		pcl::PointCloud<pcl::PointXYZ> cloud_trans;
-		cloud_trans.header.frame_id="base_link";
+		cloud_trans.header.frame_id = base_frame_;
 		sensor_msgs::PointCloud2 cloud_out; 
 
 		pcl::fromROSMsg(*msg,cloud_in);
@@ -328,9 +308,9 @@ private:
 
 
 		sensor_msgs::PointCloud pointcloud_lidar;
-	  pointcloud_lidar.header.frame_id = "/base_link";
+	  pointcloud_lidar.header.frame_id = base_frame_;
 
-	  collision_points_.points.clear();
+	  collision_lidar_points_.points.clear();
 	  
 	  sensor_msgs::LaserScan output;
 	  output.header = pointcloud_lidar.header;
@@ -366,7 +346,7 @@ private:
 	    point.z = *iter_z;
 	    
 	    pointcloud_lidar.points.push_back(point);
-	    collision_points_.points.push_back(point);
+	    collision_lidar_points_.points.push_back(point);
 	  }
 	  pointcloud_pub.publish(pointcloud_lidar);
 	  //scan_pub.publish(output);  
@@ -377,7 +357,7 @@ private:
 		string msg = input->data;
 		if (msg == "1") {
 			geometry_msgs::PoseStamped msg;
-			msg.header.frame_id = "map";
+			msg.header.frame_id = map_frame_;
       msg.header.stamp = ros::Time::now();
       msg.pose.position.x = goal_a_[0];
       msg.pose.position.y = goal_a_[1]; 
@@ -389,7 +369,7 @@ private:
 		}
 		else if (msg == "2") {		
 			geometry_msgs::PoseStamped msg;
-			msg.header.frame_id = "map";
+			msg.header.frame_id = map_frame_;
       msg.header.stamp = ros::Time::now();
       msg.pose.position.x = goal_b_[0];
       msg.pose.position.y = goal_b_[1]; 
@@ -441,9 +421,6 @@ private:
 	void wall_callback(const sensor_msgs::PointCloud::ConstPtr& input) {
 		collision_wall_points_.points.clear();
 		geometry_msgs::Point32 point;
-
-  	// pointcloud_pub.publish(input);
-
 		for (int i = 0; i < input->points.size(); ++i) {
 			if(!collisionCheck(input->points[i].x,input->points[i].y)) continue;
 
@@ -451,6 +428,20 @@ private:
 			point.y = input->points[i].y;
 
 			collision_wall_points_.points.push_back(point);
+		}
+	}
+
+	void power_callback(const sensor_msgs::PointCloud::ConstPtr& input) {
+		collision_power_points_.points.clear();
+		geometry_msgs::Point32 point;
+
+		for (int i = 0; i < input->points.size(); ++i) {
+			if(!collisionCheck(input->points[i].x,input->points[i].y)) continue;
+
+			point.x = input->points[i].x;
+			point.y = input->points[i].y;
+
+			collision_power_points_.points.push_back(point);
 		}
 	}
 
