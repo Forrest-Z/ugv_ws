@@ -380,7 +380,6 @@ bool NaviManager::followPurePursuit() {
   // cout << "goal  x y yaw = (" << next_goal_.x << "," << next_goal_.y <<
   //   "," << goal_yaw <<")" << endl;
 
-
   double temp_index = 0;
   if (goal_yaw < 0) temp_index = 2;
   if (robot_position_[2] < 0) temp_index = -2;
@@ -394,14 +393,9 @@ bool NaviManager::followPurePursuit() {
     rotation = 0.6;
     goal_distance = 0.3;
   }
-
   // cout << "yaw different after = " << rotation << endl;
-
-
   local_cmd_vel_.linear.x =  speed_scale * goal_distance;
   local_cmd_vel_.angular.z = rotation_scale * rotation;
-
-  if (local_cmd_vel_.linear.x > 1) local_cmd_vel_.linear.x = 1;
 
   return true;
 }

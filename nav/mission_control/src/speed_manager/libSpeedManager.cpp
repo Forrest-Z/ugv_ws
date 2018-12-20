@@ -279,7 +279,7 @@ void SpeedManager::collisionAvoid()
 {
   // Virtual force field
   // F(i,j) = [Fcr * C(i,j)/d(i,j)^2]  *  [xt-xo/d(i,j) + yt-yo/d(i,j)]
-
+  limitCommand(cmd_vel_);
   cmd_vel_safe_ = cmd_vel_;
 
   double free_space_index = 0;

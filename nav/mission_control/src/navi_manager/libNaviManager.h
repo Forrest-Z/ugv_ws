@@ -142,8 +142,10 @@ private:
 	void findPurePursuitGoal();
 
 	void publishCurrentGoal();
-
 	int findPointFromTwoZone(double input_x,double input_y);
+
+	void visualPath();
+
 
 
 	int findPointZone(double input_x,double input_y);
