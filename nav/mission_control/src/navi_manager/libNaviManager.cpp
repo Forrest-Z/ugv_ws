@@ -16,7 +16,7 @@ isRecObs_(false),isGoalReached_(true)
 
   plan_sub = n.subscribe("/move_base/GlobalPlanner/plan",1, &NaviManager::plan_callback,this);
   vel_sub = n.subscribe("/base_cmd_vel",1, &NaviManager::vel_callback,this);
-  goal_sub = n.subscribe("/move_base_simple/goal",1, &NaviManager::goal_callback,this);
+  goal_sub = n.subscribe("/navi_goal",1, &NaviManager::goal_callback,this);
   map_sub = n.subscribe("/nav_map",1, &NaviManager::map_callback,this);
   obs_sub = n.subscribe("/clicked_point",1,&NaviManager::obs_callback,this);
 
@@ -27,6 +27,10 @@ isRecObs_(false),isGoalReached_(true)
   wall_pub = n.advertise<sensor_msgs::PointCloud> ("/wall_points", 1);
   junction_pub = n.advertise<sensor_msgs::PointCloud> ("/junction_points", 1);
   vel_pub = n.advertise<geometry_msgs::Twist> ("/local_cmd_vel", 1);
+  move_base_goal_pub = n.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal",1);
+  move_base_cancel_pub = n.advertise<actionlib_msgs::GoalID>("/move_base/cancel",1);
+  call_map_pub = n.advertise<std_msgs::Int32>("/map_number",1);
+
   sleep(1);
 
   paramInitialization();
@@ -41,7 +45,7 @@ void NaviManager::Manager() {
   
   recordLog("Navi_manager Node is Running",LogState::INITIALIZATION);
   while (ros::ok()) {
-    NaviManager::Mission();
+    Mission();
     loop_rate.sleep();
     ros::spinOnce();
   }
@@ -60,7 +64,11 @@ void NaviManager::paramInitialization() {
 
 void NaviManager::Mission() {
   simDriving(isUseSim_);
+
   publishStaticLayer();
+  publishJunctionPoints();
+  publishCurrentGoal();
+
   if (!followPurePursuit()) {
     local_cmd_vel_.linear.x = 0;
     local_cmd_vel_.angular.z = 0;
@@ -202,7 +210,7 @@ void NaviManager::publishStaticLayer() {
 
   wall_pub.publish(pointcloud_map);
 
-  publishJunctionPoints();
+
 }
 
 
@@ -296,7 +304,7 @@ void NaviManager::loadJunctionFile(string filename) {
 
   geometry_msgs::Point32 point;
   junction_list_.points.clear();
-  int line_num = 1;
+  int line_num = 0;
   while (my_file >> point.z >> point.x >> point.y) {
     junction_list_.points.push_back(point);
     line_num++;
@@ -312,9 +320,9 @@ void NaviManager::publishJunctionPoints() {
     recordLog("Unabel to Load Junction Point",LogState::WARNNING);
     return;
   }
-  junction_list_.points.clear();
+  // junction_list_.points.clear();
   junction_list_.header.frame_id = map_frame_;
-  junction_list_.points.push_back(next_goal_);
+  // junction_list_.points.push_back(next_goal_);
   junction_pub.publish(junction_list_);
 }
 
@@ -368,7 +376,7 @@ bool NaviManager::followPurePursuit() {
     next_goal_.x - robot_position_[0]);
 
   // cout << "robot x y yaw = (" <<  robot_position_[0] << "," << 
-  //   robot_position_[1] << "," <<  robot_position_[2] << ")" << endl;
+  //   robot_position_[1] << "," <<  robot_position_[2] << ")" <<Junction endl;
   // cout << "goal  x y yaw = (" << next_goal_.x << "," << next_goal_.y <<
   //   "," << goal_yaw <<")" << endl;
 
@@ -395,9 +403,131 @@ bool NaviManager::followPurePursuit() {
 
   if (local_cmd_vel_.linear.x > 1) local_cmd_vel_.linear.x = 1;
 
-
-
   return true;
+}
+
+int NaviManager::findPointZone(double input_x,double input_y) {
+  if (!isJunSave_) {
+    recordLog("Unabel to Load Junction Point",LogState::WARNNING);
+    return -2;
+  }
+
+  geometry_msgs::Point32 closest_point;
+  geometry_msgs::Point32 second_closest_point;
+  double min_distance = DBL_MAX;
+  double second_min_distance = DBL_MAX;
+  double distance;
+  vector<int> junction_point_index = {0,0};
+  vector<int> candidate_zone = {0,0,0,0};
+
+  if (junction_list_.points.size() < 2) return -1;
+
+  min_distance = hypot((junction_list_.points[0].x - input_x),
+      (junction_list_.points[0].y - input_y));
+  second_min_distance = hypot((junction_list_.points[1].x - input_x),
+      (junction_list_.points[1].y - input_y));
+
+  for (int i = 2; i < junction_list_.points.size(); i++)
+  {
+    distance = hypot((junction_list_.points[i].x - input_x),
+      (junction_list_.points[i].y - input_y));
+
+
+    if (distance < min_distance && distance < second_min_distance) {
+      min_distance = distance;
+      junction_point_index[0] = i;
+    }
+
+    if (distance < second_min_distance && distance > min_distance) {
+      second_min_distance = distance;
+      junction_point_index[1] = i;
+    }
+
+  }
+
+  cout << junction_list_.points[junction_point_index[0]].z << endl;
+  cout << junction_list_.points[junction_point_index[1]].z << endl;
+  cout << min_distance << endl;
+  cout << second_min_distance << endl;
+
+  candidate_zone[0] = (int) junction_list_.points[junction_point_index[0]].z / 10;
+  candidate_zone[1] = int(junction_list_.points[junction_point_index[0]].z) % 10;
+  candidate_zone[2] = (int) junction_list_.points[junction_point_index[1]].z / 10;
+  candidate_zone[3] = int(junction_list_.points[junction_point_index[1]].z) % 10;
+
+  std::sort(candidate_zone.begin(), candidate_zone.end());
+
+  for (int i = 0; i < candidate_zone.size(); i++)
+  {
+    if(candidate_zone[i] == candidate_zone[i+1]) return candidate_zone[i];
+  }
+}
+
+int NaviManager::findPointFromTwoZone(double input_x,double input_y) {
+
+  // return 1;
+
+  if (!isJunSave_) {
+    recordLog("Unabel to Load Junction Point",LogState::WARNNING);
+    return -2;
+  }
+  if (junction_list_.points.size() != 1) return -1;
+
+  double junction_range = 10;
+
+  if (hypot((junction_list_.points[0].x - input_x),
+    (junction_list_.points[0].y - input_y)) < junction_range) return 0;
+  else if (input_x > junction_list_.points[0].x) return 2;
+  else return 1;
+}
+
+void NaviManager::publishCurrentGoal() {
+  static geometry_msgs::Point32 current_goal;
+  static std_msgs::Int32 map_number;
+  static double last_goal_x = 0;
+  static double last_goal_y = 0;
+
+  if(findPointFromTwoZone(navi_goal_.x,navi_goal_.y)
+    ==findPointFromTwoZone(robot_position_[0],robot_position_[1])) {
+    current_goal = navi_goal_;
+    map_number.data = findPointFromTwoZone(navi_goal_.x,navi_goal_.y);
+  } 
+  else if (findPointFromTwoZone(robot_position_[0],robot_position_[1])==0) {
+    current_goal = navi_goal_;
+    map_number.data = findPointFromTwoZone(navi_goal_.x,navi_goal_.y);
+  } else {
+    current_goal.x = junction_list_.points[0].x;
+    current_goal.y = junction_list_.points[0].y;
+    map_number.data = findPointFromTwoZone(robot_position_[0],robot_position_[1]);
+  }
+
+
+  // cout<< "DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG" << endl;
+  // cout<< "robot_position " << robot_position_[0] << " " << robot_position_[1] << endl;
+  // cout<< "navi_goal      " << navi_goal_.x << " " << navi_goal_.y << endl;
+  // cout<< "current_goal   " << current_goal.x << " " << current_goal.y << endl;
+  // cout<< "last_goal      " <<last_goal_x << " " << last_goal_y << endl;
+
+
+  if (current_goal.x == last_goal_x && current_goal.y == last_goal_y) {
+    // isNewGoal_ = false;
+  } else {
+    isNewGoal_ = true;
+    isMapSave_ = false;
+    recordLog("New Goal Received",LogState::INFOMATION);
+    last_goal_x = current_goal.x;
+    last_goal_y = current_goal.y;
+
+    geometry_msgs::PoseStamped msg;
+    msg.header.frame_id = map_frame_;
+    msg.header.stamp = ros::Time::now();
+    msg.pose.position.x = current_goal.x;
+    msg.pose.position.y = current_goal.y; 
+    msg.pose.orientation.w =1.0;
+    move_base_goal_pub.publish(msg);
+    call_map_pub.publish(map_number);
+
+  }
 
 
 }

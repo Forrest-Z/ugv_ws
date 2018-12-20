@@ -1,0 +1,7 @@
+image: dadeaft_1.png
+resolution: 0.05000
+origin: [-18.693047, -19.011288, 0.000000]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.196
+

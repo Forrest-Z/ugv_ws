@@ -47,8 +47,8 @@ SpeedManager::SpeedManager():pn("~"),
   visualization_pub = n.advertise<sensor_msgs::PointCloud> ("/visualization_points", 1);
   visualization_pub_2 = n.advertise<sensor_msgs::PointCloud> ("/visualization_points_safe", 1);
   log_pub = n.advertise<std_msgs::String> ("/ugv_log", 1);
-  move_base_goal_pub = n.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal",1);
-  move_base_cancel_pub = n.advertise<actionlib_msgs::GoalID>("/move_base/cancel",1);
+  goal_pub = n.advertise<geometry_msgs::PoseStamped>("/navi_goal",1);
+
 
 
   clear_costmap_client = n.serviceClient<std_srvs::EmptyRequest>("/move_base/clear_costmaps");
@@ -66,7 +66,7 @@ void SpeedManager::Manager() {
   ros::Rate loop_rate(ROS_RATE_HZ);
   recordLog("Speed_manager Node is Running",LogState::INITIALIZATION);
   while (ros::ok()) {
-    SpeedManager::Mission();
+    Mission();
     loop_rate.sleep();
     ros::spinOnce();
   }

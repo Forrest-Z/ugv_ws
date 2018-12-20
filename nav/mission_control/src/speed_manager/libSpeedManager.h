@@ -94,8 +94,8 @@ private:
 	ros::Publisher visualization_pub;
 	ros::Publisher visualization_pub_2;
 	ros::Publisher log_pub;
-	ros::Publisher move_base_goal_pub;
-	ros::Publisher move_base_cancel_pub;
+	ros::Publisher goal_pub;
+
 
 	/** Subscribers **/
 	ros::Subscriber joy_sub;
@@ -259,18 +259,18 @@ private:
 
 	void cmd_callback(const geometry_msgs::Twist::ConstPtr& input) {
 		//if(!isFreeDrive_) return;
-		nav_speed_    = input->linear.x;
-	  nav_rotation_ = input->angular.z;
-	  isNav_ = true;
-	  isRecovery_ = false;
+		// nav_speed_    = input->linear.x;
+	 //  nav_rotation_ = input->angular.z;
+	 //  isNav_ = true;
+	 //  isRecovery_ = false;
 	}
 
 	void local_cmd_callback(const geometry_msgs::Twist::ConstPtr& input) {
 		//if(isFreeDrive_) return;
-		android_speed_    = input->linear.x;
-	  android_rotation_ = input->angular.z;
-	  isAndroid_ = true;
-	  //isRecovery_ = false;
+		nav_speed_    = input->linear.x;
+	  nav_rotation_ = input->angular.z;
+	  isNav_ = true;
+	  isRecovery_ = false;
 	}
 
 	void android_callback(const geometry_msgs::Twist::ConstPtr& input) {
@@ -362,7 +362,7 @@ private:
       msg.pose.position.x = goal_a_[0];
       msg.pose.position.y = goal_a_[1]; 
       msg.pose.orientation.w =1.0;
-      move_base_goal_pub.publish(msg);
+      goal_pub.publish(msg);
 
 			recordLog("Button 1 | Goal at (" + to_string(int(msg.pose.position.x)) 
 				+ "," + to_string(int(msg.pose.position.y))+ ")",LogState::INFOMATION);
@@ -374,7 +374,7 @@ private:
       msg.pose.position.x = goal_b_[0];
       msg.pose.position.y = goal_b_[1]; 
       msg.pose.orientation.w =1.0;
-      move_base_goal_pub.publish(msg);
+      goal_pub.publish(msg);
 
 			recordLog("Button 2 | Goal at (" + to_string(int(msg.pose.position.x)) 
 				+ "," + to_string(int(msg.pose.position.y))+ ")",LogState::INFOMATION);

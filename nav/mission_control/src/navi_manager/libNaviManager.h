@@ -7,12 +7,15 @@
 #include <cmath>
 #include <vector>
 #include <time.h>
+#include <limits.h>
 
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
 #include <geometry_msgs/TransformStamped.h>
+#include <actionlib_msgs/GoalID.h>
 
 #include <std_msgs/String.h>
+#include <std_msgs/Int32.h>
 #include <nav_msgs/Path.h>
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/MapMetaData.h>
@@ -21,6 +24,7 @@
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <visualization_msgs/Marker.h>
+
 
 using std::string;
 using std::cout;
@@ -82,6 +86,9 @@ private:
   ros::Publisher wall_pub;
   ros::Publisher junction_pub;
   ros::Publisher vel_pub;
+  ros::Publisher move_base_goal_pub;
+  ros::Publisher move_base_cancel_pub;
+  ros::Publisher call_map_pub;
 
 
 	/** Subscribers **/
@@ -124,6 +131,7 @@ private:
 
 	geometry_msgs::Point32 obs_point_;
 	geometry_msgs::Point32 next_goal_;
+	geometry_msgs::Point32 navi_goal_;
 	/** Functions **/
 	void recordLog(string input,LogState level);
 	void simDriving(bool flag);
@@ -132,6 +140,15 @@ private:
 	void publishJunctionPoints();
 	bool followPurePursuit();
 	void findPurePursuitGoal();
+
+	void publishCurrentGoal();
+
+	int findPointFromTwoZone(double input_x,double input_y);
+
+
+	int findPointZone(double input_x,double input_y);
+	geometry_msgs::PoseStamped findJunctionPoint();
+	void findRoutingZone();
 
 	inline double sign(double input) {
 		return input < 0.0 ? -1.0 : 1.0;
@@ -274,18 +291,11 @@ private:
 	}
 
 	void goal_callback(const geometry_msgs::PoseStamped::ConstPtr& input) {
-		static double last_goal_x = 0;
-		static double last_goal_y = 0;
+		navi_goal_.x = input->pose.position.x;
+		navi_goal_.y = input->pose.position.y;
 
-		if (input->pose.position.x == last_goal_x && input->pose.position.y == last_goal_y) {
-		 	isNewGoal_ = false;
-		} else {
-			isNewGoal_ = true;
-			recordLog("New Goal Received",LogState::INFOMATION);
-			last_goal_x = input->pose.position.x;
-			last_goal_y = input->pose.position.y;
+	
 
-		}	
 	}
 
 	void map_callback(const nav_msgs::OccupancyGrid::ConstPtr& input) {
@@ -308,7 +318,6 @@ private:
 
 		obs_point_.x = input->point.x;
 		obs_point_.y = input->point.y;
-
 	}
 
 
