@@ -4,7 +4,8 @@
 NaviManager::NaviManager():pn("~"),
 isNewGoal_(true),pp_path_index_(0),
 isMapSave_(false),isJunSave_(false),
-isRecObs_(false),isGoalReached_(true)
+isRecObs_(false),isGoalReached_(true),
+isRecovery_(false)
 {
   pn.param<bool>("use_sim", isUseSim_, true);
   pn.param<string>("junction_file",junction_file_,"Node");
@@ -19,17 +20,19 @@ isRecObs_(false),isGoalReached_(true)
   goal_sub = n.subscribe("/navi_goal",1, &NaviManager::goal_callback,this);
   map_sub = n.subscribe("/nav_map",1, &NaviManager::map_callback,this);
   obs_sub = n.subscribe("/clicked_point",1,&NaviManager::obs_callback,this);
+  astar_state_sub = n.subscribe("/nav_state",1,&NaviManager::astar_state_callback,this);
 
   log_pub = n.advertise<std_msgs::String> ("/ugv_log", 1);
   path_pub = n.advertise<sensor_msgs::PointCloud> ("/path_points", 1);
   waypoint_pub = n.advertise<sensor_msgs::PointCloud> ("/waypoint_points", 1);
-  vis_pub = n.advertise<visualization_msgs::Marker>( "/waypoint_marker", 0 );
+  vis_pub = n.advertise<visualization_msgs::Marker>( "/waypoint_marker", 1);
   wall_pub = n.advertise<sensor_msgs::PointCloud> ("/wall_points", 1);
   junction_pub = n.advertise<sensor_msgs::PointCloud> ("/junction_points", 1);
   vel_pub = n.advertise<geometry_msgs::Twist> ("/local_cmd_vel", 1);
   move_base_goal_pub = n.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal",1);
   move_base_cancel_pub = n.advertise<actionlib_msgs::GoalID>("/move_base/cancel",1);
   call_map_pub = n.advertise<std_msgs::Int32>("/map_number",1);
+  navi_state_pub = n.advertise<std_msgs::Int32>("/navi_state",1);
 
   sleep(1);
 
@@ -68,6 +71,18 @@ void NaviManager::Mission() {
   publishStaticLayer();
   publishJunctionPoints();
   publishCurrentGoal();
+
+  static int ros_timer = 0;
+  int loop_s = 5;
+  if (ros_timer > loop_s * ROS_RATE_HZ) {
+    isNewGoal_ = true;
+    ros_timer = 0;
+  } else {
+    ros_timer++;
+  } 
+
+  
+
 
   if (!followPurePursuit()) {
     local_cmd_vel_.linear.x = 0;
@@ -357,6 +372,9 @@ bool NaviManager::followPurePursuit() {
 
   findPurePursuitGoal();
   if (isGoalReached_) {
+    std_msgs::Int32 msg;
+    msg.data = 1;
+    navi_state_pub.publish(msg);
     recordLog("Waiting for Plan",LogState::STATE_REPORT);
     return false;
   }
@@ -467,7 +485,7 @@ int NaviManager::findPointFromTwoZone(double input_x,double input_y) {
   }
   if (junction_list_.points.size() != 1) return -1;
 
-  double junction_range = 10;
+  double junction_range = 30;
 
   if (hypot((junction_list_.points[0].x - input_x),
     (junction_list_.points[0].y - input_y)) < junction_range) return 0;
@@ -511,7 +529,6 @@ void NaviManager::publishCurrentGoal() {
     recordLog("New Goal Received",LogState::INFOMATION);
     last_goal_x = current_goal.x;
     last_goal_y = current_goal.y;
-
     geometry_msgs::PoseStamped msg;
     msg.header.frame_id = map_frame_;
     msg.header.stamp = ros::Time::now();
@@ -520,8 +537,19 @@ void NaviManager::publishCurrentGoal() {
     msg.pose.orientation.w =1.0;
     move_base_goal_pub.publish(msg);
     call_map_pub.publish(map_number);
-
   }
 
+  if(isRecovery_) {
+    geometry_msgs::PoseStamped msg;
+    msg.header.frame_id = map_frame_;
+    msg.header.stamp = ros::Time::now();
+    msg.pose.position.x = current_goal.x;
+    msg.pose.position.y = current_goal.y; 
+    msg.pose.orientation.w =1.0;
+    move_base_goal_pub.publish(msg);
+    isRecovery_ = false;
+  }
 
 }
+
+

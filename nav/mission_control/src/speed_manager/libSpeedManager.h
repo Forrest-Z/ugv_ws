@@ -407,9 +407,7 @@ private:
 			}
 
 			case 2:{
-				isNav_ = false;
-				recordLog("Plan Failed",LogState::STATE_REPORT);
-				isRecovery_ = true;
+				
 			break;
 			}
 

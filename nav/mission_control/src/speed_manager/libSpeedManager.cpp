@@ -38,7 +38,7 @@ SpeedManager::SpeedManager():pn("~"),
   lidar_sub = n.subscribe("/rslidar_points",1, &SpeedManager::lidar_callback,this);
   wall_sub = n.subscribe("/wall_points",1, &SpeedManager::wall_callback,this);
   android_sub = n.subscribe("/virtual_joystick/cmd_vel",1, &SpeedManager::android_callback,this);
-  nav_state_sub = n.subscribe("/nav_state",1,&SpeedManager::nav_state_callback,this);
+  nav_state_sub = n.subscribe("/navi_state",1,&SpeedManager::nav_state_callback,this);
   button_sub = n.subscribe("/button",1,&SpeedManager::button_callback,this);
   power_sub = n.subscribe("/power_points",1,&SpeedManager::power_callback,this);
 
@@ -82,7 +82,7 @@ void SpeedManager::Mission() {
 ********************/
   if (lost_signal_ct_ > ROS_RATE_HZ * STOP_TIME_SEC) {
     zeroVelocity();
-    recordLog("Waiting for Controller",LogState::STATE_REPORT);
+    //recordLog("Waiting for Controller",LogState::STATE_REPORT);
   }
 
   if (isSupJoy_ != true) {
@@ -338,21 +338,27 @@ void SpeedManager::speedSmoother(geometry_msgs::Twist& input_cmd)
   static double last_cmd_linear = 0;
   static double last_cmd_anglar = 0;
 
-  double max_acc_rt = 5;
-  double max_acc_loop = max_acc_rt/ROS_RATE_HZ;
+  double max_acc_rt = 1;
+  double max_acc_loop_linear = max_acc_rt/ROS_RATE_HZ;
+  double max_acc_loop_angular = 5 * max_acc_rt/ROS_RATE_HZ;
 
-  if (input_cmd.linear.x > last_cmd_linear) {
-    input_cmd.linear.x = last_cmd_linear + max_acc_loop;
-    last_cmd_linear = input_cmd.linear.x;
+  if (input_cmd.linear.x > last_cmd_linear && input_cmd.linear.x > 0) {
+    input_cmd.linear.x = last_cmd_linear + max_acc_loop_linear;
   }
+  else if (input_cmd.linear.x < last_cmd_linear && input_cmd.linear.x < 0) {
+    input_cmd.linear.x = last_cmd_linear - max_acc_loop_linear;
+  }
+
   if (input_cmd.angular.z > last_cmd_anglar && input_cmd.angular.z >= 0) {
-    input_cmd.angular.z = last_cmd_anglar + max_acc_loop;
-    last_cmd_anglar = input_cmd.angular.z;
+    input_cmd.angular.z = last_cmd_anglar + max_acc_loop_angular;
   }
   else if (input_cmd.angular.z < last_cmd_anglar && input_cmd.angular.z < 0) {
-    input_cmd.angular.z = last_cmd_anglar - max_acc_loop;
-    last_cmd_anglar = input_cmd.angular.z;
+    input_cmd.angular.z = last_cmd_anglar - max_acc_loop_angular; 
   }
+
+
+  last_cmd_linear = input_cmd.linear.x;
+  last_cmd_anglar = input_cmd.angular.z;
 
 }
 

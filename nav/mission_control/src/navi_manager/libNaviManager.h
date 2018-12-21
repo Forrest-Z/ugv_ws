@@ -89,6 +89,7 @@ private:
   ros::Publisher move_base_goal_pub;
   ros::Publisher move_base_cancel_pub;
   ros::Publisher call_map_pub;
+  ros::Publisher navi_state_pub;
 
 
 	/** Subscribers **/
@@ -97,6 +98,7 @@ private:
 	ros::Subscriber goal_sub;
 	ros::Subscriber map_sub;
 	ros::Subscriber obs_sub;
+	ros::Subscriber astar_state_sub;
 
 	/** Parameters **/
 	string junction_file_;
@@ -117,6 +119,7 @@ private:
 	bool isJunSave_;
 	bool isRecObs_;
 	bool isGoalReached_;
+	bool isRecovery_;
 
 	/** Variables **/
 	nav_msgs::OccupancyGrid static_map_;
@@ -174,7 +177,7 @@ private:
 		isGoalReached_ = false;
 
 		if(!isNewGoal_) return;
-		recordLog("New Plan Received",LogState::INFOMATION);
+		//recordLog("New Plan Received",LogState::INFOMATION);
 		pp_path_index_ = 0;
 		global_path_ = *input;
 
@@ -321,6 +324,34 @@ private:
 		obs_point_.x = input->point.x;
 		obs_point_.y = input->point.y;
 	}
+
+
+	void astar_state_callback(const std_msgs::Int32::ConstPtr& input) {
+		int nav_state = input->data;
+
+		switch(nav_state)
+		{
+			case 0: {
+
+			break;
+			}
+
+			case 1:{
+			break;
+			}
+
+			case 2:{
+				recordLog("Plan Failed",LogState::WARNNING);
+				isRecovery_ = true;
+			break;
+			}
+
+			default: 
+				assert(false);
+		}
+	}
+
+
 
 
 };

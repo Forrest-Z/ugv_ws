@@ -34,10 +34,10 @@ void AisimbaBase::Manager() {
 }
 
 void AisimbaBase::Mission() {
-  if (port_) {
-    ROS_ERROR("error : port is already opened...");
-    return;
-  }
+  // if (port_) {
+  //   ROS_ERROR("error : port is already opened...");
+  //   return;
+  // }
   port_ = serial_port_ptr(new boost::asio::serial_port(io_service_));
   port_->open(port_name_, ec_);
   if (ec_) {
@@ -80,41 +80,61 @@ void AisimbaBase::sendBaseData() {
     0x09 right-backward
 
   -data[4] speed (0-100)
-    speed = [(data[5]>>4) * 10 + (data[5]&0x0f)] * 10
+    speed = [(data[4]>>4) * 10 + (data[4]&0x0f)] * 10
     data[4] = 0x10  speed = 100; 
   
   -data[5] data[6] steering (max 35)
     steering = [(data[5] - 0x30)*10 + (data[6]- 0x30]
   */
 
+  double max_speed = 2;
   uint8_t data[8] = {0x55, 0xaa, 0x04, 0x00, 0x00, 0x30, 0x30, 0xbb};
-
   data[2] = movingStateUpdate();
-  data[4] = 8 * (fabs(cmd_vel_.linear.x)/0.8);
-
+  data[4] = max_speed/3 * 10 * (fabs(cmd_vel_.linear.x)/0.8);
   int steering = 35 * (fabs(cmd_vel_.angular.z)/0.6);
   data[5] = int(steering/10) + 0x30;
   data[6] = (steering%10) + 0x30;
 
+  // for (int i = 0; i < 8; ++i) {
+  //   cout <<" 0x" << std::setfill('0') << std::setw(2) << std::hex << static_cast<int>(data[i]);
+  // }
+  // cout<<endl;
 
-  for (int i = 0; i < 8; ++i) {
-    cout <<" 0x" << std::setfill('0') << std::setw(2) << std::hex << static_cast<int>(data[i]);
-  }
-  cout<<endl;
+  double base_speed = static_cast<int>(data[4]) / 10.00 * 3.00;
+  double forward_back;
+  double left_right;
+  (steering == 0) ? left_right = 1 : left_right = fabs(cmd_vel_.angular.z)/cmd_vel_.angular.z;
+  (base_speed == 0) ? forward_back = 1 : forward_back = fabs(cmd_vel_.linear.x)/cmd_vel_.linear.x;
+
+  cout << "Linear Speed " << forward_back * base_speed
+    << " Steering Angle " << left_right * steering  << endl;
+  
 
   boost::asio::write(*port_.get(), boost::asio::buffer(data, 8), ec_);
 
 }
 
 void AisimbaBase::debugFunction() {
+
+  double max_speed = 2;
   uint8_t data[8] = {0x55, 0xaa, 0x04, 0x00, 0x00, 0x30, 0x30, 0xbb};
   data[2] = movingStateUpdate();
-  data[4] = 8 * (fabs(cmd_vel_.linear.x)/0.8);
+  data[4] = max_speed/3 * 10 * (fabs(cmd_vel_.linear.x)/0.8);
   int steering = 35 * (fabs(cmd_vel_.angular.z)/0.6);
   data[5] = int(steering/10) + 0x30;
   data[6] = (steering%10) + 0x30;
-  for (int i = 0; i < 8; ++i) {
-    cout <<" 0x" << std::setfill('0') << std::setw(2) << std::hex << static_cast<int>(data[i]);
-  }
-  cout<<endl;
+
+  // for (int i = 0; i < 8; ++i) {
+  //   cout <<" 0x" << std::setfill('0') << std::setw(2) << std::hex << static_cast<int>(data[i]);
+  // }
+  // cout<<endl;
+
+  double base_speed = static_cast<int>(data[4]) / 10.00 * 3.00;
+  double forward_back;
+  double left_right;
+  (steering == 0) ? left_right = 1 : left_right = fabs(cmd_vel_.angular.z)/cmd_vel_.angular.z;
+  (base_speed == 0) ? forward_back = 1 : forward_back = fabs(cmd_vel_.linear.x)/cmd_vel_.linear.x;
+
+  cout << "Linear Speed " << forward_back * base_speed
+    << " Steering Angle " << left_right * steering  << endl;
 }
