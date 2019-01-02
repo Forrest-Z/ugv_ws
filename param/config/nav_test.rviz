@@ -424,9 +424,9 @@ Visualization Manager:
           Enabled: true
           Invert Rainbow: true
           Max Color: 0; 255; 0
-          Max Intensity: 0.507339239
+          Max Intensity: 2
           Min Color: 255; 170; 0
-          Min Intensity: 0.507339239
+          Min Intensity: 0.100000001
           Name: Waypoint
           Position Transformer: XYZ
           Queue Size: 10
@@ -533,7 +533,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: 0
+      Angle: -0.00499999989
       Class: rviz/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
@@ -543,11 +543,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Scale: 4.43154287
+      Scale: 5.09735823
       Target Frame: base_link
       Value: TopDownOrtho (rviz)
-      X: 59.1631355
-      Y: -11.7555828
+      X: -19.3313828
+      Y: 2.30133152
     Saved: ~
 Window Geometry:
   Displays:
@@ -565,5 +565,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 930
-  X: 990
+  X: 61
   Y: 24

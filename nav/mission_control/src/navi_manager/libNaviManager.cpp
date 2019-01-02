@@ -72,14 +72,16 @@ void NaviManager::Mission() {
   publishJunctionPoints();
   publishCurrentGoal();
 
-  static int ros_timer = 0;
-  int loop_s = 5;
-  if (ros_timer > loop_s * ROS_RATE_HZ) {
-    isNewGoal_ = true;
-    ros_timer = 0;
-  } else {
-    ros_timer++;
-  } 
+  if(findPointFromTwoZone(robot_position_[0],robot_position_[1])==0) {
+    static int ros_timer = 0;
+    int loop_s = 5;
+    if (ros_timer > loop_s * ROS_RATE_HZ) {
+      isNewGoal_ = true;
+      ros_timer = 0;
+    } else {
+      ros_timer++;
+    } 
+  }
 
   
 

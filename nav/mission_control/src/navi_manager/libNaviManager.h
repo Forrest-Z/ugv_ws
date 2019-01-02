@@ -298,9 +298,6 @@ private:
 	void goal_callback(const geometry_msgs::PoseStamped::ConstPtr& input) {
 		navi_goal_.x = input->pose.position.x;
 		navi_goal_.y = input->pose.position.y;
-
-	
-
 	}
 
 	void map_callback(const nav_msgs::OccupancyGrid::ConstPtr& input) {

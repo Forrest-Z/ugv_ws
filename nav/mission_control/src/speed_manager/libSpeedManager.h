@@ -421,7 +421,6 @@ private:
 		geometry_msgs::Point32 point;
 		for (int i = 0; i < input->points.size(); ++i) {
 			if(!collisionCheck(input->points[i].x,input->points[i].y)) continue;
-
 			point.x = input->points[i].x;
 			point.y = input->points[i].y;
 
