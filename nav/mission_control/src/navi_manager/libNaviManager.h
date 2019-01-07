@@ -108,6 +108,9 @@ private:
 	string lidar_frame_;
 	string map_frame_;
 
+	double speed_scale_;
+  double rotation_scale_ ;
+
 	tf::TransformBroadcaster tf_odom;
 	tf::TransformListener listener;
 	tf::TransformListener listener_local;
@@ -285,7 +288,7 @@ private:
 	}
 
 	void vel_callback(const geometry_msgs::Twist::ConstPtr& input) {
-		double scale = 0.1;
+		double scale = 0.05;
 		double rotation = scale * input->angular.z;
 		double speed = scale * input->linear.x;
 

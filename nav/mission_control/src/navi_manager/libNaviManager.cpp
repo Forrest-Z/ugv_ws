@@ -13,7 +13,8 @@ isRecovery_(false)
   pn.param<string>("camera_frame", camera_frame_, "/power2_point");
   pn.param<string>("lidar_frame", lidar_frame_, "/rslidar");
   pn.param<string>("map_frame", map_frame_, "/map");
-
+  pn.param<double>("speed_scale", speed_scale_, 0.3);
+  pn.param<double>("rotation_scale", rotation_scale_, 0.5);
 
   plan_sub = n.subscribe("/move_base/GlobalPlanner/plan",1, &NaviManager::plan_callback,this);
   vel_sub = n.subscribe("/base_cmd_vel",1, &NaviManager::vel_callback,this);
@@ -205,6 +206,7 @@ void NaviManager::publishStaticLayer() {
       return;
     }
 
+
     map_point.pose.position.x = obs_point_.x;
     map_point.pose.position.y = obs_point_.y;
 
@@ -294,7 +296,7 @@ void NaviManager::recordLog(string input,LogState level) {
 
   if (event != last_log || level != LogState::STATE_REPORT) {
     if (log_schedule_[schedule_selected] < int(ros::Time::now().toSec()) - log_gap_sec) {
-      msg.data = input;
+      msg.data = ros::this_node::getName() + ": " + input;
       //ROS_INFO_STREAM(input);
 
       time_t clock = time(NULL);
@@ -369,8 +371,6 @@ void NaviManager::findPurePursuitGoal() {
 bool NaviManager::followPurePursuit() {
   double goal_tolerance = 0.5;
   double rotation_threshold = PI;
-  double speed_scale = 0.3;
-  double rotation_scale = 1;
 
   findPurePursuitGoal();
   if (isGoalReached_) {
@@ -410,12 +410,12 @@ bool NaviManager::followPurePursuit() {
   // cout << "yaw different raw = " << rotation << endl;
 
   if (fabs(rotation) > rotation_threshold) {
-    rotation = 0.6;
+    rotation = 0.8;
     goal_distance = 0.3;
   }
   // cout << "yaw different after = " << rotation << endl;
-  local_cmd_vel_.linear.x =  speed_scale * goal_distance;
-  local_cmd_vel_.angular.z = rotation_scale * rotation;
+  local_cmd_vel_.linear.x =  speed_scale_ * goal_distance;
+  local_cmd_vel_.angular.z = rotation_scale_ * rotation;
 
   return true;
 }

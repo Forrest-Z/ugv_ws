@@ -1,5 +1,12 @@
 
 
+<p>
+$$
+l = f_i(s)
+  = a_{i0} + a_{i1} \cdot s + a_{i2} \cdot s^2 + a_{i3} \cdot s^3 + a_{i4} \cdot s^4 + a_{i5} \cdot s^5        (0 \leq s \leq d_{i})
+$$
+</p>
+
 Package Description
 ---
 

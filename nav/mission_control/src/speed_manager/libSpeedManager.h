@@ -6,6 +6,7 @@
 #include <cmath>
 #include <vector>
 #include <time.h>
+#include <mutex>
 
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/Point32.h>
@@ -47,10 +48,13 @@ const string WHITE  = "\033[97m";
 const int BUTTON_LB             = 4;
 const int BUTTON_RB             = 5;
 
-const int BUTTON_A             = 0;
-const int BUTTON_B             = 1;
-const int BUTTON_X             = 2;
-const int BUTTON_Y             = 3;
+const int BUTTON_A              = 0;
+const int BUTTON_B              = 1;
+const int BUTTON_X              = 2;
+const int BUTTON_Y              = 3;
+
+const int BUTTON_BACK           = 6;
+const int BUTTON_START          = 7;
 
 const int AXIS_LEFT_LEFT_RIGHT  = 0;
 const int AXIS_LEFT_UP_DOWN     = 1;
@@ -71,6 +75,15 @@ enum class LogState
 	WARNNING,
 	ERROR
 }; 
+
+struct Lattice_Grid {
+  double x;
+  double y;
+  int row;
+  int col;
+  int length;
+  int width;
+};
 
 class SpeedManager
 {
@@ -148,9 +161,8 @@ private:
 	bool isSupJoy_;
 	bool isOneHand_;
 	bool isRecovery_;
-	bool isFreeDrive_;
 
-
+  std::mutex mutex_draw_;
 	/** Variables **/
 	double joy_speed_;
 	double joy_rotation_;
@@ -185,6 +197,9 @@ private:
 	void speedSmoother(geometry_msgs::Twist& input_cmd);
 	bool isReceiveCommand();
 
+	int findVehicleState(std::vector<sensor_msgs::PointCloud> Input_Points);
+	void publishPathParticle(std::vector<sensor_msgs::PointCloud> Input_Points,std::vector<Lattice_Grid>& Output_Points);
+	void findClearPath(std::vector<Lattice_Grid> Input_Grid,geometry_msgs::Twist& Output_Cmd);
 
 	inline double sign(double input) {
 		return input < 0.0 ? -1.0 : 1.0;
@@ -211,8 +226,8 @@ private:
 	  (input->buttons[BUTTON_LB] && input->buttons[BUTTON_RB]) 
 	  	? isSupJoy_ = true : isSupJoy_ = false;
 
-	  if (input->buttons[BUTTON_X] && input->buttons[BUTTON_LB]) poweron = false;
-	  if (input->buttons[BUTTON_Y] && input->buttons[BUTTON_LB]) poweron = true;
+	  if (input->buttons[BUTTON_BACK] && input->buttons[BUTTON_LB]) poweron = false;
+	  if (input->buttons[BUTTON_START] && input->buttons[BUTTON_LB]) poweron = true;
 
 	  if (isOneHand_) {
 	  	joy_x = input->axes[AXIS_LEFT_UP_DOWN];
@@ -258,7 +273,6 @@ private:
 
 
 	void cmd_callback(const geometry_msgs::Twist::ConstPtr& input) {
-		//if(!isFreeDrive_) return;
 		// nav_speed_    = input->linear.x;
 	 //  nav_rotation_ = input->angular.z;
 	 //  isNav_ = true;
@@ -266,7 +280,6 @@ private:
 	}
 
 	void local_cmd_callback(const geometry_msgs::Twist::ConstPtr& input) {
-		//if(isFreeDrive_) return;
 		nav_speed_    = input->linear.x;
 	  nav_rotation_ = input->angular.z;
 	  isNav_ = true;

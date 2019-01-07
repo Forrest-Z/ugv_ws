@@ -288,17 +288,22 @@ void SpeedManager::collisionAvoid()
 
   bool isEmergency = false;
 
-  // pointcloud_lidar.header.frame_id = base_frame_;
-  collision_wall_points_.header.frame_id = base_frame_;
-  //collision_lidar_points_.header.frame_id = base_frame_;
-  pointcloud_pub.publish(collision_wall_points_);
+  vector<sensor_msgs::PointCloud> total_collision_points;
+  total_collision_points = {collision_lidar_points_,collision_wall_points_,collision_power_points_};
+  std::vector<Lattice_Grid> path_grid;
+
+  //int current_state = findVehicleState(total_collision_points);
+  publishPathParticle(total_collision_points,path_grid);
+
+  if(findVehicleState(total_collision_points)!=3) {
+    findClearPath(path_grid,cmd_vel_safe_);
+  }
+
 
   computeForce(collision_lidar_points_,virtual_force_x,virtual_force_y,free_space_index,isEmergency);
   computeForce(collision_wall_points_,virtual_force_x,virtual_force_y,free_space_index,isEmergency);
   computeForce(collision_power_points_,virtual_force_x,virtual_force_y,free_space_index,isEmergency);
   //ROS_INFO_STREAM("FOC = "<<virtual_force_x<<","<<virtual_force_y);
-
-  isFreeDrive_ = (collision_wall_points_.points.empty() && collision_lidar_points_.points.empty());
 
 
   // if (fabs(cmd_vel_.linear.x) < fabs(virtual_force_x)) cmd_vel_safe_.linear.x = 0;
@@ -319,8 +324,181 @@ void SpeedManager::collisionAvoid()
     cmd_vel_safe_.linear.x = 0;
     cmd_vel_safe_.angular.z = cmd_vel_.angular.z * 0.3;
   }
+}
+
+int SpeedManager::findVehicleState(std::vector<sensor_msgs::PointCloud> Input_Points) {
+  int empty_ct = 0;
+  sensor_msgs::PointCloud all_in_one;
+  all_in_one.header.frame_id = base_frame_;
+
+  for (int i = 0; i < Input_Points.size(); i++) {
+    if(Input_Points[i].points.empty()) {
+      empty_ct++;
+    } else {
+      for (int j = 0; j < Input_Points[i].points.size(); j++) {
+        geometry_msgs::Point32 point;
+        point.x = Input_Points[i].points[j].x;
+        point.y = Input_Points[i].points[j].y;
+        all_in_one.points.push_back(point);
+      }
+    }
+  }
+
+  //pointcloud_pub.publish(all_in_one);
+  return empty_ct;
+}
+
+void SpeedManager::publishPathParticle(std::vector<sensor_msgs::PointCloud> Input_Points, std::vector<Lattice_Grid>& Output_Grid){
+
+  Output_Grid.clear();
+
+  sensor_msgs::PointCloud front_particle;
+  front_particle.header.frame_id = base_frame_;
+
+  bool isUnsafe = false;
+
+  double linear_scale = cmd_vel_safe_.linear.x;
+  double angluar_scale = cmd_vel_safe_.angular.z;
+
+  int roi_length = 10 * linear_scale;
+  int roi_width = 10 * angluar_scale;
+
+
+  int length_start,length_end;
+  int width_start,width_end;
+  int min_length = 2;
+
+
+  if(fabs(angluar_scale) < 0.1) angluar_scale = 0;
+
+
+  if(linear_scale < 0) {
+    if(fabs(linear_scale) < 0.2) linear_scale = -0.2;
+    length_start = roi_length;
+    length_end = min_length;
+
+    if(angluar_scale < 0) {
+      width_start = -min_length;
+      width_end = -roi_width;
+    } 
+    else if(angluar_scale > 0) {
+      width_start = -roi_width;
+      width_end = min_length;
+    } else {
+      width_start = -min_length;
+      width_end = min_length;
+    }
+  } 
+  else if(linear_scale > 0) {
+    if(fabs(linear_scale) < 0.2) linear_scale = 0.2;
+    length_start = -min_length;
+    length_end = roi_length;
+
+    if(angluar_scale < 0) {
+      width_start = roi_width;
+      width_end = min_length;
+    } 
+    else if(angluar_scale > 0) {
+      width_start = -min_length;
+      width_end = roi_width;
+    } else {
+      width_start = -min_length;
+      width_end = min_length;
+    }
+  } else {
+    length_start = -min_length;
+    length_end = min_length;
+
+    if(angluar_scale < 0) {
+      width_start = roi_width;
+      width_end = min_length;
+    } 
+    else if(angluar_scale > 0) {
+      width_start = -min_length;
+      width_end = roi_width;
+    } else {
+      width_start = -min_length;
+      width_end = min_length;
+    }
+  }
+
+  for (int i = length_start; i <= length_end; i++) {
+    for (int j = width_start; j <= width_end; j++) {
+      isUnsafe = false;
+      for (int m = 0; m < Input_Points.size(); m++) {
+        if(Input_Points[m].points.empty()) continue;
+        for (int n = 0; n < Input_Points[m].points.size(); n++) {
+          double dis_x = Input_Points[m].points[n].x - i*vehicle_radius_;
+          double dis_y = Input_Points[m].points[n].y - j*vehicle_radius_;
+          double dis_point = hypot(dis_x,dis_y);
+          if(dis_point < vehicle_radius_) {
+            isUnsafe = true;
+            continue;
+          }
+        }
+      }
+
+      if(!isUnsafe) {
+        geometry_msgs::Point32 point;
+        point.x = i*vehicle_radius_;
+        point.y = j*vehicle_radius_;
+        front_particle.points.push_back(point);
+      // } else {
+        Lattice_Grid pixle;
+        pixle.x = i*vehicle_radius_;
+        pixle.y = j*vehicle_radius_;
+        pixle.row = i;
+        pixle.col = j;
+        pixle.length = length_end - length_start;
+        pixle.width = width_end - width_start;
+        Output_Grid.push_back(pixle);
+      }
+    }
+  }
+  pointcloud_pub.publish(front_particle);
+  
+}
+
+void SpeedManager::findClearPath(std::vector<Lattice_Grid> Input_Grid, geometry_msgs::Twist& Output_Cmd) {
+
+  if(Input_Grid.empty()) return;
+
+  bool isBlocked = false;
+  int min_length = 2;
+  int prerow = Input_Grid[0].row;
+  int total_row = 1;
+  int left_ct = 0;
+  vector<int> col_ct(2*Input_Grid[0].width,0);
+
+  for (int i = 0; i < Input_Grid.size(); ++i) {
+    if(abs(prerow - Input_Grid[i].row) == 1) {
+      total_row++;
+      prerow = Input_Grid[i].row;  
+    }
+    col_ct[Input_Grid[i].col+Input_Grid[0].width]++;
+  }
+
+  for (int i = 0; i < col_ct.size(); ++i) {
+    
+    // cout<<"Line Number "<< i - Input_Grid[0].width;
+    // cout<<" Line Size = "<<col_ct[i];
+    // cout<<" Length = "<<Input_Grid[0].length + 1<<endl;
+    if(col_ct[i] == Input_Grid[0].length + 1) {
+      (i - Input_Grid[0].width > 0) ? left_ct++ : left_ct--;
+    }
+  }
+
+  if(total_row < Input_Grid[0].length + 1) {
+    isBlocked = true;
+    //cout << "break at " << total_row - min_length<<endl;
+  }
+
+  //cmd_vel_safe_.angular.z += left_ct * 0.00001;
+  // cout<<left_ct * 0.001<<"   | ";
+  // cout<<cmd_vel_safe_.angular.z<<endl;
 
 }
+
 
 
 void SpeedManager::limitCommand(geometry_msgs::Twist& input_cmd)
@@ -340,7 +518,7 @@ void SpeedManager::speedSmoother(geometry_msgs::Twist& input_cmd)
 
   double max_acc_rt = 1;
   double max_acc_loop_linear = max_acc_rt/ROS_RATE_HZ;
-  double max_acc_loop_angular = 5 * max_acc_rt/ROS_RATE_HZ;
+  double max_acc_loop_angular = 2 * max_acc_rt/ROS_RATE_HZ;
 
   if (input_cmd.linear.x > last_cmd_linear && input_cmd.linear.x > 0) {
     input_cmd.linear.x = last_cmd_linear + max_acc_loop_linear;
@@ -471,7 +649,7 @@ void SpeedManager::recordLog(string input,LogState level) {
 
   if (event != last_log || level != LogState::STATE_REPORT) {
     if (log_schedule_[schedule_selected] < int(ros::Time::now().toSec()) - log_gap_sec) {
-      msg.data = input;
+      msg.data = ros::this_node::getName() + ": " + input;
       //ROS_INFO_STREAM(input);
 
       time_t clock = time(NULL);

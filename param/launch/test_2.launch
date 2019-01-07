@@ -1,32 +1,36 @@
 <launch>
   
   <node name="speed_manager" pkg="mission_control" type="speed_manager" output="screen" respawn="true">
-      <rosparam>
-        max_rotation: 0.6
-        max_speed: 0.8
-        vehicle_radius: 0.7
-        lookahead_time: 4
-        safe_zone: 4
-        force_constant_x: 0.4
-        force_constant_y: 0.1
+    <rosparam>
+      max_rotation: 0.6
+      max_speed: 0.8
+      vehicle_radius: 0.7
+      lookahead_time: 4
+      safe_zone: 5
+      force_constant_x: 0.4
+      force_constant_y: 0.05
 
-        max_height: 2
-        min_height: 0.5
-        max_range: 8
-        min_range: 0.2
-        oscillation: 0.1
+      max_height: 2
+      min_height: 0.5
+      max_range: 8
+      min_range: 0.2
+      oscillation: 0.1
 
-        one_hand: false
+      one_hand: false
 
-        goal_a: [-127.095825,-3.857359]
-        goal_b: [399.883423,-14.068487]
+      goal_a: [-127.095825,-3.857359]
+      goal_b: [399.883423,-14.068487]
 
-      </rosparam>  
-      
+    </rosparam>  
+    
   </node>
 
   <node name="navi_manager" pkg="mission_control" type="navi_manager" output="screen" respawn="true">    
-      <param name="use_sim"  value="true"/>
+    <rosparam>
+      use_sim: true
+      speed_scale: 0.2
+      rotation_scale: 0.5
+    </rosparam>
       <param name="junction_file"  value="$(find param)/map/junction.txt"/>
   </node>
 
