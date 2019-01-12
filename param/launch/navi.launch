@@ -1,16 +1,10 @@
 <launch>
 
-  <node pkg="map_server" type="map_server" name="map_server_nav" args="$(find param)/map/1_lmap.yaml" output="screen">
+  <node pkg="map_server" type="map_server" name="map_server_nav" args="$(find param)/map/1.yaml" output="screen">
     <remap from="map" to="nav_map"/>
     <param name="map_folder"  value="$(find param)/map/"/>
   </node>
 
-<!--   <node pkg="map_server" type="map_server" name="map_server_nav" args="lmap.yaml">
-    <remap from="map" to="nav_map"/>
-  </node> -->
-<!--   <node pkg="map_server" type="map_server" name="map_server_vis" args="$(find param)/map/map_vis.yaml">
-    <remap from="map" to="vis_map"/>
-  </node>  -->
 
 <!--   <node pkg="pcl_ros" type="pcd_to_pointcloud" name="pcd_to_pointcloud" args="$(find param)/map/withimu_11_30_02aft.pcd 0.1">
     <param name="frame_id" value = "/map" />

@@ -19,6 +19,7 @@
 #include <nav_msgs/Path.h>
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/MapMetaData.h>
+#include <nav_msgs/Odometry.h>
 #include <sensor_msgs/PointCloud.h>
 #include <geometry_msgs/Point32.h>
 #include <geometry_msgs/Twist.h>
@@ -90,6 +91,7 @@ private:
   ros::Publisher move_base_cancel_pub;
   ros::Publisher call_map_pub;
   ros::Publisher navi_state_pub;
+  ros::Publisher odom_pub;
 
 
 	/** Subscribers **/
@@ -110,6 +112,7 @@ private:
 
 	double speed_scale_;
   double rotation_scale_ ;
+	double lookahead_distance_;
 
 	tf::TransformBroadcaster tf_odom;
 	tf::TransformListener listener;
@@ -130,12 +133,14 @@ private:
 	geometry_msgs::Twist local_cmd_vel_;
 	nav_msgs::Path global_path_;
 	int pp_path_index_;
+
 	
 	vector<double> robot_position_;
 	//vector<vector<double>> waypoint_list_;
 	sensor_msgs::PointCloud junction_list_;
+	sensor_msgs::PointCloud pp_goal_;
 
-	geometry_msgs::Point32 obs_point_;
+	std::vector<geometry_msgs::Point32> obs_point_;
 	geometry_msgs::Point32 next_goal_;
 	geometry_msgs::Point32 navi_goal_;
 	/** Functions **/
@@ -149,6 +154,7 @@ private:
 
 	void publishCurrentGoal();
 	int findPointFromTwoZone(double input_x,double input_y);
+	int findPointFromThreeZone(double input_x,double input_y);
 
 	void visualPath();
 
@@ -320,9 +326,12 @@ private:
 		recordLog("Point at ( " + to_string(input->point.x)
 			+ "," + to_string(input->point.y) + " )",LogState::INFOMATION);
 		isRecObs_ = true;
-
-		obs_point_.x = input->point.x;
-		obs_point_.y = input->point.y;
+		const int obs_num_max = 20;
+		if(obs_point_.size()>20) obs_point_.clear();
+		geometry_msgs::Point32 point;
+		point.x = input->point.x;
+		point.y = input->point.y;
+		obs_point_.push_back(point);
 	}
 
 

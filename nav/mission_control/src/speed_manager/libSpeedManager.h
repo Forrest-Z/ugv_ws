@@ -30,6 +30,9 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <boost/make_shared.hpp>
 
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/core/core.hpp>
+
 using std::string;
 using std::cout;
 using std::endl;
@@ -38,6 +41,8 @@ using std::isnan;
 using std::to_string;
 using std::ceil;
 
+using cv::Mat;
+using cv::Vec3b;
 
 const string ORIGIN = "\033[0m";
 const string RED    = "\033[91m"; 
@@ -151,6 +156,8 @@ private:
 
 	vector<double> goal_a_;
 	vector<double> goal_b_;
+	vector<double> goal_x_;
+	vector<double> goal_y_;
 
 	/** Flags **/
 	int lost_signal_ct_;
@@ -178,6 +185,7 @@ private:
 
 	sensor_msgs::PointCloud collision_lidar_points_;
 	sensor_msgs::PointCloud collision_wall_points_;
+	sensor_msgs::PointCloud collision_wall_points_all_;
 	sensor_msgs::PointCloud collision_power_points_;
 
 	tf::TransformListener listener;
@@ -186,7 +194,8 @@ private:
 	void drawVehicle(double center_x,double center_y,int seq);
 	void drawPath(int seq);
 	bool collisionCheck(double input_x, double input_y);
-	void computeForce(sensor_msgs::PointCloud& points,double& force_x,double& force_y,double& freespace,bool& flag);
+	void computeForce(sensor_msgs::PointCloud& points
+		,double& force_x,double& force_y,double& freespace,bool& flag);
 	void collisionAvoid();
 	void limitCommand(geometry_msgs::Twist& input_cmd);
 	void debugFunction();
@@ -198,11 +207,19 @@ private:
 	bool isReceiveCommand();
 
 	int findVehicleState(std::vector<sensor_msgs::PointCloud> Input_Points);
-	void publishPathParticle(std::vector<sensor_msgs::PointCloud> Input_Points,std::vector<Lattice_Grid>& Output_Points);
-	void findClearPath(std::vector<Lattice_Grid> Input_Grid,geometry_msgs::Twist& Output_Cmd);
+	void publishPathParticle(std::vector<sensor_msgs::PointCloud> Input_Points,
+		cv::Mat& Output_Grid);
+	void findClearPath(cv::Mat& Input_Grid,geometry_msgs::Twist& Output_Cmd);
+	void searchPath(cv::Mat& Input_Grid,
+		int Start_Row,int Start_Col,int End_Row,int End_Col);
+	void shiftLine(cv::Mat& Input_Grid,geometry_msgs::Twist& Output_Cmd,int& Ref_Timer);
 
 	inline double sign(double input) {
 		return input < 0.0 ? -1.0 : 1.0;
+	}
+
+	inline int sign(int input) {
+		return input < 0 ? -1 : 1;
 	}
 
 	inline void zeroVelocity() {
@@ -266,6 +283,14 @@ private:
 	  }
 	  if (input->buttons[BUTTON_B] && input->buttons[BUTTON_LB]) {
 	  	sim_button->data = "2";
+	  	button_callback(sim_button);
+	  }
+	  if (input->buttons[BUTTON_X] && input->buttons[BUTTON_LB]) {
+	  	sim_button->data = "3";
+	  	button_callback(sim_button);
+	  }
+	  if (input->buttons[BUTTON_Y] && input->buttons[BUTTON_LB]) {
+	  	sim_button->data = "4";
 	  	button_callback(sim_button);
 	  }
 
@@ -377,7 +402,7 @@ private:
       msg.pose.orientation.w =1.0;
       goal_pub.publish(msg);
 
-			recordLog("Button 1 | Goal at (" + to_string(int(msg.pose.position.x)) 
+			recordLog("Button A | Goal at (" + to_string(int(msg.pose.position.x)) 
 				+ "," + to_string(int(msg.pose.position.y))+ ")",LogState::INFOMATION);
 		}
 		else if (msg == "2") {		
@@ -389,14 +414,32 @@ private:
       msg.pose.orientation.w =1.0;
       goal_pub.publish(msg);
 
-			recordLog("Button 2 | Goal at (" + to_string(int(msg.pose.position.x)) 
+			recordLog("Button B | Goal at (" + to_string(int(msg.pose.position.x)) 
 				+ "," + to_string(int(msg.pose.position.y))+ ")",LogState::INFOMATION);
 		}
 		else if (msg == "3") {
-			recordLog("Button 3",LogState::INFOMATION);
+			geometry_msgs::PoseStamped msg;
+			msg.header.frame_id = map_frame_;
+      msg.header.stamp = ros::Time::now();
+      msg.pose.position.x = goal_x_[0];
+      msg.pose.position.y = goal_x_[1]; 
+      msg.pose.orientation.w =1.0;
+      goal_pub.publish(msg);
+
+			recordLog("Button X | Goal at (" + to_string(int(msg.pose.position.x)) 
+				+ "," + to_string(int(msg.pose.position.y))+ ")",LogState::INFOMATION);
 		}
 		else if(msg == "4") {
-			recordLog("Button 4",LogState::INFOMATION);
+			geometry_msgs::PoseStamped msg;
+			msg.header.frame_id = map_frame_;
+      msg.header.stamp = ros::Time::now();
+      msg.pose.position.x = goal_y_[0];
+      msg.pose.position.y = goal_y_[1]; 
+      msg.pose.orientation.w =1.0;
+      goal_pub.publish(msg);
+
+			recordLog("Button Y | Goal at (" + to_string(int(msg.pose.position.x)) 
+				+ "," + to_string(int(msg.pose.position.y))+ ")",LogState::INFOMATION);
 		} else {
 			recordLog("Unregister Button",LogState::INFOMATION);
 		}
@@ -431,11 +474,14 @@ private:
 
 	void wall_callback(const sensor_msgs::PointCloud::ConstPtr& input) {
 		collision_wall_points_.points.clear();
+		collision_wall_points_all_.points.clear();
 		geometry_msgs::Point32 point;
 		for (int i = 0; i < input->points.size(); ++i) {
-			if(!collisionCheck(input->points[i].x,input->points[i].y)) continue;
 			point.x = input->points[i].x;
 			point.y = input->points[i].y;
+			collision_wall_points_all_.points.push_back(point);
+
+			if(!collisionCheck(input->points[i].x,input->points[i].y)) continue;
 
 			collision_wall_points_.points.push_back(point);
 		}

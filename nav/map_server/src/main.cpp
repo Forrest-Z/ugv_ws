@@ -248,7 +248,7 @@ class MapServer
       std::string myfname = "";
 
       // myfname = fname_;
-      myfname = map_folder_ + std::to_string(map_number) + "_lmap.yaml";
+      myfname = map_folder_ + std::to_string(map_number) + ".yaml";
 
       ///Get the yaml file name of this map
       std::ifstream fin(myfname.c_str());

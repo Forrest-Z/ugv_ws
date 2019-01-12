@@ -4,11 +4,11 @@
       <rosparam>
         max_rotation: 0.6
         max_speed: 0.8
-        vehicle_radius: 0.4
-        lookahead_time: 2
-        safe_zone: 8
-        force_constant_x: 0.1
-        force_constant_y: 0.3
+        vehicle_radius: 0.6
+        lookahead_time: 4
+        safe_zone: 5
+        force_constant_x: 0.2
+        force_constant_y: 0.05
 
         max_height: 2
         min_height: 0.5
@@ -18,18 +18,20 @@
 
         one_hand: false
 
-        goal_a: [99.4,9.0]
-        goal_b: [204,-36.6]
-
+        goal_a: [-127.095825,-3.857359]
+        goal_b: [399.883423,-14.068487]
       </rosparam>  
       
   </node>
 
   <node name="navi_manager" pkg="mission_control" type="navi_manager" output="screen" respawn="true">    
-      <param name="use_sim"  value="false"/>
+    <rosparam>
+      use_sim: true
+      speed_scale: 0.2
+      rotation_scale: 0.5
+    </rosparam>
       <param name="junction_file"  value="$(find param)/map/junction.txt"/>
   </node>
-
 
   <node pkg="joy" type="joy_node" name="joystick" respawn="true">
       <param name="dev" value="/dev/input/js0" />

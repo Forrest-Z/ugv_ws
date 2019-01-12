@@ -25,6 +25,8 @@ SpeedManager::SpeedManager():pn("~"),
   pn.param<bool>("one_hand", isOneHand_, false);
   pn.param<vector<double>>("goal_a",goal_a_,{0,0});
   pn.param<vector<double>>("goal_b",goal_b_,{0,0});
+  pn.param<vector<double>>("goal_x",goal_x_,{0,0});
+  pn.param<vector<double>>("goal_y",goal_y_,{0,0});
   pn.param<string>("base_frame", base_frame_, "/base_link");
   pn.param<string>("camera_frame", camera_frame_, "/power2_point");
   pn.param<string>("lidar_frame", lidar_frame_, "/rslidar");
@@ -74,6 +76,9 @@ void SpeedManager::Manager() {
 
 void SpeedManager::paramInitialization() {
   //recordLog("Parameter Initialization Done",LogState::INITIALIZATION);
+  //   cv::namedWindow("Map", CV_GUI_EXPANDED);
+  // cv::moveWindow("Map",400,300);
+
 }
 
 void SpeedManager::Mission() {
@@ -289,15 +294,18 @@ void SpeedManager::collisionAvoid()
   bool isEmergency = false;
 
   vector<sensor_msgs::PointCloud> total_collision_points;
-  total_collision_points = {collision_lidar_points_,collision_wall_points_,collision_power_points_};
-  std::vector<Lattice_Grid> path_grid;
+  total_collision_points = {collision_lidar_points_,collision_wall_points_all_,collision_power_points_};
+
+  Mat map_grid;
 
   //int current_state = findVehicleState(total_collision_points);
-  publishPathParticle(total_collision_points,path_grid);
 
-  if(findVehicleState(total_collision_points)!=3) {
-    findClearPath(path_grid,cmd_vel_safe_);
-  }
+  // publishPathParticle(total_collision_points,map_grid);
+  // findClearPath(map_grid,cmd_vel_safe_);
+
+  // if(findVehicleState(total_collision_points)!=3) {
+  //   findClearPath(map_grid,cmd_vel_safe_);
+  // }
 
 
   computeForce(collision_lidar_points_,virtual_force_x,virtual_force_y,free_space_index,isEmergency);
@@ -348,79 +356,29 @@ int SpeedManager::findVehicleState(std::vector<sensor_msgs::PointCloud> Input_Po
   return empty_ct;
 }
 
-void SpeedManager::publishPathParticle(std::vector<sensor_msgs::PointCloud> Input_Points, std::vector<Lattice_Grid>& Output_Grid){
-
-  Output_Grid.clear();
+void SpeedManager::publishPathParticle(std::vector<sensor_msgs::PointCloud> Input_Points, cv::Mat& Output_Grid){
 
   sensor_msgs::PointCloud front_particle;
   front_particle.header.frame_id = base_frame_;
 
   bool isUnsafe = false;
 
-  double linear_scale = cmd_vel_safe_.linear.x;
-  double angluar_scale = cmd_vel_safe_.angular.z;
-
-  int roi_length = 10 * linear_scale;
-  int roi_width = 10 * angluar_scale;
-
-
   int length_start,length_end;
   int width_start,width_end;
-  int min_length = 2;
+
+  length_start = -10*max_speed_;
+  length_end = -length_start;
+  width_start = -10*max_rotation_;
+  width_end = -width_start;
 
 
-  if(fabs(angluar_scale) < 0.1) angluar_scale = 0;
+
+  int map_width = ceil(fabs(width_end - width_start))+1;
+  int map_height = ceil(fabs(length_end - length_start))+1;
+
+  Output_Grid = Mat::ones(map_height,map_width,CV_8UC3) * 255;
 
 
-  if(linear_scale < 0) {
-    if(fabs(linear_scale) < 0.2) linear_scale = -0.2;
-    length_start = roi_length;
-    length_end = min_length;
-
-    if(angluar_scale < 0) {
-      width_start = -min_length;
-      width_end = -roi_width;
-    } 
-    else if(angluar_scale > 0) {
-      width_start = -roi_width;
-      width_end = min_length;
-    } else {
-      width_start = -min_length;
-      width_end = min_length;
-    }
-  } 
-  else if(linear_scale > 0) {
-    if(fabs(linear_scale) < 0.2) linear_scale = 0.2;
-    length_start = -min_length;
-    length_end = roi_length;
-
-    if(angluar_scale < 0) {
-      width_start = roi_width;
-      width_end = min_length;
-    } 
-    else if(angluar_scale > 0) {
-      width_start = -min_length;
-      width_end = roi_width;
-    } else {
-      width_start = -min_length;
-      width_end = min_length;
-    }
-  } else {
-    length_start = -min_length;
-    length_end = min_length;
-
-    if(angluar_scale < 0) {
-      width_start = roi_width;
-      width_end = min_length;
-    } 
-    else if(angluar_scale > 0) {
-      width_start = -min_length;
-      width_end = roi_width;
-    } else {
-      width_start = -min_length;
-      width_end = min_length;
-    }
-  }
 
   for (int i = length_start; i <= length_end; i++) {
     for (int j = width_start; j <= width_end; j++) {
@@ -443,60 +401,148 @@ void SpeedManager::publishPathParticle(std::vector<sensor_msgs::PointCloud> Inpu
         point.x = i*vehicle_radius_;
         point.y = j*vehicle_radius_;
         front_particle.points.push_back(point);
-      // } else {
-        Lattice_Grid pixle;
-        pixle.x = i*vehicle_radius_;
-        pixle.y = j*vehicle_radius_;
-        pixle.row = i;
-        pixle.col = j;
-        pixle.length = length_end - length_start;
-        pixle.width = width_end - width_start;
-        Output_Grid.push_back(pixle);
+      } else {
+        Output_Grid.at<Vec3b>(length_end+i,width_end+j)[1] = 255;
+        // Output_Grid.at<Vec3b>(map_height+1+i,map_width+1+j)[1] = i;
+        // Output_Grid.at<Vec3b>(map_height+1+i,map_width+1+j)[2] = j;
       }
     }
   }
+
   pointcloud_pub.publish(front_particle);
   
 }
 
-void SpeedManager::findClearPath(std::vector<Lattice_Grid> Input_Grid, geometry_msgs::Twist& Output_Cmd) {
+void SpeedManager::findClearPath(cv::Mat& Input_Grid, geometry_msgs::Twist& Output_Cmd) {
+    int robot_row = ceil(Input_Grid.rows/2);
+    int robot_col = ceil(Input_Grid.cols/2);
 
-  if(Input_Grid.empty()) return;
+    Input_Grid.at<Vec3b>(robot_row,robot_col)[0] = 0;
+    Input_Grid.at<Vec3b>(robot_row,robot_col)[1] = 0;
+    Input_Grid.at<Vec3b>(robot_row,robot_col)[2] = 255;
 
-  bool isBlocked = false;
-  int min_length = 2;
-  int prerow = Input_Grid[0].row;
-  int total_row = 1;
-  int left_ct = 0;
-  vector<int> col_ct(2*Input_Grid[0].width,0);
+    double speed    = Output_Cmd.linear.x;
+    double rotation = Output_Cmd.angular.z;
 
-  for (int i = 0; i < Input_Grid.size(); ++i) {
-    if(abs(prerow - Input_Grid[i].row) == 1) {
-      total_row++;
-      prerow = Input_Grid[i].row;  
+    int move_pixle  = speed/max_speed_ * (Input_Grid.rows/2);
+    int shift_pixle = 2 * rotation/max_rotation_ * (Input_Grid.cols/2);
+    if(fabs(rotation/max_rotation_)<=0.5) {
+      Input_Grid.at<Vec3b>(robot_row+move_pixle,robot_col+shift_pixle)[0] = 0;
+      Input_Grid.at<Vec3b>(robot_row+move_pixle,robot_col+shift_pixle)[1] = 0;
+      Input_Grid.at<Vec3b>(robot_row+move_pixle,robot_col+shift_pixle)[2] = 255;
+    } else {
+      shift_pixle = 2 * (rotation/max_rotation_ - sign(rotation)*0.5) 
+        * (Input_Grid.rows/2); 
+      move_pixle  = sign(rotation) * sign(speed) * speed/max_speed_ * (Input_Grid.cols/2);
+      shift_pixle = fabs(shift_pixle);
+
+      if(speed >= 0) {
+        Input_Grid.at<Vec3b>(robot_row-shift_pixle+Input_Grid.rows/2,robot_col+move_pixle)[0] = 0;
+        Input_Grid.at<Vec3b>(robot_row-shift_pixle+Input_Grid.rows/2,robot_col+move_pixle)[1] = 0;
+        Input_Grid.at<Vec3b>(robot_row-shift_pixle+Input_Grid.rows/2,robot_col+move_pixle)[2] = 255;
+      } else {
+        Input_Grid.at<Vec3b>(shift_pixle,robot_col+move_pixle)[0] = 0;
+        Input_Grid.at<Vec3b>(shift_pixle,robot_col+move_pixle)[1] = 0;
+        Input_Grid.at<Vec3b>(shift_pixle,robot_col+move_pixle)[2] = 255;
+      }
     }
-    col_ct[Input_Grid[i].col+Input_Grid[0].width]++;
+
+
+    // searchPath(Input_Grid,
+    //   robot_row,robot_col,
+    //   robot_row+move_pixle,robot_col+shift_pixle);
+
+    static int ref_timer = 0;
+    //shiftLine(Input_Grid,Output_Cmd,ref_timer);
+
+
+    cv::rotate(Input_Grid, Input_Grid, cv::ROTATE_180);
+    cv::imshow("Map",Input_Grid);
+    cv::resizeWindow("Map",600,600);
+    cv::waitKey(1);
+}
+
+void SpeedManager::shiftLine(cv::Mat& Input_Grid,
+  geometry_msgs::Twist& Output_Cmd,int& Ref_Timer) {
+
+  if(Ref_Timer != 0) { 
+    if(Ref_Timer > 0) {
+      Output_Cmd.angular.z += 0.3;
+      cout << "Turning Left" << endl;
+      Ref_Timer-=1;
+     } else { 
+      Output_Cmd.angular.z -= 0.3;
+      cout << "Turning Right" << endl;
+      Ref_Timer+=1;
+    }
+  } else {
+    cout << "Seraching" << endl;
+    int unit_time = 30;
+    int search_col = (Input_Grid.cols/2);
+    int pixle_r_ct = 0;
+    int pixle_l_ct = 0;
+    for (int i = 0; i <= (Input_Grid.cols/2); i++) {
+      for (int row = 0; row < Input_Grid.rows;  row++) {
+        if(Input_Grid.at<Vec3b>(row,search_col+i)[1] == 0) pixle_r_ct++;
+        if(Input_Grid.at<Vec3b>(row,search_col-i)[1] == 0) pixle_l_ct++;
+      }
+      if(pixle_r_ct == Input_Grid.rows) {
+        Ref_Timer = i * unit_time;
+        return;
+      }
+      if(pixle_l_ct == Input_Grid.rows) {
+        Ref_Timer = -i * unit_time;
+        return;
+      }
+      pixle_r_ct = 0;
+      pixle_l_ct = 0;
+    }
   }
 
-  for (int i = 0; i < col_ct.size(); ++i) {
+}
+
+
+void SpeedManager::searchPath(cv::Mat& Input_Grid,
+  int Start_Row,int Start_Col,int End_Row,int End_Col) {
+
+  bool isFoundPath = false;
+  bool isOut = false;
+  int current_row = Start_Row;
+  int current_col = Start_Col;
+  int shift_pixle = 0;
+
+  if(Input_Grid.at<Vec3b>(End_Row,End_Col)[1] == 255) {
+    cout<<"NO"<<endl;
+    return;
+  }
+
+
+  while(!isFoundPath) {
     
-    // cout<<"Line Number "<< i - Input_Grid[0].width;
-    // cout<<" Line Size = "<<col_ct[i];
-    // cout<<" Length = "<<Input_Grid[0].length + 1<<endl;
-    if(col_ct[i] == Input_Grid[0].length + 1) {
-      (i - Input_Grid[0].width > 0) ? left_ct++ : left_ct--;
+    if(current_col != End_Col) current_col += sign(End_Col-current_col) * 1;
+    if(current_row != End_Row) current_row += sign(End_Row-current_row) * 1;
+
+    while(Input_Grid.at<Vec3b>(current_row,current_col)[1] == 255 || isOut) {
+      current_col++;
+      shift_pixle++;
+      if(shift_pixle>Input_Grid.rows && shift_pixle>Input_Grid.cols) isOut = true;
+      // cout<<Start_Row<<","<<Start_Col<<"  "
+      // <<End_Row<<","<<End_Col<<"  "
+      // <<current_row<<","<<current_col<<endl;
     }
+
+    if(current_row>Input_Grid.rows || current_row < 0) break;
+    if(current_col>Input_Grid.cols || current_col < 0) break;
+
+    Input_Grid.at<Vec3b>(current_row,current_col)[2] = 255;
+
+    if(current_row == End_Row) isFoundPath = true;
+    //isOut = false;
   }
 
-  if(total_row < Input_Grid[0].length + 1) {
-    isBlocked = true;
-    //cout << "break at " << total_row - min_length<<endl;
-  }
-
-  //cmd_vel_safe_.angular.z += left_ct * 0.00001;
-  // cout<<left_ct * 0.001<<"   | ";
-  // cout<<cmd_vel_safe_.angular.z<<endl;
-
+  Input_Grid.at<Vec3b>(End_Row,End_Col)[0] = 0;
+  Input_Grid.at<Vec3b>(End_Row,End_Col)[1] = 0;
+  Input_Grid.at<Vec3b>(End_Row,End_Col)[2] = 255;
 }
 
 
