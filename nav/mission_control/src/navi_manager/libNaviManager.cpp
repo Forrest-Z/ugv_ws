@@ -516,7 +516,7 @@ int NaviManager::findPointFromThreeZone(double input_x,double input_y) {
     recordLog("Unabel to Load Junction Point",LogState::WARNNING);
     return -2;
   }
-  if (junction_list_.points.size() != 1) return -1;
+  //if (junction_list_.points.size() != 1) return -1;
 
   double junction_range = 30;
 
@@ -540,7 +540,21 @@ void NaviManager::publishCurrentGoal() {
     map_number.data = findPointFromThreeZone(navi_goal_.x,navi_goal_.y);
   } 
   else if (findPointFromThreeZone(robot_position_[0],robot_position_[1])==0) {
-    current_goal = navi_goal_;
+
+    if(findPointFromThreeZone(navi_goal_.x,navi_goal_.y) == 3 
+      && fabs(robot_position_[1]-junction_list_.points[2].y) > 5
+      && fabs(robot_position_[0]-junction_list_.points[2].x) < 1000) {
+      current_goal.x = junction_list_.points[2].x;
+      current_goal.y = junction_list_.points[2].y;
+    }
+    else if(findPointFromThreeZone(navi_goal_.x,navi_goal_.y) == 2 
+      && fabs(robot_position_[1]-junction_list_.points[1].y) > 5 
+      && fabs(robot_position_[0]-junction_list_.points[1].x) < 1000) {
+      current_goal.x = junction_list_.points[1].x;
+      current_goal.y = junction_list_.points[1].y;
+    } else {
+      current_goal = navi_goal_;
+    }
     map_number.data = findPointFromThreeZone(navi_goal_.x,navi_goal_.y);
   } else {
     current_goal.x = junction_list_.points[0].x;

@@ -26,7 +26,7 @@
 
   <node name="navi_manager" pkg="mission_control" type="navi_manager" output="screen" respawn="true">    
     <rosparam>
-      use_sim: true
+      use_sim: false
       speed_scale: 0.2
       rotation_scale: 0.5
     </rosparam>

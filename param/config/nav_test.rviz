@@ -6,8 +6,6 @@ Panels:
       Expanded:
         - /Vehicle1/Odometry1
         - /Vehicle1/Odometry1/Shape1
-        - /Mission_Control1
-        - /Mission_Control1/PurePursuit_LocalGoal1
       Splitter Ratio: 0.595567882
     Tree Height: 811
   - Class: rviz/Selection
@@ -275,16 +273,6 @@ Visualization Manager:
           Unreliable: false
           Use Timestamp: false
           Value: true
-        - Alpha: 0.699999988
-          Class: rviz/Map
-          Color Scheme: map
-          Draw Behind: false
-          Enabled: true
-          Name: Full_Map
-          Topic: /vis_map
-          Unreliable: false
-          Use Timestamp: false
-          Value: true
         - Alpha: 0.600000024
           Class: rviz/Map
           Color Scheme: costmap
@@ -535,7 +523,7 @@ Visualization Manager:
           Queue Size: 10
           Selectable: true
           Size (Pixels): 3
-          Size (m): 60
+          Size (m): 1
           Style: Spheres
           Topic: /junction_points
           Unreliable: false
@@ -578,11 +566,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Scale: 11.0438604
+      Scale: 15.8031149
       Target Frame: base_link
       Value: TopDownOrtho (rviz)
-      X: 21.3527527
-      Y: 1.72551811
+      X: -0.442243308
+      Y: -5.84490776
     Saved: ~
 Window Geometry:
   Displays:
