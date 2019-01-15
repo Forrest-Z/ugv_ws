@@ -4,8 +4,9 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /Vehicle1/Odometry1
         - /Vehicle1/Odometry1/Shape1
+        - /Mission_Control1
+        - /Mission_Control1/PurePursuit_LocalGoal1
       Splitter Ratio: 0.595567882
     Tree Height: 811
   - Class: rviz/Selection
@@ -103,7 +104,7 @@ Visualization Manager:
               Value: true
             Value: false
           Enabled: true
-          Keep: 10000
+          Keep: 1000
           Name: Odometry
           Position Tolerance: 0.100000001
           Shape:
@@ -213,7 +214,7 @@ Visualization Manager:
           Use Fixed Frame: true
           Use rainbow: true
           Value: false
-      Enabled: true
+      Enabled: false
       Name: Sensor
     - Class: rviz/Group
       Displays:
@@ -556,7 +557,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: -0.0150006572
+      Angle: -0.0100006592
       Class: rviz/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
@@ -566,11 +567,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Scale: 15.8031149
+      Scale: 10.4468164
       Target Frame: base_link
       Value: TopDownOrtho (rviz)
-      X: -0.442243308
-      Y: -5.84490776
+      X: -23.6713028
+      Y: 15.9483128
     Saved: ~
 Window Geometry:
   Displays:
