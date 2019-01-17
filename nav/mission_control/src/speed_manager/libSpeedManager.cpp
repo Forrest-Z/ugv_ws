@@ -76,8 +76,9 @@ void SpeedManager::Manager() {
 
 void SpeedManager::paramInitialization() {
   //recordLog("Parameter Initialization Done",LogState::INITIALIZATION);
-  //   cv::namedWindow("Map", CV_GUI_EXPANDED);
+  // cv::namedWindow("Map", CV_GUI_EXPANDED);
   // cv::moveWindow("Map",400,300);
+  
 
 }
 

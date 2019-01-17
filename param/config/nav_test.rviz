@@ -5,7 +5,6 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Vehicle1/Odometry1/Shape1
-        - /Mission_Control1
         - /Mission_Control1/PurePursuit_LocalGoal1
       Splitter Ratio: 0.595567882
     Tree Height: 811
@@ -222,7 +221,7 @@ Visualization Manager:
           Buffer Length: 1
           Class: rviz/Path
           Color: 25; 255; 0
-          Enabled: false
+          Enabled: true
           Head Diameter: 0.300000012
           Head Length: 0.200000003
           Length: 0.300000012
@@ -240,7 +239,7 @@ Visualization Manager:
           Shaft Length: 0.100000001
           Topic: /move_base/GlobalPlanner/plan
           Unreliable: false
-          Value: false
+          Value: true
         - Alpha: 1
           Buffer Length: 1
           Class: rviz/Path
@@ -450,7 +449,7 @@ Visualization Manager:
           Max Color: 0; 255; 0
           Max Intensity: 2
           Min Color: 255; 170; 0
-          Min Intensity: 0.100000001
+          Min Intensity: 1.58792996
           Name: Waypoint
           Position Transformer: XYZ
           Queue Size: 10
@@ -488,7 +487,7 @@ Visualization Manager:
           Max Color: 0; 255; 0
           Max Intensity: 2
           Min Color: 255; 170; 0
-          Min Intensity: 0.100000001
+          Min Intensity: 1
           Name: PurePursuit_Path
           Position Transformer: XYZ
           Queue Size: 10
@@ -501,7 +500,7 @@ Visualization Manager:
           Use Fixed Frame: true
           Use rainbow: false
           Value: true
-        - Alpha: 0.300000012
+        - Alpha: 0.800000012
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
             Max Value: 10
@@ -526,7 +525,7 @@ Visualization Manager:
           Size (Pixels): 3
           Size (m): 1
           Style: Spheres
-          Topic: /junction_points
+          Topic: /pp_current_goal
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
@@ -557,7 +556,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: -0.0100006592
+      Angle: 0.0099993404
       Class: rviz/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
@@ -567,11 +566,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Scale: 10.4468164
+      Scale: 8.26803493
       Target Frame: base_link
       Value: TopDownOrtho (rviz)
-      X: -23.6713028
-      Y: 15.9483128
+      X: -3.02516961
+      Y: -10.0418577
     Saved: ~
 Window Geometry:
   Displays:

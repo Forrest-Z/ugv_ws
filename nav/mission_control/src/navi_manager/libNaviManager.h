@@ -8,6 +8,7 @@
 #include <vector>
 #include <time.h>
 #include <limits.h>
+#include <algorithm> 
 
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
@@ -23,6 +24,7 @@
 #include <sensor_msgs/PointCloud.h>
 #include <geometry_msgs/Point32.h>
 #include <geometry_msgs/Twist.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <visualization_msgs/Marker.h>
 
@@ -34,6 +36,7 @@ using std::vector;
 using std::to_string;
 using std::getline;
 using std::ifstream;
+using std::min;
 
 const int ROS_RATE_HZ   = 20;
 const int ZERO          = 0;
@@ -53,7 +56,6 @@ const int AXIS_LEFT_UP_DOWN     = 1;
 const int AXIS_RIGHT_LEFT_RIGHT = 3;
 const int AXIS_RIGHT_UP_DOWN    = 4;
 
-;
 
 enum class LogState 
 {
@@ -92,6 +94,7 @@ private:
   ros::Publisher call_map_pub;
   ros::Publisher navi_state_pub;
   ros::Publisher odom_pub;
+  ros::Publisher pp_pub;
 
 
 	/** Subscribers **/
@@ -101,6 +104,7 @@ private:
 	ros::Subscriber map_sub;
 	ros::Subscriber obs_sub;
 	ros::Subscriber astar_state_sub;
+	ros::Subscriber initpose_sub;
 
 	/** Parameters **/
 	string junction_file_;
@@ -132,13 +136,12 @@ private:
 	nav_msgs::MapMetaData static_map_info_;
 	geometry_msgs::Twist local_cmd_vel_;
 	nav_msgs::Path global_path_;
-	int pp_path_index_;
 
 	
 	vector<double> robot_position_;
 	//vector<vector<double>> waypoint_list_;
 	sensor_msgs::PointCloud junction_list_;
-	sensor_msgs::PointCloud pp_goal_;
+	
 
 	std::vector<geometry_msgs::Point32> obs_point_;
 	geometry_msgs::Point32 next_goal_;
@@ -155,6 +158,8 @@ private:
 	void publishCurrentGoal();
 	int findPointFromTwoZone(double input_x,double input_y);
 	int findPointFromThreeZone(double input_x,double input_y);
+	int isReadyToChangeMap(double input_x,double input_y);
+	int findJunctionIndex(int goal,int robot);
 
 	void visualPath();
 
@@ -187,7 +192,6 @@ private:
 
 		if(!isNewGoal_) return;
 		//recordLog("New Plan Received",LogState::INFOMATION);
-		pp_path_index_ = 0;
 		global_path_ = *input;
 
 
@@ -307,6 +311,7 @@ private:
 	void goal_callback(const geometry_msgs::PoseStamped::ConstPtr& input) {
 		navi_goal_.x = input->pose.position.x;
 		navi_goal_.y = input->pose.position.y;
+		isGoalReached_ = false;
 	}
 
 	void map_callback(const nav_msgs::OccupancyGrid::ConstPtr& input) {
@@ -332,6 +337,18 @@ private:
 		point.x = input->point.x;
 		point.y = input->point.y;
 		obs_point_.push_back(point);
+	}
+
+
+	void initpose_callback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& input) {
+		if(!isUseSim_) return;
+		robot_position_[0] = input->pose.pose.position.x;
+		robot_position_[1] = input->pose.pose.position.y;
+		recordLog("Simulation Robot Position Received",LogState::INFOMATION);
+		std_msgs::Int32 map_number;
+		map_number.data = findPointZone(robot_position_[0],robot_position_[1]);
+		isMapSave_ = false;
+  	call_map_pub.publish(map_number);
 	}
 
 

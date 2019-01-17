@@ -1,8 +1,4 @@
 <launch>
-  <node pkg="joy" type="joy_node" name="joystick" respawn="true">
-      <param name="dev" value="/dev/input/js0" />
-  </node>
-
 
   <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan">
 
@@ -47,6 +43,5 @@
     <node pkg="tf" type="static_transform_publisher" name="rslidar" args="0.1 0 0.7 0 0 0 /base_link /rslidar 100" />
 
   <node pkg="tf" type="static_transform_publisher" name="base_laser" args="0.1 0 0.7 0 0 0 /base_link /base_laser 100" />
-
   
 </launch>
