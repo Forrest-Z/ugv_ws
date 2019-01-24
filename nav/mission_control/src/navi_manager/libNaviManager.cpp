@@ -259,11 +259,7 @@ void NaviManager::publishStaticLayer() {
     }
   }
 
-
-
   wall_pub.publish(pointcloud_map);
-
-
 }
 
 
@@ -419,7 +415,7 @@ void NaviManager::findPurePursuitGoal() {
 }
 
 bool NaviManager::followPurePursuit() {
-  double goal_tolerance = 0.5;
+  double goal_tolerance = 1;
   double rotation_threshold = PI;
 
   findPurePursuitGoal();
@@ -461,7 +457,7 @@ bool NaviManager::followPurePursuit() {
 
   if (fabs(rotation) > rotation_threshold) {
     rotation = 0.8;
-    goal_distance = 0.3;
+    goal_distance = 0.1;
   }
   // cout << "yaw different after = " << rotation << endl;
   local_cmd_vel_.linear.x =  speed_scale_ * goal_distance;
@@ -622,12 +618,21 @@ int NaviManager::findPointZone(double input_x,double input_y) {
     recordLog("Unabel to Load Junction Point",LogState::WARNNING);
     return -1;
   }
-  if (input_x < junction_list_.points[1].x 
-    && input_y < junction_list_.points[0].y) return 1;
-  else if (input_x > junction_list_.points[2].x) return 4;
-  else if (input_x < junction_list_.points[1].x && 
-    input_y > junction_list_.points[0].y) return 2;
-  else return 3;
+  // if (input_x < junction_list_.points[1].x 
+  //   && input_y < junction_list_.points[0].y) return 1;
+  // else if (input_x > junction_list_.points[2].x) return 4;
+  // else if (input_x < junction_list_.points[1].x && 
+  //   input_y > junction_list_.points[0].y) return 2;
+  // else return 3;
+
+  if (input_x < junction_list_.points[1].x
+    && input_y > junction_list_.points[0].y) return 2;
+  else if (input_x > junction_list_.points[3].x) return 5;
+  else if (input_x > junction_list_.points[2].x
+    && input_x < junction_list_.points[3].x) return 4;
+  else if (input_x > junction_list_.points[1].x
+    && input_x < junction_list_.points[2].x) return 3;
+  else return 1;
 }
 
 int NaviManager::isReadyToChangeMap(double input_x,double input_y) {

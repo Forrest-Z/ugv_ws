@@ -4,11 +4,11 @@
     <rosparam>
       max_rotation: 0.6
       max_speed: 0.8
-      vehicle_radius: 0.5
-      lookahead_time: 4
+      vehicle_radius: 0.4
+      lookahead_time: 3
       safe_zone: 5
-      force_constant_x: 0.4
-      force_constant_y: 0.01
+      force_constant_x: 0.2
+      force_constant_y: 0.02
 
       max_height: 2
       min_height: 0.5
@@ -18,10 +18,10 @@
 
       one_hand: false
 
-      goal_a: [362.345001,-12.395015]
-      goal_b: [250.257,49.591]
-      goal_x: [-125.037,-1.265]
-      goal_y: [-47.827606,45.070847]
+      goal_a: [643.462646,-30.777496]
+      goal_b: [2288.519775,514.973816]
+      goal_x: [-23.512510,-35.236523]
+      goal_y: [11.995888,11.043774]
     </rosparam>  
     
   </node>
@@ -36,12 +36,9 @@
       <param name="junction_file"  value="$(find param)/map/junction.txt"/>
   </node>
 
-    <node pkg="joy" type="joy_node" name="joystick" respawn="true">
+  <node pkg="joy" type="joy_node" name="joystick" respawn="true">
       <param name="dev" value="/dev/input/js0" />
   </node>
-
-  <node pkg="tf" type="static_transform_publisher" name="localiztion" args="0 0 0 0 0 0 /map /odom 100" />
-
 
   <node pkg="map_server" type="map_server" name="map_server_nav" args="$(find param)/map/1.yaml" output="screen">
     <remap from="map" to="nav_map"/>
@@ -52,5 +49,6 @@
       <param name="map_folder"  value="$(find param)/map/"/>
   </node>
 
-  
+  <node pkg="tf" type="static_transform_publisher" name="localiztion" args="0 0 0 0 0 0 /map /odom 100" />
+
 </launch>

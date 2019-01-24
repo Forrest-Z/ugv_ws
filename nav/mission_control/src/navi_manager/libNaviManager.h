@@ -22,12 +22,13 @@
 #include <nav_msgs/MapMetaData.h>
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/PointCloud.h>
+#include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/point_cloud_conversion.h>
 #include <geometry_msgs/Point32.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <visualization_msgs/Marker.h>
-
 
 using std::string;
 using std::cout;
@@ -86,7 +87,7 @@ private:
 	ros::Publisher path_pub;
 	ros::Publisher waypoint_pub;
   ros::Publisher vis_pub;
-  ros::Publisher wall_pub;
+  ros::Publisher wall_pub; 
   ros::Publisher junction_pub;
   ros::Publisher vel_pub;
   ros::Publisher move_base_goal_pub;
@@ -260,7 +261,7 @@ private:
 
 		int step = lookahead_distance / travel_distance_unit;
 
-		for (int i = 0; i < input->poses.size(); i+=step) {
+		for (int i = 0; i < input->poses.size(); i++) {
 			point.x = input->poses[i].pose.position.x;
 			point.y = input->poses[i].pose.position.y;
 			point.z = speed_box[i];
@@ -299,7 +300,7 @@ private:
 
 	void vel_callback(const geometry_msgs::Twist::ConstPtr& input) {
 		double scale = 0.05;
-		double rotation = scale * input->angular.z;
+		double rotation = 1 * scale * input->angular.z;
 		double speed = scale * input->linear.x;
 
 		robot_position_[2] += rotation;

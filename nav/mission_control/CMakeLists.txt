@@ -10,6 +10,8 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(OpenCV REQUIRED)
 
+find_package(PCL 1.2 REQUIRED)
+
  generate_messages(
    DEPENDENCIES
  )
@@ -28,6 +30,6 @@ add_executable(speed_manager src/speed_manager/SpeedManager.cpp src/speed_manage
 add_executable(navi_manager src/navi_manager/NaviManager.cpp src/navi_manager/libNaviManager.cpp)
 
 
-target_link_libraries(speed_manager ${OpenCV_LIBS}  ${catkin_LIBRARIES})
+target_link_libraries(speed_manager ${OpenCV_LIBS}  ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 target_link_libraries(navi_manager ${OpenCV_LIBS}  ${catkin_LIBRARIES})
 

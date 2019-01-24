@@ -41,7 +41,7 @@
     </rosparam>
   </node>
 
-  <node name="rviz" pkg="rviz" type="rviz"  args="-d $(find param)/config/nav_test.rviz" />
+  <node name="rviz_nav" pkg="rviz" type="rviz"  args="-d $(find param)/config/nav_test.rviz" />
 
 
   <node name="autolabor_driver" pkg="autolabor_pro1_driver" type="autolabor_pro1_driver" output="screen">

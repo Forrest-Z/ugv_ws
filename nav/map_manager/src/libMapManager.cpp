@@ -98,8 +98,8 @@ void MapManager::readNodeTXT(std::vector<MapGraph>& Index) {
   while (std::getline(node_file, str)) {
 		std::stringstream ss(str);
 		int xxx,yyy;
-		vector<int> read_neighbor(4.0);
-		ss >> linenum >> xxx >> yyy >> read_neighbor[0] >> read_neighbor[1] >> read_neighbor[2] >> read_neighbor[3];
+		vector<int> read_neighbor(8.0);
+		ss >> linenum >> xxx >> yyy>> read_neighbor[0] >> read_neighbor[1] >> read_neighbor[2] >> read_neighbor[3] >> read_neighbor[4] >> read_neighbor[5] >> read_neighbor[6] >> read_neighbor[7];
 		graph.id = linenum;
 		graph.position.x = xxx;
 		graph.position.y = yyy;
@@ -137,11 +137,6 @@ bool MapManager::pathPlanner(int Start_Id,int End_id,
 	costs[Start_Id] = 0;
 	current_id = Start_Id;
 
-	MapGraph temp_node;
-	temp_node.id = current_id;
-	temp_node.cost = 0;
-	path_astar_que.push(temp_node);
-
 	findNeighbor(current_id,Graph,neighbor);
 
 	while(!isGoalReached_) { //!isGoalReached && !isPlanFailed
@@ -152,14 +147,12 @@ bool MapManager::pathPlanner(int Start_Id,int End_id,
 		Path.clear();
 		for (int i = 0; i < neighbor.size() ; i++) {
 			int next_id = neighbor[i];
-			double new_cost = costs[current_id] + computeHeuristic(current_id,next_id,Graph);
+			double new_cost = costs[current_id] + computeHeuristic(current_id-1,next_id-1,Graph);
 			if(visited[next_id]==-1 || new_cost<costs[next_id]) {
 				visited[next_id] = current_id;
 				costs[next_id] = new_cost;
-				temp_node.id = next_id;
-				temp_node.cost = new_cost + computeHeuristic(next_id,End_id,Graph);
-				path_astar_que.push(temp_node);
 				to_visit.push(next_id);
+
 			}
 		}
 
@@ -195,7 +188,7 @@ bool MapManager::pathPlanner(int Start_Id,int End_id,
 void MapManager::findNeighbor(int Id,std::vector<MapGraph> Index,std::vector<int>& Neighbor) {
 	Neighbor.clear();
 
-	for (int i = 0; i < 4; i++)
+	for (int i = 0; i < Index[Id-1].neighbor.size(); i++)
 	{
 		if( Index[Id-1].neighbor[i] == 0 ) continue;
 		Neighbor.push_back(Index[Id-1].neighbor[i]);

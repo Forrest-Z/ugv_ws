@@ -3,11 +3,13 @@
 
 #include <ros/ros.h>
 #include <iostream>
+#include <iomanip> 
 #include <cmath>
 #include <vector>
 #include <time.h>
 #include <mutex>
 
+#include <boost/make_shared.hpp>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/Point32.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -15,23 +17,31 @@
 #include <sensor_msgs/LaserScan.h>
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/point_cloud_conversion.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/String.h>
 #include <std_srvs/EmptyRequest.h>
 #include <std_srvs/Empty.h>
+
 #include <actionlib_msgs/GoalID.h>
 
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
-#include <geometry_msgs/TransformStamped.h>
-
 #include <pcl_ros/transforms.h>
-#include <pcl_conversions/pcl_conversions.h>
-#include <boost/make_shared.hpp>
+#include <geometry_msgs/TransformStamped.h>
 
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/core/core.hpp>
+
+#include <pcl/ModelCoefficients.h>
+#include <pcl/point_types.h>
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/extract_indices.h>
 
 using std::string;
 using std::cout;
@@ -40,6 +50,7 @@ using std::vector;
 using std::isnan;
 using std::to_string;
 using std::ceil;
+using std::setw;
 
 using cv::Mat;
 using cv::Vec3b;
@@ -81,14 +92,17 @@ enum class LogState
 	ERROR
 }; 
 
-struct Lattice_Grid {
-  double x;
-  double y;
-  int row;
-  int col;
-  int length;
-  int width;
+struct Distance2D {
+	double left;
+	double right;
 };
+
+struct LaneFrame {
+	Distance2D distance;
+	double direction;
+};
+
+
 
 class SpeedManager
 {
@@ -113,6 +127,7 @@ private:
 	ros::Publisher visualization_pub_2;
 	ros::Publisher log_pub;
 	ros::Publisher goal_pub;
+	ros::Publisher lane_pub; 
 
 
 	/** Subscribers **/
@@ -213,6 +228,12 @@ private:
 	void searchPath(cv::Mat& Input_Grid,
 		int Start_Row,int Start_Col,int End_Row,int End_Col);
 	void shiftLine(cv::Mat& Input_Grid,geometry_msgs::Twist& Output_Cmd,int& Ref_Timer);
+
+	bool generateLane(sensor_msgs::PointCloud Input,LaneFrame& Output);
+
+	void findAvailableLane(LaneFrame Input,std::vector<sensor_msgs::PointCloud> Input_Points);
+	int findObstacleLane(LaneFrame Input, std::vector<sensor_msgs::PointCloud> Input_Points, int Lane_Num, int Vehicle_Lane, int Scale);
+
 
 	inline double sign(double input) {
 		return input < 0.0 ? -1.0 : 1.0;

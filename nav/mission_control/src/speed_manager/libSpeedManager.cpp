@@ -50,7 +50,7 @@ SpeedManager::SpeedManager():pn("~"),
   visualization_pub_2 = n.advertise<sensor_msgs::PointCloud> ("/visualization_points_safe", 1);
   log_pub = n.advertise<std_msgs::String> ("/ugv_log", 1);
   goal_pub = n.advertise<geometry_msgs::PoseStamped>("/navi_goal",1);
-
+  lane_pub = n.advertise<sensor_msgs::PointCloud> ("/lane_points", 1);
 
 
   clear_costmap_client = n.serviceClient<std_srvs::EmptyRequest>("/move_base/clear_costmaps");
@@ -281,6 +281,154 @@ void SpeedManager::computeForce(sensor_msgs::PointCloud& points,
 }
 
 
+bool SpeedManager::generateLane(sensor_msgs::PointCloud Input,LaneFrame& Output) {
+  
+  if(Input.points.size() == 0) return false;
+
+  sensor_msgs::PointCloud2 pointcloud_2;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr pointcloud_pcl_1 (new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr pointcloud_pcl_2 (new pcl::PointCloud<pcl::PointXYZ>);
+  sensor_msgs::convertPointCloudToPointCloud2(Input,pointcloud_2);
+
+  pcl::fromROSMsg(pointcloud_2,*pointcloud_pcl_1);
+
+  pcl::ModelCoefficients::Ptr coefficients_1 (new pcl::ModelCoefficients);
+  pcl::PointIndices::Ptr inliers_1 (new pcl::PointIndices);
+  pcl::ModelCoefficients::Ptr coefficients_2 (new pcl::ModelCoefficients);
+  pcl::PointIndices::Ptr inliers_2 (new pcl::PointIndices);
+  pcl::SACSegmentation<pcl::PointXYZ> seg;
+
+  seg.setOptimizeCoefficients (true);
+
+  seg.setModelType (pcl::SACMODEL_LINE); //SACMODEL_PARALLEL_LINE
+  seg.setMethodType (pcl::SAC_RANSAC);
+
+  seg.setDistanceThreshold (0.2);
+  seg.setInputCloud (pointcloud_pcl_1);
+  seg.segment (*inliers_1,*coefficients_1);
+  if (inliers_1->indices.size () == 0) return false;
+
+  double kx = coefficients_1->values[3];
+  double ky = coefficients_1->values[4];
+
+  double line_1_x = coefficients_1->values[0];
+  double line_1_y = coefficients_1->values[1];
+
+
+  int buffer_size = 10;
+  static int buffer_ct = 0;
+  double shift_threshold = 0.3;
+
+  static double last_kx = kx;
+  static double last_ky = ky;
+
+  if(fabs(last_kx - kx) > shift_threshold || fabs(last_ky - ky) > shift_threshold) {
+    buffer_ct = 0;
+    last_kx = kx;
+    last_ky = ky;
+  } else {
+    buffer_ct++;
+  }
+  if(buffer_ct < buffer_size) return false;
+
+
+
+  pcl::ExtractIndices<pcl::PointXYZ> extract;
+  extract.setInputCloud (pointcloud_pcl_1);
+  extract.setIndices (inliers_1);
+  extract.setNegative (true);
+  extract.filter (*pointcloud_pcl_2);
+
+  seg.setInputCloud (pointcloud_pcl_2);
+  seg.segment (*inliers_2,*coefficients_2);
+  if (inliers_2->indices.size () == 0) return false;
+
+  double line_2_x = coefficients_2->values[0];
+  double line_2_y = coefficients_2->values[1];
+
+  static double last_dis_1;
+  static double last_dis_2;
+  static double last_dis;
+  static bool isInit = false;
+  if(!isInit) {
+    last_dis = hypot((line_1_x - line_2_x),(line_1_y - line_2_y));
+    if(line_1_y > 0) {
+      last_dis_1 = hypot((line_1_x),(line_1_y));
+      last_dis_2 = hypot((line_2_x),(line_2_y));
+    } else {
+      last_dis_1 = hypot((line_2_x),(line_2_y));
+      last_dis_2 = hypot((line_1_x),(line_1_y));
+    }
+    isInit = true;
+  }
+
+  double dis_total = hypot((line_1_x - line_2_x),(line_1_y - line_2_y));
+  double dis_1,dis_2;
+  if(line_1_y > 0) {
+    dis_1 = hypot((line_1_x),(line_1_y));
+    dis_2 = hypot((line_2_x),(line_2_y));
+  } else {
+    dis_1 = hypot((line_2_x),(line_2_y));
+    dis_2 = hypot((line_1_x),(line_1_y));
+  }
+
+  // if(fabs(last_dis-dis_total)>shift_threshold) {
+  //   last_dis = dis_total;
+  //   return false;
+  // } else {
+  //   last_dis = dis_total;
+  // }
+  // if(fabs(last_dis_1-dis_1)>shift_threshold) {
+  //   dis_1 = last_dis_1;
+  //   return false;
+  // } else {
+  //   last_dis_1 = dis_1;
+  // }
+  // if(fabs(last_dis_2-dis_2)>shift_threshold) {
+  //   dis_2 = last_dis_2;
+  //   return false;
+  // } else {
+  //   last_dis_2 = dis_2;
+  // }
+
+
+
+
+  // cout << "Coefficients  " << endl
+  //   << "kx = " << kx << "  ky = "<< ky<< endl
+  //   << "kx/ky = " << kx/ky << " ky/kx = "<<ky/kx <<endl
+  //   << "tan-1 (kx/ky) = " << atan2(kx,ky)*180/PI << endl
+  //   << "tan-1 (ky/kx) = " << atan2(ky,kx)*180/PI << endl
+  // << endl;
+  //   << "Road width " <<dis_total
+  //   << "  Dis left " << dis_1
+  //   << "  Dis right " << dis_2 <<endl;
+
+
+  Output.distance.left = dis_1;
+  Output.distance.right = dis_2;
+  Output.direction = -atan2(ky,kx);
+
+  sensor_msgs::PointCloud pointcloud_lane;
+  pointcloud_lane.header.frame_id = base_frame_;
+  for (int i = 0; i < inliers_1->indices.size(); i++) {
+    geometry_msgs::Point32 point;
+    point.x = pointcloud_pcl_1->points[inliers_1->indices[i]].x;
+    point.y = pointcloud_pcl_1->points[inliers_1->indices[i]].y;
+    pointcloud_lane.points.push_back(point);
+  }
+
+  for (int i = 0; i < inliers_2->indices.size(); i++) {
+    geometry_msgs::Point32 point;
+    point.x = pointcloud_pcl_2->points[inliers_2->indices[i]].x;
+    point.y = pointcloud_pcl_2->points[inliers_2->indices[i]].y;
+    pointcloud_lane.points.push_back(point);
+  }
+  lane_pub.publish(pointcloud_lane);
+
+  return true;
+}
+
 void SpeedManager::collisionAvoid()
 {
   // Virtual force field
@@ -306,6 +454,16 @@ void SpeedManager::collisionAvoid()
 
   // if(findVehicleState(total_collision_points)!=3) {
   //   findClearPath(map_grid,cmd_vel_safe_);
+  // }
+
+  // LaneFrame lane_pos;
+
+
+  // if(generateLane(collision_wall_points_all_,lane_pos)) {
+  //   // cout << "Vehicle Angle = " << lane_pos.direction << endl
+  //   //   << " Vehicle to Right Edge = " << lane_pos.distance.right << endl
+  //   //   << " Vehicle to Left  Edge = " << lane_pos.distance.left << endl;
+  //   findAvailableLane(lane_pos,total_collision_points);
   // }
 
 
@@ -334,6 +492,58 @@ void SpeedManager::collisionAvoid()
     cmd_vel_safe_.angular.z = cmd_vel_.angular.z * 0.3;
   }
 }
+
+void SpeedManager::findAvailableLane(LaneFrame Input,std::vector<sensor_msgs::PointCloud> Input_Points) {
+  int buffer_scale = 3;
+  double lane_width = Input.distance.right + Input.distance.left;
+  int allow_lane_num = lane_width / (vehicle_radius_ * buffer_scale);
+  int vehicle_current_lane_num = Input.distance.right / (vehicle_radius_ * buffer_scale);
+
+  cout << "There are " << allow_lane_num << " Lane "<< endl
+    << "Vehicle at Lane " << vehicle_current_lane_num << endl;
+
+
+  int move_lane = findObstacleLane(Input,Input_Points,allow_lane_num,vehicle_current_lane_num,buffer_scale);
+  
+}
+
+int SpeedManager::findObstacleLane(LaneFrame Input, std::vector<sensor_msgs::PointCloud> Input_Points,int Lane_Num, int Vehicle_Lane, int Scale) {
+
+  vector<int> invailed_lane(Lane_Num,0);
+  cout<<"check " <<invailed_lane.size()<<endl;
+
+  double max_dis = 0;
+  double min_dis = DBL_MAX;
+
+  for (int m = 0; m < Input_Points.size(); m++) {
+    if(Input_Points[m].points.empty()) continue;
+    for (int n = 0; n < Input_Points[m].points.size(); n++) {
+
+      double lane_y = Input_Points[m].points[n].x * sin(Input.direction) 
+        + Input_Points[m].points[n].y * cos(Input.direction);
+      double vehicle_pos = (Input.distance.right - Input.distance.left)/2;
+      lane_y = vehicle_pos + lane_y;
+      
+      for (int i = 0; i < Lane_Num/2; ++i) {
+        if(fabs(lane_y) < vehicle_radius_ * Scale * (i+0.5)) {
+          int k;
+          (lane_y > 0) ? k = i : k = -i ;
+          invailed_lane[Lane_Num/2 + k]++;
+        }
+      }
+    }
+  }
+  
+  for (int i = 0; i < invailed_lane.size(); i++) {
+    cout << "Lane "<<i<<" has "<<invailed_lane[i] << " points" <<endl;
+  }
+
+
+}
+  
+
+
+
 
 int SpeedManager::findVehicleState(std::vector<sensor_msgs::PointCloud> Input_Points) {
   int empty_ct = 0;
