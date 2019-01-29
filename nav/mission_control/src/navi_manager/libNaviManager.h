@@ -157,8 +157,6 @@ private:
 	void findPurePursuitGoal();
 
 	void publishCurrentGoal();
-	int findPointFromTwoZone(double input_x,double input_y);
-	int findPointFromThreeZone(double input_x,double input_y);
 	int isReadyToChangeMap(double input_x,double input_y);
 	int findJunctionIndex(int goal,int robot);
 

@@ -1,5 +1,0 @@
-<launch>
-	<node name="pointclou_to_laserscan" pkg="imu_integration" type="pointclou_to_laserscan"  >
-	<param name="MaximumIterations" value="80"/>
-        </node>
-</launch>

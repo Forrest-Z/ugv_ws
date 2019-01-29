@@ -466,44 +466,6 @@ bool NaviManager::followPurePursuit() {
   return true;
 }
 
-int NaviManager::findPointFromTwoZone(double input_x,double input_y) {
-
-  // return 1;
-
-  if (!isJunSave_) {
-    recordLog("Unabel to Load Junction Point",LogState::WARNNING);
-    return -2;
-  }
-  if (junction_list_.points.size() != 1) return -1;
-
-  double junction_range = 30;
-
-  if (hypot((junction_list_.points[0].x - input_x),
-    (junction_list_.points[0].y - input_y)) < junction_range) return 0;
-  else if (input_x > junction_list_.points[0].x) return 2;
-  else return 1;
-}
-
-int NaviManager::findPointFromThreeZone(double input_x,double input_y) {
-
-  // return 1;
-
-  if (!isJunSave_) {
-    recordLog("Unabel to Load Junction Point",LogState::WARNNING);
-    return -2;
-  }
-  //if (junction_list_.points.size() != 1) return -1;
-
-  double junction_range = 25; //25
-
-  if (hypot((junction_list_.points[0].x - input_x),
-    (junction_list_.points[0].y - input_y)) < junction_range) return 0;
-  else if (input_x < junction_list_.points[0].x) return 1;
-  else if (input_x > junction_list_.points[0].x && 
-    input_y > junction_list_.points[0].y) return 2;
-  else return 3;
-}
-
 void NaviManager::publishCurrentGoal() {
   static geometry_msgs::Point32 current_goal;
   static std_msgs::Int32 map_number;

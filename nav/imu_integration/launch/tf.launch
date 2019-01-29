@@ -1,5 +1,0 @@
-<launch>
-	<node pkg="imu_integration" type = "tf_pub" name ="pub_base_footprint" />
-	<node pkg="imu_integration" type = "rspoints_test" name = "rspoints_test" /> 
-
-</launch>
