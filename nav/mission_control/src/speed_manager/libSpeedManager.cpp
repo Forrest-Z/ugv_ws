@@ -447,6 +447,8 @@ void SpeedManager::collisionAvoid()
 
   Mat map_grid;
 
+  makeDecision(total_collision_points);
+
   //int current_state = findVehicleState(total_collision_points);
 
   // publishPathParticle(total_collision_points,map_grid);
@@ -542,7 +544,22 @@ int SpeedManager::findObstacleLane(LaneFrame Input, std::vector<sensor_msgs::Poi
 }
   
 
+int SpeedManager::makeDecision(std::vector<sensor_msgs::PointCloud> Input_Points) {
 
+  for (int i = 0; i < Input_Points.size(); i++) {
+    if(Input_Points[i].points.empty()) continue;
+
+    for (int j = 0; j < Input_Points[i].points.size(); j++) {
+      geometry_msgs::Point32 point;
+      point.x = Input_Points[i].points[j].x;
+      point.y = Input_Points[i].points[j].y;
+      all_in_one.points.push_back(point);
+    }
+    
+  }
+
+  return 0;
+}
 
 
 int SpeedManager::findVehicleState(std::vector<sensor_msgs::PointCloud> Input_Points) {

@@ -235,6 +235,9 @@ private:
 	int findObstacleLane(LaneFrame Input, std::vector<sensor_msgs::PointCloud> Input_Points, int Lane_Num, int Vehicle_Lane, int Scale);
 
 
+	int makeDecision(std::vector<sensor_msgs::PointCloud> Input_Points);
+
+
 	inline double sign(double input) {
 		return input < 0.0 ? -1.0 : 1.0;
 	}
