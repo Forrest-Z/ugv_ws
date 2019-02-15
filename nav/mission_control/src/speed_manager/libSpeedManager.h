@@ -163,6 +163,7 @@ private:
 	double min_range_;
 
 	double oscillation_;
+	double play_speed_;
 
 	string base_frame_;
 	string camera_frame_;
@@ -236,6 +237,8 @@ private:
 
 
 	int makeDecision(std::vector<sensor_msgs::PointCloud> Input_Points);
+
+	void filterPointCloud(std::vector<sensor_msgs::PointCloud>& Input_Points);
 
 
 	inline double sign(double input) {
@@ -408,9 +411,10 @@ private:
 	    point.z = *iter_z;
 	    
 	    pointcloud_lidar.points.push_back(point);
+	    point.z = 0;
 	    collision_lidar_points_.points.push_back(point);
 	  }
-	  pointcloud_pub.publish(pointcloud_lidar);
+	  //pointcloud_pub.publish(pointcloud_lidar);
 	  //scan_pub.publish(output);  
 	}
 
@@ -499,6 +503,7 @@ private:
 	void wall_callback(const sensor_msgs::PointCloud::ConstPtr& input) {
 		collision_wall_points_.points.clear();
 		collision_wall_points_all_.points.clear();
+
 		geometry_msgs::Point32 point;
 		for (int i = 0; i < input->points.size(); ++i) {
 			point.x = input->points[i].x;
@@ -509,6 +514,9 @@ private:
 
 			collision_wall_points_.points.push_back(point);
 		}
+
+		collision_wall_points_.header.frame_id = base_frame_;
+		pointcloud_pub.publish(collision_wall_points_);
 	}
 
 	void power_callback(const sensor_msgs::PointCloud::ConstPtr& input) {

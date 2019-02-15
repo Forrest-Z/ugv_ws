@@ -76,6 +76,7 @@ public:
 	void Manager();
 	void paramInitialization();
 	void Mission();
+	void testFunction();
 
 private:
 	/** Node Handles **/
@@ -118,6 +119,7 @@ private:
 	double speed_scale_;
   double rotation_scale_ ;
 	double lookahead_distance_;
+	double play_speed_;
 
 	tf::TransformBroadcaster tf_odom;
 	tf::TransformListener listener;
@@ -161,8 +163,6 @@ private:
 	int findJunctionIndex(int goal,int robot);
 
 	void visualPath();
-
-
 
 	int findPointZone(double input_x,double input_y);
 	geometry_msgs::PoseStamped findJunctionPoint();
@@ -330,8 +330,8 @@ private:
 		recordLog("Point at ( " + to_string(input->point.x)
 			+ "," + to_string(input->point.y) + " )",LogState::INFOMATION);
 		isRecObs_ = true;
-		const int obs_num_max = 20;
-		if(obs_point_.size()>20) obs_point_.clear();
+		const int obs_num_max = 0;
+		if(obs_point_.size()>obs_num_max) obs_point_.clear();
 		geometry_msgs::Point32 point;
 		point.x = input->point.x;
 		point.y = input->point.y;
@@ -357,7 +357,6 @@ private:
 		switch(nav_state)
 		{
 			case 0: {
-
 			break;
 			}
 

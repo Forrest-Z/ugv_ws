@@ -10,7 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(OpenCV REQUIRED)
 
-find_package(PCL 1.2 REQUIRED)
+find_package(PCL REQUIRED)
 
  generate_messages(
    DEPENDENCIES

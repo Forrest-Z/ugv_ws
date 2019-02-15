@@ -12,15 +12,12 @@ MapManager::MapManager():pn("~")
 
   sleep(1);
   Initialization();
-
 }
-
 
 MapManager::~MapManager(){
 }
 
 void MapManager::Initialization() {
-
 	isGoalReached_ = false; isGoalSend_=false;isPathReady_=false;isReadYaml_=false;
 	map_number_ = 1;
 }
@@ -32,10 +29,13 @@ void MapManager::Manager() {
     loop_rate.sleep();
     ros::spinOnce();
   }
+
+  NaviManager test;
+  test.testFunction();
 }
+
 void MapManager::Mission() {
 	routingAnalyze();
-	//debugFunction();
 }
 
 void MapManager::routingAnalyze() {
@@ -73,10 +73,8 @@ void MapManager::routingAnalyze() {
 	goalToPixel(car_in_map,car_in_piexl);
 	findPointId(saved_graph_,car_in_piexl,start_id);
 
-	//ROS_INFO_STREAM("Start at " << start_id);
 	if(pathPlanner(start_id,end_id,saved_graph_,path_astar)) {
 		publishPlan(saved_graph_,path_astar);
-		//ROS_INFO_STREAM("End at " << end_id);
 	}
 }
 
@@ -112,7 +110,6 @@ void MapManager::readNodeTXT(std::vector<MapGraph>& Index) {
 bool MapManager::pathPlanner(int Start_Id,int End_id,
 	std::vector<MapGraph> Graph,std::vector<int>& Path) {
 
-
 	if(!checkIndexVaild(Start_Id,Graph)) {
 		cout<<"Invaild Start Point"<<endl;
 		Path.clear();
@@ -130,7 +127,6 @@ bool MapManager::pathPlanner(int Start_Id,int End_id,
 	vector<int> neighbor;
 	vector<int> visited(Graph.size()+1,-1);
 	vector<double> costs(Graph.size()+1,-1);
-
 
 	int current_id;
 	visited[Start_Id] = 0;
@@ -152,7 +148,6 @@ bool MapManager::pathPlanner(int Start_Id,int End_id,
 				visited[next_id] = current_id;
 				costs[next_id] = new_cost;
 				to_visit.push(next_id);
-
 			}
 		}
 
@@ -160,15 +155,10 @@ bool MapManager::pathPlanner(int Start_Id,int End_id,
 			isGoalReached_ = true;
 			break;
 		}
-
 		current_id = to_visit.front();
 		to_visit.pop();
-
 		findNeighbor(current_id,Graph,neighbor);
-
-		//cout<< "Next Search Id " << current_id << endl;
 	}
-
 
 	int next_point = End_id; 
 	while(!isPathReady_) { //!path_astar_que.empty()
@@ -179,10 +169,7 @@ bool MapManager::pathPlanner(int Start_Id,int End_id,
 		Path.push_back(next_point);
 		next_point = visited[next_point];
 	}
-
-	//cout<<Path.size()<<endl;
 	return true;
-
 }
 
 void MapManager::findNeighbor(int Id,std::vector<MapGraph> Index,std::vector<int>& Neighbor) {
@@ -238,7 +225,6 @@ bool MapManager::readYamlFile(){
 		isReadYaml_ = false;
 		return false;
 	}
- 
 	yaml_file.close(); 
 }
 
@@ -269,13 +255,6 @@ void MapManager::publishPlan(std::vector<MapGraph> Map,std::vector<int> Path) {
 	pose.header.frame_id = "/map";
 	path.header.frame_id = "/map";
 
-	// cout<<"Path: ";
-	// for (int i = 0; i < Path.size(); ++i)
-	// {
-	// 	cout<<Map[Path[i]-1].id<<" ";
-	// }
-	// cout<<endl;
-
 	for (int i = 0; i < Path.size(); i++) {
 		geometry_msgs::Point32 point;
 
@@ -294,9 +273,4 @@ void MapManager::publishPlan(std::vector<MapGraph> Map,std::vector<int> Path) {
 	plan_pub.publish(path);
 	plan_point_pub.publish(pointcloud);
 	isGoalSend_ = false;
-
-}
-
-void MapManager::debugFunction(){
-
 }

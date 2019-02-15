@@ -22,6 +22,7 @@
 #include <tf/transform_listener.h>
 #include <geometry_msgs/TransformStamped.h>
 
+#include "../../mission_control/src/navi_manager/libNaviManager.h"
 
 using std::vector;
 using std::queue;
@@ -29,7 +30,7 @@ using std::cout;
 using std::endl;
 using std::string;
 
-const int ROS_RATE_HZ = 20;
+// const int ROS_RATE_HZ = 20;
 
 
 struct PositionPiexl {
@@ -105,8 +106,6 @@ private:
   int map_number_;
 
   /** Functions **/
-  void debugFunction();
-
   void readNodeTXT(std::vector<MapGraph>& Index);
   void routingAnalyze();
   bool readYamlFile();

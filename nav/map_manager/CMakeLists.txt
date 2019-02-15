@@ -18,7 +18,7 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(map_manager src/MapManager.cpp src/libMapManager.cpp)
+add_executable(map_manager src/MapManager.cpp src/libMapManager.cpp ../mission_control/src/navi_manager/libNaviManager.cpp)
 
 target_link_libraries(map_manager 
 	${catkin_LIBRARIES}

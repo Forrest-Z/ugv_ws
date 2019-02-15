@@ -16,6 +16,7 @@ isRecovery_(false)
   pn.param<double>("speed_scale", speed_scale_, 0.3);
   pn.param<double>("rotation_scale", rotation_scale_, 0.5);
   pn.param<double>("lookahead_distance", lookahead_distance_, 3);
+  pn.param<double>("play_speed",play_speed_,1);
 
   plan_sub = n.subscribe("/move_base/GlobalPlanner/plan",1, &NaviManager::plan_callback,this);
   vel_sub = n.subscribe("/base_cmd_vel",1, &NaviManager::vel_callback,this);
@@ -48,8 +49,13 @@ isRecovery_(false)
 NaviManager::~NaviManager(){
 }
 
+void NaviManager::testFunction(){
+  int i = 0;
+  cout<< i << endl;
+}
+
 void NaviManager::Manager() {
-  ros::Rate loop_rate(ROS_RATE_HZ);
+  ros::Rate loop_rate(ROS_RATE_HZ * play_speed_);
   
   recordLog("Navi_manager Node is Running",LogState::INITIALIZATION);
   while (ros::ok()) {
@@ -78,42 +84,13 @@ void NaviManager::Mission() {
   
   publishCurrentGoal();
 
-  // if(findPointFromThreeZone(robot_position_[0],robot_position_[1])==0) {
-  //   static int ros_timer = 0;
-  //   int loop_s = 5;
-  //   if (ros_timer > loop_s * ROS_RATE_HZ) {
-  //     isNewGoal_ = true;
-  //     ros_timer = 0;
-  //   } else {
-  //     ros_timer++;
-  //   } 
-  // }
-
-
-  // static double last_goal_x = 0;
-  // static double last_goal_y = 0;
-
-  // if(last_goal_x!=navi_goal_.x && last_goal_y != navi_goal_.y) {
-  //   isNewGoal_ = true;
-  //   isMapSave_ = false;
-  //   geometry_msgs::PoseStamped msg;
-  //   msg.header.frame_id = map_frame_;
-  //   msg.header.stamp = ros::Time::now();
-  //   msg.pose.position.x = navi_goal_.x;
-  //   msg.pose.position.y = navi_goal_.y; 
-  //   msg.pose.orientation.w =1.0;
-  //   move_base_goal_pub.publish(msg);
-  //   last_goal_x = navi_goal_.x;
-  //   last_goal_y = navi_goal_.y;
-  // }
-  
-
-
   if (!followPurePursuit()) {
     local_cmd_vel_.linear.x = 0;
     local_cmd_vel_.angular.z = 0;
   }
 
+  if(isGoalReached_) return;
+  
   vel_pub.publish(local_cmd_vel_);
 }
 
@@ -139,10 +116,8 @@ void NaviManager::simDriving(bool flag) {
     odom.pose.pose.position.y = robot_position_[1];
     odom.pose.pose.orientation = odom_trans.transform.rotation;
     odom_pub.publish(odom);
-
   }
 }
-
 
 void NaviManager::publishStaticLayer() {
   tf::StampedTransform transform;
@@ -350,7 +325,6 @@ void NaviManager::loadJunctionFile(string filename) {
     recordLog("Unabel to Locate Junction File from " + filename,LogState::WARNNING);
     return;
   }
-
   geometry_msgs::Point32 point;
   junction_list_.points.clear();
   int line_num = 0;
@@ -369,7 +343,6 @@ void NaviManager::publishJunctionPoints() {
     recordLog("Unabel to Load Junction Point",LogState::WARNNING);
     return;
   }
-
   junction_list_.header.frame_id = map_frame_;
   junction_pub.publish(junction_list_);
 }
@@ -429,7 +402,6 @@ bool NaviManager::followPurePursuit() {
 
   if (hypot(next_goal_.x - robot_position_[0],
     next_goal_.y - robot_position_[1]) < goal_tolerance) {
-    // recordLog("Pure Pursuit Goal Reached",LogState::STATE_REPORT);
     global_path_.poses.clear();
     isGoalReached_ = true;
     return false;
@@ -479,8 +451,6 @@ void NaviManager::publishCurrentGoal() {
 
   int junction_index = -1;
 
-
-
   if(changeIndex == 0) {
     current_goal = navi_goal_;
     map_number.data = robot_region;
@@ -525,7 +495,6 @@ void NaviManager::publishCurrentGoal() {
   // cout<< "last_goal      " <<last_goal_x << " " << last_goal_y << endl;
   // cout<< "goal zone      " <<findPointZone(navi_goal_.x,navi_goal_.y)<<endl;
   // cout<< "robot zone     " <<findPointZone(robot_position_[0],robot_position_[1])<<endl;
-
 
   if (!(current_goal.x == last_goal_x && current_goal.y == last_goal_y) 
     && (!isGoalReached_)) {

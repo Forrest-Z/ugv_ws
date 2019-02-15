@@ -31,6 +31,7 @@ SpeedManager::SpeedManager():pn("~"),
   pn.param<string>("camera_frame", camera_frame_, "/power2_point");
   pn.param<string>("lidar_frame", lidar_frame_, "/rslidar");
   pn.param<string>("map_frame", map_frame_, "/map");
+  pn.param<double>("play_speed",play_speed_,1);
 
 
 
@@ -65,7 +66,7 @@ SpeedManager::~SpeedManager(){
 }
 
 void SpeedManager::Manager() {
-  ros::Rate loop_rate(ROS_RATE_HZ);
+  ros::Rate loop_rate(ROS_RATE_HZ * play_speed_);
   recordLog("Speed_manager Node is Running",LogState::INITIALIZATION);
   while (ros::ok()) {
     Mission();
@@ -83,9 +84,6 @@ void SpeedManager::paramInitialization() {
 }
 
 void SpeedManager::Mission() {
-/********************
-  CONTROL LOOP
-********************/
   if (lost_signal_ct_ > ROS_RATE_HZ * STOP_TIME_SEC) {
     zeroVelocity();
     //recordLog("Waiting for Controller",LogState::STATE_REPORT);
@@ -207,10 +205,11 @@ bool SpeedManager::collisionCheck(double input_x, double input_y) {
   double angluar_speed = cmd_vel_.angular.z;
   double lookahead_index = 2;
 
+  double distance = hypot(input_x,input_y);
+
   if (linear_speed == 0 && angluar_speed == 0) return false;
 
   if (linear_speed == 0 && angluar_speed != 0) {
-    double distance = hypot(input_x,input_y);
     return distance <  vehicle_radius_;
   }
 
@@ -227,26 +226,50 @@ bool SpeedManager::collisionCheck(double input_x, double input_y) {
 
 
   if (linear_speed != 0 && angluar_speed != 0) {
-    double distance = hypot(input_x,input_y);
     if (distance <  2 * radius_scale_ * vehicle_radius_ && 
       sign(linear_speed) == sign(input_x)) return true;
-
-    double moving_radius       = linear_speed/angluar_speed;
-    double moving_radius_left  = moving_radius + radius_scale_ * vehicle_radius_;
-    double moving_radius_right = moving_radius - radius_scale_ * vehicle_radius_;
-
-    double unit_dis_left  = asin( input_x/moving_radius_left );
-    double unit_dis_right = asin( input_x/moving_radius_right );
-
-//    double distance = hypot(input_x,input_y);
     if (distance > lookahead_time_ * lookahead_index * fabs(linear_speed)) return false;
 
-    double safe_y_left   = moving_radius - 
-      moving_radius_left * cos(sign(angluar_speed)*unit_dis_left);
-    double safe_y_right  = moving_radius - 
-      moving_radius_right * cos(sign(angluar_speed)*unit_dis_right);
+    double moving_radius = fabs(linear_speed/angluar_speed);
+    double limit_factor  = 0.2;
 
-    return input_y < safe_y_right && input_y > safe_y_left && sign(input_x) == sign(linear_speed);
+    double safe_x_front = radius_scale_ * vehicle_radius_ 
+      + linear_speed/max_speed_ * moving_radius;
+    double safe_x_rear = - radius_scale_ * vehicle_radius_ 
+      - linear_speed/max_speed_ * moving_radius;
+    bool output_result_x = (linear_speed > 0) ? 
+      (input_x > -radius_scale_ * vehicle_radius_ && input_x < safe_x_front) : 
+      (input_x > safe_x_rear && input_x < radius_scale_ * vehicle_radius_);
+
+    double safe_y_left  = radius_scale_ * vehicle_radius_ 
+      + limit_factor * linear_speed/max_speed_ * moving_radius * sign(linear_speed);
+    double safe_y_right = - radius_scale_ * vehicle_radius_ 
+      - limit_factor * linear_speed/max_speed_ * moving_radius * sign(linear_speed);
+    bool output_result_y = (sign(angluar_speed*linear_speed) > 0) ? 
+      (input_y < safe_y_left && input_y > - radius_scale_ * vehicle_radius_) : 
+      (input_y < radius_scale_ * vehicle_radius_ && input_y > safe_y_right);
+
+    // cout << "Range checK"
+    //   << " y left  = " << safe_y_left
+    //   << " y right = " << safe_y_right
+    //   << " x front = " << safe_x_front
+    //   << " x rear  = " << safe_x_rear << endl;
+
+    return output_result_x && output_result_y;
+    
+    // double moving_radius       = linear_speed/angluar_speed;
+    // double moving_radius_left  = moving_radius + radius_scale_ * vehicle_radius_;
+    // double moving_radius_right = moving_radius - radius_scale_ * vehicle_radius_;
+
+    // double unit_dis_left  = asin( input_x/moving_radius_left );
+    // double unit_dis_right = asin( input_x/moving_radius_right );
+
+    // double safe_y_left   = moving_radius - 
+    //   moving_radius_left * cos(sign(angluar_speed)*unit_dis_left);
+    // double safe_y_right  = moving_radius - 
+    //   moving_radius_right * cos(sign(angluar_speed)*unit_dis_right);
+
+    // return input_y < safe_y_right && input_y > safe_y_left && sign(input_x) == sign(linear_speed);
   }
 
 }
@@ -443,11 +466,41 @@ void SpeedManager::collisionAvoid()
   bool isEmergency = false;
 
   vector<sensor_msgs::PointCloud> total_collision_points;
-  total_collision_points = {collision_lidar_points_,collision_wall_points_all_,collision_power_points_};
+  total_collision_points =
+    {collision_lidar_points_,collision_wall_points_all_,collision_power_points_};
+
+  vector<sensor_msgs::PointCloud> part_collision_points;
+  part_collision_points =
+    {collision_lidar_points_,collision_wall_points_,collision_power_points_};
+
+  filterPointCloud(total_collision_points);
 
   Mat map_grid;
 
-  makeDecision(total_collision_points);
+
+  // cout << "num " << obs_points_number <<endl;
+  // cout<< "cmd vel = " << cmd_vel_.linear.x << endl;
+  // cout<< "safe vel = " << cmd_vel_safe_.linear.x << endl;
+
+  static int stop_timer = 0;
+  static bool isStopped = false;
+  int obs_points_number = makeDecision(part_collision_points);
+
+  if(!isStopped) {
+    if(stop_timer > ROS_RATE_HZ * STOP_TIME_SEC) isStopped = true;
+    if(obs_points_number >= 0  && fabs(cmd_vel_safe_.angular.z) < oscillation_) {
+      cmd_vel_safe_.linear.x -= stop_timer * (max_speed_/(ROS_RATE_HZ * STOP_TIME_SEC));
+      if(cmd_vel_safe_.linear.x < 0) cmd_vel_safe_.linear.x = 0;
+      stop_timer++;
+      return;
+    }
+  }
+  if(obs_points_number == -1) {
+    isStopped = false;
+    stop_timer = 0;
+  }
+
+
 
   //int current_state = findVehicleState(total_collision_points);
 
@@ -505,7 +558,7 @@ void SpeedManager::findAvailableLane(LaneFrame Input,std::vector<sensor_msgs::Po
     << "Vehicle at Lane " << vehicle_current_lane_num << endl;
 
 
-  int move_lane = findObstacleLane(Input,Input_Points,allow_lane_num,vehicle_current_lane_num,buffer_scale);
+  int move_to_lane = findObstacleLane(Input,Input_Points,allow_lane_num,vehicle_current_lane_num,buffer_scale);
   
 }
 
@@ -539,26 +592,70 @@ int SpeedManager::findObstacleLane(LaneFrame Input, std::vector<sensor_msgs::Poi
   for (int i = 0; i < invailed_lane.size(); i++) {
     cout << "Lane "<<i<<" has "<<invailed_lane[i] << " points" <<endl;
   }
+}
+
+void SpeedManager::filterPointCloud(std::vector<sensor_msgs::PointCloud>& Input_Points) {
+  sensor_msgs::PointCloud all_in_one;
+  all_in_one.header.frame_id = base_frame_;
+
+  for (int i = 0; i < Input_Points.size(); i++) {
+    if(Input_Points[i].points.empty()) continue;
+    for (int j = 0; j < Input_Points[i].points.size(); j++) {
+      geometry_msgs::Point32 point;
+      point.x = Input_Points[i].points[j].x;
+      point.y = Input_Points[i].points[j].y;
+      point.z = 0;
+      all_in_one.points.push_back(point);
+    }
+  }
+
+  // cout<<" Origin PointCloud Size " << all_in_one.points.size() <<endl;
+
+  sensor_msgs::PointCloud2 pointcloud_2;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr pointcloud_in (new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr pointcloud_out (new pcl::PointCloud<pcl::PointXYZ>);
 
 
+  sensor_msgs::convertPointCloudToPointCloud2(all_in_one,pointcloud_2);
+  pcl::fromROSMsg(pointcloud_2,*pointcloud_in);
+
+  pcl::VoxelGrid<pcl::PointXYZ> sor;
+  sor.setInputCloud (pointcloud_in);
+  sor.setLeafSize (0.2, 0.2, 10);
+  sor.filter (*pointcloud_out);
+
+  pcl::toROSMsg(*pointcloud_out,pointcloud_2);
+  sensor_msgs::convertPointCloud2ToPointCloud(pointcloud_2,all_in_one);
+
+  // cout<<" Filtered PointCloud Size " << all_in_one.points.size() <<endl;
+
+  //pointcloud_pub.publish(all_in_one);
 }
   
 
 int SpeedManager::makeDecision(std::vector<sensor_msgs::PointCloud> Input_Points) {
 
+  int inrange_points = -1;
+  double lookahead_index = 4;
+
   for (int i = 0; i < Input_Points.size(); i++) {
     if(Input_Points[i].points.empty()) continue;
-
     for (int j = 0; j < Input_Points[i].points.size(); j++) {
-      geometry_msgs::Point32 point;
-      point.x = Input_Points[i].points[j].x;
-      point.y = Input_Points[i].points[j].y;
-      all_in_one.points.push_back(point);
+      if(fabs(Input_Points[i].points[j].y) > radius_scale_ * vehicle_radius_) continue;
+      if(cmd_vel_.linear.x > 0) {
+        if(Input_Points[i].points[j].x > lookahead_index * lookahead_time_ * max_speed_ 
+          || Input_Points[i].points[j].x < radius_scale_ * vehicle_radius_) continue;
+      } else {
+        continue;
+      }
+      inrange_points++;
     }
     
   }
 
-  return 0;
+  if(inrange_points == -1) return inrange_points;
+  inrange_points /= 100;
+  return inrange_points;
 }
 
 
@@ -637,7 +734,7 @@ void SpeedManager::publishPathParticle(std::vector<sensor_msgs::PointCloud> Inpu
     }
   }
 
-  pointcloud_pub.publish(front_particle);
+  //pointcloud_pub.publish(front_particle);
   
 }
 
@@ -817,6 +914,7 @@ void SpeedManager::speedSmoother(geometry_msgs::Twist& input_cmd)
 
 bool SpeedManager::isReceiveCommand()
 { 
+
   static double last_cmd_linear = -99;
   static double last_cmd_anglar = -99;
   static int stuck_ct = 0;
@@ -838,14 +936,14 @@ bool SpeedManager::isReceiveCommand()
     return true;
   }
      
-  if (last_cmd_linear == nav_speed_ && last_cmd_anglar == nav_rotation_) {
-    if (stuck_ct > stuck_limit) isNav_ = false;
-    else stuck_ct++;
-  } else {
-    last_cmd_linear = nav_speed_;
-    last_cmd_anglar = nav_rotation_;
-    stuck_ct = 0;
-  }
+  // if (last_cmd_linear == nav_speed_ && last_cmd_anglar == nav_rotation_) {
+  //   if (stuck_ct > stuck_limit) isNav_ = false;
+  //   else stuck_ct++;
+  // } else {
+  //   last_cmd_linear = nav_speed_;
+  //   last_cmd_anglar = nav_rotation_;
+  //   stuck_ct = 0;
+  // }
 
   if (isNav_) {
     cmd_vel_.linear.x  = nav_speed_;

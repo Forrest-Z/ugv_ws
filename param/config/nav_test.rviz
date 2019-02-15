@@ -5,6 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Vehicle1/Odometry1/Shape1
+        - /Mission_Control1/Warning_Points1
       Splitter Ratio: 0.595567882
     Tree Height: 811
   - Class: rviz/Selection
@@ -44,7 +45,7 @@ Visualization Manager:
         Y: 0
         Z: 0
       Plane: XY
-      Plane Cell Count: 1000
+      Plane Cell Count: 500
       Reference Frame: <Fixed Frame>
       Value: true
     - Class: rviz/Group
@@ -356,7 +357,7 @@ Visualization Manager:
           Use Fixed Frame: true
           Use rainbow: true
           Value: true
-        - Alpha: 0.300000012
+        - Alpha: 0.600000024
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
             Max Value: 10
@@ -365,7 +366,7 @@ Visualization Manager:
           Axis: Z
           Channel Name: intensity
           Class: rviz/PointCloud
-          Color: 0; 255; 0
+          Color: 255; 0; 0
           Color Transformer: FlatColor
           Decay Time: 0
           Enabled: true
@@ -378,9 +379,9 @@ Visualization Manager:
           Position Transformer: XYZ
           Queue Size: 10
           Selectable: true
-          Size (Pixels): 3
+          Size (Pixels): 15
           Size (m): 0.600000024
-          Style: Boxes
+          Style: Points
           Topic: /filtered_points
           Unreliable: false
           Use Fixed Frame: true
@@ -478,7 +479,7 @@ Visualization Manager:
           Max Color: 0; 255; 0
           Max Intensity: 2
           Min Color: 255; 170; 0
-          Min Intensity: 0.100000001
+          Min Intensity: 0.13333334
           Name: Waypoint
           Position Transformer: XYZ
           Queue Size: 10
@@ -516,7 +517,7 @@ Visualization Manager:
           Max Color: 0; 255; 0
           Max Intensity: 2
           Min Color: 255; 170; 0
-          Min Intensity: 0.100000001
+          Min Intensity: 0.13333334
           Name: PurePursuit_Path
           Position Transformer: XYZ
           Queue Size: 10
@@ -595,11 +596,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Scale: 22.6412067
+      Scale: 50.3679047
       Target Frame: base_link
       Value: TopDownOrtho (rviz)
-      X: 2.00918365
-      Y: 3.23523092
+      X: 2.25963855
+      Y: -0.627964139
     Saved: ~
 Window Geometry:
   Displays:
@@ -617,5 +618,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 930
-  X: 61
+  X: 990
   Y: 24

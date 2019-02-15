@@ -5,10 +5,12 @@
       max_rotation: 0.6
       max_speed: 0.8
       vehicle_radius: 0.4
-      lookahead_time: 3
+      lookahead_time: 2.5
       safe_zone: 5
-      force_constant_x: 0.2
+      force_constant_x: 0.4
       force_constant_y: 0.02
+
+      play_speed: 1
 
       max_height: 2
       min_height: 0.5
@@ -32,6 +34,8 @@
       speed_scale: 0.3
       rotation_scale: 0.5
       lookahead_distance: 3
+
+      play_speed: 1
     </rosparam>
       <param name="junction_file"  value="$(find param)/map/junction.txt"/>
   </node>
