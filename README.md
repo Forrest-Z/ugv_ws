@@ -8,6 +8,13 @@ Package Description
 ### Genius Pros - UGV Project
 ### Update Logs
 
+##### v2.0 - Adapted to New Base Structure with New Framework <br>
+* Project are running on new base which faster and heavier.
+* Adding base communication node that directly control motor RPM via RS232.
+* Changing local obstacle avoidance algorithm to path-based frame clean path search. Similar to Automation vehicle avoidance method without lane detection requirement.
+* Update map server and map editor node (map editor is a separate project now).
+* Note: Current version is ONLY a temporary version for testing new base.
+
 ##### v1.0 - Brand New Structure with New Navigation System <br>
 * The new system are no longer require move base or any other ROS Navigation Stack packages except Map server. 
 * New planner based on Node-Graph Map search by using a modified version of Astar Algorithm.
