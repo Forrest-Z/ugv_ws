@@ -196,7 +196,7 @@ void Controlling::computeClearPath(geometry_msgs::Point32& Force,geometry_msgs::
   int sample_num = 2 * sample_half + 1;
   vector<int> path_vector(sample_num);
 
-  int width_index = 20;
+  int width_index = 25;
   double factor = 0.001;
 
   int min_safe = -1;
@@ -263,12 +263,7 @@ void Controlling::computeClearPath(geometry_msgs::Point32& Force,geometry_msgs::
     Force.x = 0;
     Force.y = 0;
     Force.z = 1;
-  }
-  // else if(min_distance < 1.5 * vehicle_radius_ ){
-  //   ROS_INFO("VFF");
-  //   computeObstacleForce(Force);
-  // } 
-  else {
+  } else {
     // ROS_INFO("Normal");
     double force_factor = -0.3;
     Force.x = min_safe - sample_half;

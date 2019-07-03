@@ -74,9 +74,13 @@ private:
 
   /** Variables **/
   geometry_msgs::Point32 vehicle_in_map_;
+  geometry_msgs::Point32 goal_in_map_;
   int map_number_;
   nav_msgs::Path global_path_;
   geometry_msgs::Twist last_command_;
+
+
+  
 
   sensor_msgs::PointCloud map_obs_;
 
@@ -124,11 +128,11 @@ private:
   void goal_callback(const geometry_msgs::PoseStamped::ConstPtr& input) {
   	cout<<"Receive New Goal"<<endl;
     isPatrol_ = false;
-  	geometry_msgs::Point32 goal_in_map;
-    goal_in_map.x = input->pose.position.x;
-    goal_in_map.y = input->pose.position.y;
+  	
+    goal_in_map_.x = input->pose.position.x;
+    goal_in_map_.y = input->pose.position.y;
 
-    makeGlobalPath(goal_in_map);
+    makeGlobalPath(goal_in_map_);
   }
 
   
@@ -163,8 +167,10 @@ private:
 	    joy_rotation_ = 0;
 	  }
 
-    if (isJoy_ && input->buttons[BUTTON_A]) runPatrolMission(1);
-    if (isJoy_ && input->buttons[BUTTON_B]) runPatrolMission(2);
+    if (isJoy_ && input->buttons[BUTTON_BACK]) global_path_.poses.clear();
+
+    // if (isJoy_ && input->buttons[BUTTON_A]) runPatrolMission(1);
+    // if (isJoy_ && input->buttons[BUTTON_B]) runPatrolMission(2);
 
     sp_cmd_ = 0;
     if (isJoy_ && input->buttons[BUTTON_START]) sp_cmd_=1;
