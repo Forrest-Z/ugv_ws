@@ -51,6 +51,7 @@ MissionControl::~MissionControl() {
 void MissionControl::Execute() {
 	ros::Rate loop_rate(ROS_RATE_HZ);
 	Planning MyPlanner(0.5,2);
+	ros::Time last_timer = ros::Time::now();
   while (ros::ok()) {
     loop_rate.sleep();
     ros::spinOnce();
@@ -107,9 +108,16 @@ void MissionControl::Execute() {
 		  vehicle_in_map_.z = tf::getYaw(transform.getRotation());
 
 	    if(global_path_.poses.size() == 0) continue;
+
+	    double replann_timer = 2;
+	    if( (ros::Time::now()-last_timer).toSec() > replann_timer) {
+	    	makeGlobalPath(goal_in_map_);
+	    	last_timer = ros::Time::now();
+	    }
+
 		  geometry_msgs::Point32 current_goal;
 		  geometry_msgs::Twist pp_command;
-		  double goal_tolerance = 1;
+		  double goal_tolerance = 2;
 
 		  MyPlanner.findCurrentGoal(global_path_,vehicle_in_map_,current_goal);
 		  MyPlanner.computePurePursuitCommand(current_goal,vehicle_in_map_,pp_command);
@@ -127,7 +135,7 @@ void MissionControl::Execute() {
 	  	obs_pub.publish(Cloud_Out);
 	  	vel_pub.publish(pp_command);
     }
-
+    
     // global_path_.poses.clear();
   }
 }
