@@ -2,9 +2,9 @@
 
 void Controlling::getMovingState(geometry_msgs::Twist Cmd_Vel) {
   // Seting global variable "moving_state_" based on command.
-  if (fabs(Cmd_Vel.linear.x) <= oscillation_ && fabs(Cmd_Vel.angular.z) <= oscillation_) moving_state_= "stop";
-  else if (fabs(Cmd_Vel.linear.x) <= oscillation_ && fabs(Cmd_Vel.angular.z) > oscillation_) moving_state_= "rotation";
-  else if (fabs(Cmd_Vel.linear.x) > oscillation_ && fabs(Cmd_Vel.angular.z) <= oscillation_) moving_state_ = "stright";
+  if (fabs(Cmd_Vel.linear.x) <= 10 * oscillation_ && fabs(Cmd_Vel.angular.z) <= 10 * oscillation_) moving_state_= "stop";
+  else if (fabs(Cmd_Vel.linear.x) <= 10 * oscillation_ && fabs(Cmd_Vel.angular.z) > 10 * oscillation_) moving_state_= "rotation";
+  else if (fabs(Cmd_Vel.linear.x) > 10 * oscillation_ && fabs(Cmd_Vel.angular.z) <= 10 * oscillation_) moving_state_ = "stright";
   else moving_state_ = "moving";
 }
 
@@ -19,31 +19,31 @@ void Controlling::getPredictPath(geometry_msgs::Twist Cmd_Vel) {
     drawCircle(point_step,vehicle_radius_,path_predict_);
   } 
   else if (moving_state_ == "rotation") {
-    drawCircle(point_step,inflation_rate_*vehicle_radius_,path_predict_);
+    drawCircle(point_step,vehicle_radius_,path_predict_);
   } 
   else if (moving_state_ == "stright") {
     geometry_msgs::Point32 origin;
     origin.x = 0;
     double end = Cmd_Vel.linear.x * lookahead_time_;
-    origin.y = -inflation_rate_*vehicle_radius_;
+    origin.y = -vehicle_radius_;
     drawLine(0,end,point_step,origin,path_predict_);
-    origin.y = inflation_rate_*vehicle_radius_;
+    origin.y = vehicle_radius_;
     drawLine(0,end,point_step,origin,path_predict_);
   } else {
     geometry_msgs::Point32 origin;
     double path_radius = fabs(Cmd_Vel.linear.x/Cmd_Vel.angular.z);
-    double inner_radius = path_radius - inflation_rate_ * vehicle_radius_;
-    double outer_radius = path_radius + inflation_rate_ * vehicle_radius_;
+    double inner_radius = path_radius - vehicle_radius_;//path_radius - inflation_rate_ * vehicle_radius_;
+    double outer_radius = path_radius + vehicle_radius_;//path_radius + inflation_rate_ * vehicle_radius_;
     double end;
     origin.x = 0;
     if (Cmd_Vel.angular.z >= 0) {
       origin.y = path_radius;
-      end = 3*PI/2 + Cmd_Vel.linear.x/fabs(Cmd_Vel.linear.x) * Cmd_Vel.angular.z * lookahead_time_;
+      end = 3*PI/2 + Cmd_Vel.linear.x/fabs(Cmd_Vel.linear.x) * Cmd_Vel.angular.z * lookahead_time_/2;
       drawCircle(3*PI/2,end,point_step,inner_radius,origin,path_predict_);
       drawCircle(3*PI/2,end,point_step,outer_radius,origin,path_predict_);
     } else {
       origin.y = -path_radius;
-      end = PI/2 + Cmd_Vel.linear.x/fabs(Cmd_Vel.linear.x) * Cmd_Vel.angular.z * lookahead_time_;
+      end = PI/2 + Cmd_Vel.linear.x/fabs(Cmd_Vel.linear.x) * Cmd_Vel.angular.z * lookahead_time_/2;
       drawCircle(PI/2,end,point_step,inner_radius,origin,path_predict_);
       drawCircle(PI/2,end,point_step,outer_radius,origin,path_predict_);
     }
@@ -109,28 +109,8 @@ void Controlling::filterPointClouds(sensor_msgs::PointCloud Cloud_In,geometry_ms
     }
   } else {
     for (int i = 0; i < Cloud_In.points.size(); ++i) {
+
       double distance = hypot(Cloud_In.points[i].x,Cloud_In.points[i].y);
-      if (distance > fabs(lookahead_time_ * 0.5  * Cmd_Vel.linear.x)) continue;
-
-      if(Cloud_In.points[i].x/Cmd_Vel.linear.x > 0){
-        geometry_msgs::Point32 point;
-        point.x = Cloud_In.points[i].x;
-        point.y = Cloud_In.points[i].y;
-        point.z = Cloud_In.points[i].z;
-        pointcloud_semicircle_.points.push_back(point);        
-      }
-
-
-      // if (distance < inflation_rate_ * vehicle_radius_ ) {
-      //   geometry_msgs::Point32 point;
-      //   point.x = Cloud_In.points[i].x;
-      //   point.y = Cloud_In.points[i].y;
-      //   point.z = Cloud_In.points[i].z;
-      //   pointcloud_filltered_.points.push_back(point);
-      //   pointcloud_onpath_.points.push_back(point);
-      //   continue;
-      // }
-
       double path_radius = fabs(Cmd_Vel.linear.x/Cmd_Vel.angular.z);
       double inner_radius = path_radius - inflation_rate_ * vehicle_radius_;
       double outer_radius = path_radius + inflation_rate_ * vehicle_radius_;
@@ -145,21 +125,34 @@ void Controlling::filterPointClouds(sensor_msgs::PointCloud Cloud_In,geometry_ms
 
       if (Cmd_Vel.linear.x > 0 && Cloud_In.points[i].x < 0) continue;
       if (Cmd_Vel.linear.x < 0 && Cloud_In.points[i].x > 0) continue;
-        
+
       geometry_msgs::Point32 point;
+
+      double numerator = pow(path_radius,2) + pow(point_radius,2) - pow(distance,2);
+      double denominator = 2 * path_radius * point_radius;
+      double anglePointVehicle = acos(numerator/denominator);
+
+      if(fabs((anglePointVehicle * Cmd_Vel.linear.x)/Cmd_Vel.angular.z) > fabs(Cmd_Vel.linear.x) * lookahead_time_) continue;
+
+      point.x = fabs((anglePointVehicle * Cmd_Vel.linear.x)/Cmd_Vel.angular.z);
+      point.y = path_radius - point_radius;
+      point.z = Cloud_In.points[i].z;
+      pointcloud_onpath_.points.push_back(point);
+
+      if(Cloud_In.points[i].x/Cmd_Vel.linear.x > 0){
+        point.x = Cloud_In.points[i].x;
+        point.y = Cloud_In.points[i].y;
+        point.z = Cloud_In.points[i].z;
+        pointcloud_semicircle_.points.push_back(point);        
+      }
+        
       point.x = Cloud_In.points[i].x;
       point.y = Cloud_In.points[i].y;
       point.z = Cloud_In.points[i].z;
       pointcloud_filltered_.points.push_back(point);
       if (Cloud_In.points[i].z != 10) pointcloud_obstacle_.points.push_back(point);
 
-      double numerator = pow(path_radius,2) + pow(point_radius,2) - pow(distance,2);
-      double denominator = 2 * path_radius * point_radius;
-      double anglePointVehicle = acos(numerator/denominator);
-      point.x = fabs((anglePointVehicle * Cmd_Vel.linear.x)/Cmd_Vel.angular.z);
-      point.y = path_radius - point_radius;
-      point.z = Cloud_In.points[i].z;
-      pointcloud_onpath_.points.push_back(point);
+
     }
   }
 
@@ -169,9 +162,10 @@ bool Controlling::waitObstaclePass(geometry_msgs::Twist& Cmd_Vel){
   static int waitCount_ = 0;
   if(pointcloud_obstacle_.points.size() == 0){
     waitCount_ = 0;
+    return false;
   }
-
-  if(waitCount_ > ROS_RATE_HZ * STOP_TIME_SEC) return false;
+  Cmd_Vel.angular.z = 0;
+  if(waitCount_ >= ROS_RATE_HZ * STOP_TIME_SEC) return false;
 
   Cmd_Vel.linear.x = 0;
   waitCount_++;
@@ -202,7 +196,7 @@ void Controlling::computeClearPath(geometry_msgs::Point32& Force,geometry_msgs::
   int sample_num = 2 * sample_half + 1;
   vector<int> path_vector(sample_num);
 
-  int width_index = 30;
+  int width_index = 20;
   double factor = 0.001;
 
   int min_safe = -1;
@@ -259,16 +253,24 @@ void Controlling::computeClearPath(geometry_msgs::Point32& Force,geometry_msgs::
   }
 
   if(min_distance < vehicle_radius_){
+    ROS_INFO("TOO ClOSE");
     Force.x = 0;
     Force.y = Cmd_Vel.angular.z;
     Force.z = 1;
   }
-  else if(min_distance < 1.5 * vehicle_radius_ || min_safe == -1){
-    // ROS_INFO("VFF");
-    computeObstacleForce(Force);
-  } else {
+  else if(min_safe == -1) {
+    ROS_INFO("BLOCKED");
+    Force.x = 0;
+    Force.y = 0;
+    Force.z = 1;
+  }
+  // else if(min_distance < 1.5 * vehicle_radius_ ){
+  //   ROS_INFO("VFF");
+  //   computeObstacleForce(Force);
+  // } 
+  else {
     // ROS_INFO("Normal");
-    double force_factor = -0.5;
+    double force_factor = -0.3;
     Force.x = min_safe - sample_half;
     Force.y = force_factor * (min_safe - sample_half);
   }
@@ -298,16 +300,10 @@ void Controlling::computeSafeSpeed(geometry_msgs::Point32& Force,geometry_msgs::
     if(distance < min_distance) min_distance = distance;
   }
 
-
-
   if(min_distance < 10) {
-    double factor_x = 1;
+    double factor_x = 0.4;
     Force.x = factor_x * Cmd_Vel.linear.x/pow((min_distance/vehicle_radius_),2);
   }
-
-  // cout << "min_distance: " <<min_distance << endl;
-  // cout << "(min_distance/vehicle_radius_): "<< (min_distance/vehicle_radius_) << endl;
-
 }
 
 
