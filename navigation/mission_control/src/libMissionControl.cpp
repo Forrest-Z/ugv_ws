@@ -24,13 +24,13 @@ MissionControl::MissionControl(){
   map_number_ = 1;
 
   vehicle_radius_ = 0.8;
-  lookahead_time_ = 4;
+  lookahead_time_ = 5;
 
 
 	max_speed_ = 1.2;
 	max_rotation_ = 2;
 
-	max_acc_speed_ = 0.015;
+	max_acc_speed_ = 0.025;
 	max_acc_rotation_ = 0.1;
 
 	oscillation_ = 0.02;
@@ -134,8 +134,8 @@ void MissionControl::Execute() {
 
 void MissionControl::makeGlobalPath(geometry_msgs::Point32 goal_in_map) {
 	Routing MyRouter;
-	string map_folder = "/home/gp/ha_ws/src/config/map/"; 
-	// /home/gp/ha_ws/src/config/map/  /home/ha/Workspace/test_ws/src/config/map/
+	string map_folder;
+	(isUseSim_) ? map_folder = "/home/ha/Workspace/ugv_ws/src/ugv_ws/config/map/" : map_folder = "/home/gp/ha_ws/src/ugv_ws/config/map/";
 	std::vector<MapGraph> map;
 	std::vector<int> path;
 	YamlInfo map_info;
@@ -184,7 +184,7 @@ void MissionControl::pathPredict(geometry_msgs::Twist& Cmd_Vel,sensor_msgs::Poin
 	MyController.getPredictPath(Cmd_Vel); 
 	MyController.filterPointClouds(Cloud_In,Cmd_Vel);
 
-	MyController.computeSafePath(Cmd_Vel);
+	if(!MyController.waitObstaclePass(Cmd_Vel)) MyController.computeSafePath(Cmd_Vel);
 
 	speedLimit(Cmd_Vel);
 	sensor_msgs::PointCloud path_pointcloud;
@@ -259,7 +259,7 @@ void MissionControl::speedSmoother(geometry_msgs::Twist& Cmd_Vel) {
 double MissionControl::smootherLogic(double cmd,double last,double acc){
 	double output = 0;
 
-	if((cmd < 0 && last > 0) || (cmd > 0 && last < 0)) output = 0;
+	if((cmd <= 0 && last > 0) || (cmd >= 0 && last < 0)) output = 0;
 	else if(fabs(cmd) - fabs(last) < 2 * acc) output = cmd;
 	else if(cmd > last) output = last + acc;
 	else if(cmd < last) output = last - acc;
