@@ -5,7 +5,6 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /TF1
         - /TF1/Frames1
       Splitter Ratio: 0.5
     Tree Height: 747
@@ -104,13 +103,6 @@ Visualization Manager:
               {}
       Update Interval: 0
       Value: true
-    - Class: rviz/Axes
-      Enabled: false
-      Length: 10
-      Name: Axes
-      Radius: 1
-      Reference Frame: map
-      Value: false
     - Alpha: 0.699999988
       Class: rviz/Map
       Color Scheme: map
@@ -144,36 +136,6 @@ Visualization Manager:
       Topic: /Astar_plan
       Unreliable: false
       Value: true
-    - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 10
-        Min Value: -10
-        Value: true
-      Axis: Z
-      Channel Name: intensity
-      Class: rviz/PointCloud
-      Color: 255; 255; 255
-      Color Transformer: Intensity
-      Decay Time: 0
-      Enabled: false
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: PointCloud
-      Position Transformer: XYZ
-      Queue Size: 10
-      Selectable: true
-      Size (Pixels): 3
-      Size (m): 3
-      Style: Flat Squares
-      Topic: /Astar_path
-      Unreliable: false
-      Use Fixed Frame: true
-      Use rainbow: true
-      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -256,9 +218,9 @@ Visualization Manager:
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
-      Size (Pixels): 3
-      Size (m): 0.5
-      Style: Flat Squares
+      Size (Pixels): 5
+      Size (m): 0.300000012
+      Style: Squares
       Topic: /obs_points
       Unreliable: false
       Use Fixed Frame: true
@@ -299,7 +261,7 @@ Visualization Manager:
       Marker Topic: /clean_path
       Name: Marker
       Namespaces:
-        {}
+        clean_path_arrow: true
       Queue Size: 100
       Value: true
     - Alpha: 1
@@ -366,11 +328,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Scale: 20.6359024
+      Scale: 35.4575386
       Target Frame: base_link
       Value: TopDownOrtho (rviz)
-      X: 0.768728316
-      Y: 4.45121813
+      X: 3.41139197
+      Y: 2.48560143
     Saved: ~
 Window Geometry:
   Displays:
@@ -388,5 +350,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 934
-  X: 53
+  X: 986
   Y: 24

@@ -10,7 +10,8 @@ class MissionControl
 {
 public:
 	MissionControl();
-	~MissionControl();
+	~MissionControl(); 
+  void Initialization();
 
 	void Execute();
 
@@ -52,7 +53,7 @@ private:
   ros::Publisher vel_pub;
   ros::Publisher path_pred_pub;
   ros::Publisher obs_pub;
-
+  ros::Publisher map_number_pub;
   ros::Publisher clean_path_arrow;
 
   /** Parameters **/
@@ -71,6 +72,7 @@ private:
   bool isJoy_;
   bool isPatrol_;
   bool isUseSim_;
+  bool isJunSave_;
 
   /** Variables **/
   geometry_msgs::Point32 vehicle_in_map_;
@@ -79,8 +81,8 @@ private:
   nav_msgs::Path global_path_;
   geometry_msgs::Twist last_command_;
 
-
-  
+  sensor_msgs::PointCloud junction_list_;
+  geometry_msgs::Point32 current_goal_;
 
   sensor_msgs::PointCloud map_obs_;
 
@@ -95,6 +97,7 @@ private:
   tf::TransformListener listener;
 
 
+
   void makeGlobalPath(geometry_msgs::Point32 goal_in_map);
   void publishPlan(std::vector<MapGraph> Map,std::vector<int> Path,YamlInfo Map_info);
 
@@ -105,6 +108,12 @@ private:
   // bool checkAllStateReady();
 
   void runPatrolMission(int case_num);
+
+  void checkMapNumber();
+  void loadJunctionFile();
+  int findPointZone(double input_x,double input_y);
+  int isReadyToChangeMap(double input_x,double input_y);
+  int findJunctionIndex(int goal,int robot);
 
   void initPatrol(){
     patrolIndex_ = 0;
@@ -126,7 +135,6 @@ private:
   }
 
   void goal_callback(const geometry_msgs::PoseStamped::ConstPtr& input) {
-  	cout<<"Receive New Goal"<<endl;
     isPatrol_ = false;
   	
     goal_in_map_.x = input->pose.position.x;
@@ -149,6 +157,10 @@ private:
 	  double joy_y;
 	  double min_axis = 0.1;
 	  double scale = 1;
+    static bool isPower = true;
+
+    if (input->buttons[BUTTON_X] && input->buttons[BUTTON_LB]) isPower = false;
+    if (input->buttons[BUTTON_Y] && input->buttons[BUTTON_LB]) isPower = true;
 
   	(input->buttons[BUTTON_LB]) ? isJoy_ = true : isJoy_ = false;
   	(input->buttons[BUTTON_RB]) ? scale = 0.5 : scale = 1;
@@ -167,15 +179,37 @@ private:
 	    joy_rotation_ = 0;
 	  }
 
+    if(!isPower){
+      isJoy_ = true;
+      joy_speed_    = 0;
+      joy_rotation_ = 0;
+    }
+
     if (isJoy_ && input->buttons[BUTTON_BACK]) global_path_.poses.clear();
 
-    // if (isJoy_ && input->buttons[BUTTON_A]) runPatrolMission(1);
-    // if (isJoy_ && input->buttons[BUTTON_B]) runPatrolMission(2);
+    geometry_msgs::Point32 position_subway;
+    position_subway.x = 2288.519775;
+    position_subway.y = 514.973816;
+
+    geometry_msgs::Point32 position_home;
+    position_home.x = -23.512510;
+    position_home.y = -35.236523;
+
+    // goal_a: [643.462646,-30.777496]
+    //   goal_b: [2288.519775,514.973816]
+    //   goal_x: [-23.512510,-35.236523]
+    //   goal_y: [11.995888,11.043774]
+
+    if (isJoy_ && input->buttons[BUTTON_A]) goal_in_map_ = position_subway;
+    if (isJoy_ && input->buttons[BUTTON_B]) goal_in_map_ = position_home;
+
+    if (isJoy_ && input->buttons[BUTTON_B]) goal_in_map_ = position_home;
 
     sp_cmd_ = 0;
     if (isJoy_ && input->buttons[BUTTON_START]) sp_cmd_=1;
 
   }
+
 
   void odom_callback(const nav_msgs::Odometry::ConstPtr& input) {
     geometry_msgs::TransformStamped odom_trans;
@@ -234,8 +268,11 @@ private:
     vehicle_in_map_.z = tf::getYaw(map_to_base.getRotation());
 
     // cout<< vehicle_in_map_.x << ","<<vehicle_in_map_.y << "," << vehicle_in_map_.z << endl;
-
   }
+
+  inline double sign(double input) {
+    return input < 0.0 ? -1.0 : 1.0;
+  } 
 
 	
 };
