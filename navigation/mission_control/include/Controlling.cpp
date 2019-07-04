@@ -164,7 +164,7 @@ bool Controlling::waitObstaclePass(geometry_msgs::Twist& Cmd_Vel){
     waitCount_ = 0;
     return false;
   }
-  Cmd_Vel.angular.z = 0;
+  //Cmd_Vel.angular.z = 0;
   if(waitCount_ >= ROS_RATE_HZ * STOP_TIME_SEC) return false;
 
   Cmd_Vel.linear.x = 0;
@@ -196,7 +196,7 @@ void Controlling::computeClearPath(geometry_msgs::Point32& Force,geometry_msgs::
   int sample_num = 2 * sample_half + 1;
   vector<int> path_vector(sample_num);
 
-  int width_index = 25;
+  int width_index = 20;
   double factor = 0.001;
 
   int min_safe = -1;
@@ -265,7 +265,7 @@ void Controlling::computeClearPath(geometry_msgs::Point32& Force,geometry_msgs::
     Force.z = 1;
   } else {
     // ROS_INFO("Normal");
-    double force_factor = -0.3;
+    double force_factor = -0.2;
     Force.x = min_safe - sample_half;
     Force.y = force_factor * (min_safe - sample_half);
   }
@@ -296,7 +296,7 @@ void Controlling::computeSafeSpeed(geometry_msgs::Point32& Force,geometry_msgs::
   }
 
   if(min_distance < 10) {
-    double factor_x = 0.4;
+    double factor_x = 0.6;
     Force.x = factor_x * Cmd_Vel.linear.x/pow((min_distance/vehicle_radius_),2);
   }
 }

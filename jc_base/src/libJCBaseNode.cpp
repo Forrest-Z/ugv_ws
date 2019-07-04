@@ -5,7 +5,7 @@ JCBase::JCBase():pn("~")
   pn.param<string>("port_name", port_name_, "/dev/ttyUSB0");
   pn.param<int>("baud_rate", baud_rate_, 115200);
 
-  odom_pub = n.advertise<nav_msgs::Odometry>("odom", 1);
+  odom_pub = n.advertise<nav_msgs::Odometry>("/wheel_odom", 1);
 
   cmd_sub = n.subscribe("/husky_velocity_controller/cmd_vel",1, &JCBase::cmd_callback,this);
 
@@ -204,7 +204,7 @@ void JCBase::publishOdom() {
   double vy = 0;
   double vth = base_twist_.angular.z * 0.45;
 
-  vth = 0;
+  //vth = 0;
 
   double dt = (current_time_ - last_time_).toSec();
   double delta_x = (vx * cos(th) - vy * sin(th)) * dt;
@@ -215,7 +215,7 @@ void JCBase::publishOdom() {
   y += delta_y;
   th += delta_th;
 
-  geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(th);
+  geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(0);
 
   geometry_msgs::TransformStamped odom_trans;
   odom_trans.header.stamp = ros::Time::now();
@@ -228,7 +228,7 @@ void JCBase::publishOdom() {
   odom_trans.transform.rotation = odom_quat;
   odom_broadcaster.sendTransform(odom_trans);
 
-
+  odom_quat = tf::createQuaternionMsgFromYaw(th);
   base_odom_.header.stamp = current_time_;
   base_odom_.header.frame_id = "odom";
 

@@ -185,7 +185,7 @@ private:
   void pointcloud_callback(const sensor_msgs::PointCloud2::ConstPtr& input) {
     pointcloud_lidar_.points.clear();
     double x_fix = 0.08;
-    double z_fix = 0.64;
+    double z_fix = 0;//0.64;
 
     double ground_height = 0.1;
 
@@ -207,7 +207,7 @@ private:
 
       double range = hypot(point.x, point.y);
       double height = point.z;
-      if(height < -0.3) continue;
+      if(height < -0.2) continue;
       pointcloud_lidar_.points.push_back(point);
     }
 
