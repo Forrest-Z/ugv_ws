@@ -28,7 +28,7 @@ MissionControl::MissionControl(){
 
 
 	max_speed_ = 1.2;
-	max_rotation_ = 2;
+	max_rotation_ = 1.5;
 
 	max_acc_speed_ = 0.025;
 	max_acc_rotation_ = 0.1;
