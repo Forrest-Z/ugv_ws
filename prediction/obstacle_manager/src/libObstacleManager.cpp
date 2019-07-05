@@ -90,8 +90,8 @@ void ObstacleManager::publishMapObstacle() {
 
   int point_gap = 3;
  
-  for (int i = search_row_begin; i < search_row_end; i+=5) {
-    for (int j = search_col_begin; j < search_col_end; j+=5) {
+  for (int i = search_row_begin; i < search_row_end; i+=point_gap) {
+    for (int j = search_col_begin; j < search_col_end; j+=point_gap) {
       if(static_map_.data[i+j*static_map_info_.width] == 0) continue;
       point.x = i * static_map_info_.resolution + static_map_info_.origin.position.x;
       point.y = j * static_map_info_.resolution + static_map_info_.origin.position.y;

@@ -215,7 +215,7 @@ void Controlling::computeClearPath(geometry_msgs::Point32& Force,geometry_msgs::
     if(distance < min_distance) min_distance = distance;
 
     int point_width;
-    (pointcloud_filltered_.points[i].z == 10) ? point_width = width_index/5 : point_width = width_index;
+    (pointcloud_filltered_.points[i].z == 10) ? point_width = width_index/3 : point_width = width_index;
 
     // double factor_x;
     // (pointcloud_filltered_.points[i].z == 10) ? factor_x = factor/10 : factor_x = factor; ///pow(distance/5,2)
