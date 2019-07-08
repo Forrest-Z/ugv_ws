@@ -207,7 +207,9 @@ private:
 
       double range = hypot(point.x, point.y);
       double height = point.z;
-      if(height < -0.2) continue;
+      if(height < -0.1) continue;
+      if(height > 1) continue;
+      if(range < 0.5) continue;
       pointcloud_lidar_.points.push_back(point);
     }
 
