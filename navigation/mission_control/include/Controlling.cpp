@@ -218,7 +218,7 @@ void Controlling::computeClearPath(geometry_msgs::Point32& Force,geometry_msgs::
   int sample_num = 2 * sample_half + 1;
   vector<int> path_vector(sample_num);
 
-  int width_index = 25;
+  int width_index = 10;
   double factor = 0.001;
 
   int min_safe = -1;
@@ -237,7 +237,7 @@ void Controlling::computeClearPath(geometry_msgs::Point32& Force,geometry_msgs::
     if(distance < min_distance) min_distance = distance;
 
     int point_width;
-    (pointcloud_filltered_.points[i].z == 10) ? point_width = width_index/2 : point_width = width_index;
+    (pointcloud_filltered_.points[i].z == 10) ? point_width = width_index/3 : point_width = width_index;
 
     // double factor_x;
     // (pointcloud_filltered_.points[i].z == 10) ? factor_x = factor/10 : factor_x = factor; ///pow(distance/5,2)

@@ -31,7 +31,7 @@ MissionControl::~MissionControl(){
 void MissionControl::Initialization() {
 	map_number_ = 1;
 
-  vehicle_radius_ = 0.8;
+  vehicle_radius_ = 0.7;
   lookahead_time_ = 5;
 
 	max_speed_ = 1.2;
