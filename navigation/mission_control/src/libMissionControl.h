@@ -16,7 +16,7 @@ public:
 	void Execute();
 
 private:
-	const int ROS_RATE_HZ = 20;
+	const int ROS_RATE_HZ = 40;
 	const double PI = 3.14159265359;
 
 	const int BUTTON_LB             = 4;
@@ -46,6 +46,7 @@ private:
   ros::Subscriber joy_sub;
   ros::Subscriber map_obs_sub;
   ros::Subscriber odom_sub;
+  ros::Subscriber sonic_sub;
 
   /** Publishers **/
   ros::Publisher plan_pub;
@@ -55,6 +56,7 @@ private:
   ros::Publisher obs_pub;
   ros::Publisher map_number_pub;
   ros::Publisher clean_path_arrow;
+  ros::Publisher junction_pub;
 
   /** Parameters **/
   double vehicle_radius_;
@@ -89,6 +91,7 @@ private:
   double joy_speed_;
 	double joy_rotation_;
   int sp_cmd_;
+  int sonic_state_;
 
   int patrolIndex_;
   vector<geometry_msgs::Point32> patrolA_;
@@ -105,15 +108,13 @@ private:
 	void speedLimit(geometry_msgs::Twist& Cmd_Vel);
   void speedSmoother(geometry_msgs::Twist& Cmd_Vel);
   double smootherLogic(double cmd,double last,double acc);
-  // bool checkAllStateReady();
+  double smootherLogicAngular(double cmd,double last,double acc);
 
   void runPatrolMission(int case_num);
 
   void checkMapNumber();
   void loadJunctionFile();
-  int findPointZone(double input_x,double input_y);
   int isReadyToChangeMap(double input_x,double input_y);
-  int findJunctionIndex(int goal,int robot);
 
   void initPatrol(){
     patrolIndex_ = 0;
@@ -269,6 +270,11 @@ private:
 
     // cout<< vehicle_in_map_.x << ","<<vehicle_in_map_.y << "," << vehicle_in_map_.z << endl;
   }
+
+  void sonic_callback(const std_msgs::Int32::ConstPtr& input) {
+    sonic_state_ = input->data;
+  }
+
 
   inline double sign(double input) {
     return input < 0.0 ? -1.0 : 1.0;

@@ -1,6 +1,6 @@
 image: 2.png
 resolution: 0.05000
-origin: [101.172653, -33.234035, 0.000000]
+origin: [-283.255249, 425.479614, 0.000000]
 negate: 0
 occupied_thresh: 0.65
 free_thresh: 0.196

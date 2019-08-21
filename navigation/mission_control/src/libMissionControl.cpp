@@ -10,6 +10,7 @@ MissionControl::MissionControl(){
   map_obs_sub = n.subscribe("/map_obs_points",1, &MissionControl::map_obs_callback,this); 
   joy_sub = n.subscribe("/joy",1, &MissionControl::joy_callback,this);
   odom_sub = n.subscribe(odom_topic,1, &MissionControl::odom_callback,this);
+  sonic_sub = n.subscribe("/sonic_state",1, &MissionControl::sonic_callback,this);
 
 
 
@@ -19,6 +20,7 @@ MissionControl::MissionControl(){
   path_pred_pub = n.advertise<sensor_msgs::PointCloud>("/pred_path",1);
   obs_pub = n.advertise<sensor_msgs::PointCloud> ("/obs_points", 1);
   map_number_pub = n.advertise<std_msgs::Int32>("/map_number",1);
+  junction_pub = n.advertise<sensor_msgs::PointCloud>("/junction_point",1);
 
   clean_path_arrow = n.advertise<visualization_msgs::Marker>("/clean_path",1);
 
@@ -31,10 +33,10 @@ MissionControl::~MissionControl(){
 void MissionControl::Initialization() {
 	map_number_ = 1;
 
-  vehicle_radius_ = 0.7;
-  lookahead_time_ = 5;
+  vehicle_radius_ = 0.6;
+  lookahead_time_ = 3;
 
-	max_speed_ = 1.2;
+	max_speed_ = 2;
 	max_rotation_ = 1.5;
 
 	max_acc_speed_ = 0.025;
@@ -59,7 +61,7 @@ void MissionControl::Initialization() {
 
 void MissionControl::Execute() {
 	ros::Rate loop_rate(ROS_RATE_HZ);
-	Planning MyPlanner(0.5,2);
+	Planning MyPlanner(0.5,1);
 	ros::Time last_timer = ros::Time::now();
   while (ros::ok()) {
     loop_rate.sleep();
@@ -117,9 +119,9 @@ void MissionControl::Execute() {
 
 	    if(global_path_.poses.size() == 0) continue;
 
-	    double replann_timer = 2;
+	    double replann_timer = 1;
 	    if( (ros::Time::now()-last_timer).toSec() > replann_timer) {
-	    	makeGlobalPath(current_goal_);
+	    	makeGlobalPath(goal_in_map_);
 	    	last_timer = ros::Time::now();
 	    }
 
@@ -136,6 +138,11 @@ void MissionControl::Execute() {
 	    	pp_command.linear.x = 0;
 	    	pp_command.angular.z = 0;
 	    	if(isPatrol_) patrolIndex_++;
+	  	}
+
+	  	if(sonic_state_ == 1){
+	  		pp_command.linear.x = 0;
+	  		pp_command.angular.z  = 0;
 	  	}
 
 	  	pathPredict(pp_command,map_obs_,Cloud_Out);
@@ -234,18 +241,20 @@ void MissionControl::pathPredict(geometry_msgs::Twist& Cmd_Vel,sensor_msgs::Poin
 }
 
 void MissionControl::speedLimit(geometry_msgs::Twist& Cmd_Vel) {
-	if(fabs(Cmd_Vel.linear.x) > max_speed_) {
-		Cmd_Vel.linear.x = max_speed_ * (Cmd_Vel.linear.x / fabs(Cmd_Vel.linear.x));
-	}
-	if(fabs(Cmd_Vel.linear.x)>0.5){
-		if(fabs(Cmd_Vel.angular.z) > max_rotation_) {
-			Cmd_Vel.angular.z = max_rotation_ * (Cmd_Vel.angular.z / fabs(Cmd_Vel.angular.z));
+	if(Cmd_Vel.linear.y == 0) {
+		if(fabs(Cmd_Vel.linear.x) > max_speed_) {
+			Cmd_Vel.linear.x = max_speed_ * (Cmd_Vel.linear.x / fabs(Cmd_Vel.linear.x));
 		}
 	} else {
-		if(fabs(Cmd_Vel.angular.z) > 2) {
-			Cmd_Vel.angular.z = 2 * (Cmd_Vel.angular.z / fabs(Cmd_Vel.angular.z));
-		}		
+		if(fabs(Cmd_Vel.linear.x) > fabs(Cmd_Vel.linear.y) * max_speed_) {
+			Cmd_Vel.linear.x = fabs(Cmd_Vel.linear.y) * max_speed_ * (Cmd_Vel.linear.x / fabs(Cmd_Vel.linear.x));
+		}
 	}
+
+	if(fabs(Cmd_Vel.angular.z) > max_rotation_) {
+		Cmd_Vel.angular.z = max_rotation_ * (Cmd_Vel.angular.z / fabs(Cmd_Vel.angular.z));
+	}		
+	
 	if(fabs(Cmd_Vel.angular.z) < oscillation_) {
 		Cmd_Vel.angular.z = 0;
 	}
@@ -253,26 +262,23 @@ void MissionControl::speedLimit(geometry_msgs::Twist& Cmd_Vel) {
 }
 
 void MissionControl::speedSmoother(geometry_msgs::Twist& Cmd_Vel) {
-
-	// if((Cmd_Vel.linear.x < 0 && last_command_.linear.x > 0) || (Cmd_Vel.linear.x > 0 && last_command_.linear.x < 0)) {
-	// 	Cmd_Vel.linear.x = 0;
-	// }
-	// else if(fabs(Cmd_Vel.linear.x) == max_speed_ && fabs(fabs(Cmd_Vel.linear.x)-fabs(last_command_.linear.x)) < 2*max_acc_speed_) {
-	// 	Cmd_Vel.linear.x = Cmd_Vel.linear.x;
-	// }
-	// else if (Cmd_Vel.linear.x > last_command_.linear.x) {
- //    Cmd_Vel.linear.x = last_command_.linear.x + max_acc_speed_;
- //  }
- //  else if (Cmd_Vel.linear.x < last_command_.linear.x) {
- //    Cmd_Vel.linear.x = last_command_.linear.x - max_acc_speed_;
-	// }
-
-	// last_command_ = Cmd_Vel;
 	Cmd_Vel.linear.x = smootherLogic(Cmd_Vel.linear.x,last_command_.linear.x,max_acc_speed_);
+	// Cmd_Vel.angular.z = smootherLogicAngular(Cmd_Vel.angular.z,last_command_.angular.z,max_acc_speed_);
 	last_command_ = Cmd_Vel;
 }
 
 double MissionControl::smootherLogic(double cmd,double last,double acc){
+	double output = 0;
+
+	if((cmd <= 0 && last > 0) || (cmd >= 0 && last < 0)) output = 0;
+	else if(fabs(cmd) - fabs(last) < 2 * acc) output = cmd;
+	else if(cmd > last) output = last + acc;
+	else if(cmd < last) output = last - acc;
+
+	return output;
+}
+
+double MissionControl::smootherLogicAngular(double cmd,double last,double acc){
 	double output = 0;
 
 	if((cmd <= 0 && last > 0) || (cmd >= 0 && last < 0)) output = 0;
@@ -313,69 +319,62 @@ void MissionControl::runPatrolMission(int case_num) {
 
 void MissionControl::checkMapNumber() {
   static std_msgs::Int32 map_number;
+  int robot_region = map_number_;
+  static bool first_enter = false;
+  static geometry_msgs::Point32 vehicle_enter;
+  static double min_distance;
+  static double max_angle;
 
-  int goal_region = findPointZone(goal_in_map_.x,goal_in_map_.y); 
-  int robot_region = findPointZone(vehicle_in_map_.x,vehicle_in_map_.y);
-  int changeIndex = goal_region - robot_region;
+  junction_list_.header.frame_id = "/map";
+  junction_pub.publish(junction_list_);
+
   int robot_in_junction = isReadyToChangeMap(vehicle_in_map_.x,vehicle_in_map_.y);
-  int current_map = robot_in_junction/10;
-  int next_map = robot_in_junction%10;
-  int junction_index = -1;
-
-  if(changeIndex == 0) {
-    current_goal_ = goal_in_map_;
-    map_number.data = robot_region;
-  } 
-  else if (abs(changeIndex) == 1)
-  { 
-    junction_index = findJunctionIndex(goal_region,robot_region);
-
-    if(robot_in_junction == junction_list_.points[junction_index].z) {
-      current_goal_ = goal_in_map_;
-      map_number.data = goal_region;
-    } else {
-      current_goal_.x = junction_list_.points[junction_index].x;
-      current_goal_.y = junction_list_.points[junction_index].y;
-      map_number.data = robot_region;
-    }
+  if(robot_in_junction == -1) {
+  	map_number.data = robot_region;
+  	first_enter = true;
+  	return;
   } else {
-    if(robot_in_junction > 0) {
-      junction_index 
-        = findJunctionIndex(robot_region+2*sign(changeIndex),robot_region+1*sign(changeIndex));
-      if(robot_in_junction == junction_list_.points[findJunctionIndex(robot_region+1*sign(changeIndex),robot_region)].z){
-        map_number.data = robot_region+1*sign(changeIndex);
-      } else {
-        junction_index = findJunctionIndex(robot_region+1*sign(changeIndex),robot_region);
-        map_number.data = robot_region;
-      }
-    } else {
-      junction_index = findJunctionIndex(robot_region+1*sign(changeIndex),robot_region);
-      map_number.data = robot_region;
-    }
-    current_goal_.x = junction_list_.points[junction_index].x;
-    current_goal_.y = junction_list_.points[junction_index].y;
-  }
+	  if(first_enter){
+	  	vehicle_enter = vehicle_in_map_;
+	  	first_enter = false;
+	  	min_distance = 100;
+	  	max_angle = 0;
+	  	ROS_INFO("Enter Junction Zone");
+	  }
+	  double distance_vehicle_to_points_enter = 
+	  		hypot((junction_list_.points[robot_in_junction].x - vehicle_enter.x),
+      		(junction_list_.points[robot_in_junction].y - vehicle_enter.y));
+	  double distance_vehicle_to_points_now = 
+	  		hypot((junction_list_.points[robot_in_junction].x - vehicle_in_map_.x),
+      		(junction_list_.points[robot_in_junction].y - vehicle_in_map_.y));
+	  double distance_vehicle_moved = 
+	  		hypot((vehicle_enter.x - vehicle_in_map_.x),
+      		(vehicle_enter.y - vehicle_in_map_.y));
 
-  static double last_goal_x = 0;
-  static double last_goal_y = 0;
-  bool isNoGoal = (goal_in_map_.x == 0 && goal_in_map_.y == 0);
-  if (!(current_goal_.x == last_goal_x && current_goal_.y == last_goal_y)) {
-    cout<<"Receive New Goal"<<endl;
-    last_goal_x = current_goal_.x;
-    last_goal_y = current_goal_.y;
-    map_number_ = map_number.data;
-    if(!isNoGoal)makeGlobalPath(current_goal_);
-    map_number_pub.publish(map_number);
-  }
+	  double moving_angle = acos( 
+	  	(pow(distance_vehicle_to_points_enter,2) + pow(distance_vehicle_to_points_now,2) - pow(distance_vehicle_moved,2)) 
+	  	/ (2 * distance_vehicle_to_points_enter * distance_vehicle_to_points_now) 
+	  	);
 
-  // cout<< "DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG" << endl;
-  // cout<< "robot_position " << vehicle_in_map_.x << " " << vehicle_in_map_.y << endl;
-  // cout<< "navi_goal      " << goal_in_map_.x << " " << goal_in_map_.y << endl;
-  // cout<< "current_goal   " << current_goal_.x << " " << current_goal_.y << endl;
-  // cout<< "last_goal      " << last_goal_x << " " << last_goal_y << endl;
-  // cout<< "goal zone      " << findPointZone(goal_in_map_.x,goal_in_map_.y) << endl;
-  // cout<< "robot zone     " << findPointZone(vehicle_in_map_.x,vehicle_in_map_.y) << endl;  
-  // cout<< "called map num " << map_number_ << endl; 
+		if(distance_vehicle_to_points_now < min_distance) min_distance = distance_vehicle_to_points_now;
+		if(moving_angle > max_angle) max_angle = moving_angle;
+	 	int map_1 = int(junction_list_.points[robot_in_junction].z)/10;
+	  int map_2 = int(junction_list_.points[robot_in_junction].z)%10;
+	  int next_map;
+
+	  if ( max_angle > 1.4 && min_distance < 5) {
+	  	(robot_region == map_1) ? next_map = map_2 : next_map = map_1;
+	  	robot_region = next_map;
+	  	map_number.data = next_map;
+	  	first_enter = true;
+  		map_number_pub.publish(map_number);
+  		makeGlobalPath(goal_in_map_);
+	  }
+
+	  // ROS_INFO_STREAM("max_angle    = " << max_angle);
+	  // ROS_INFO_STREAM("min_distance = " << min_distance);
+
+  }
 
 }
 
@@ -399,40 +398,24 @@ void MissionControl::loadJunctionFile() {
   isJunSave_ = true;
 }
 
-int MissionControl::findPointZone(double input_x,double input_y) {
-  if (!isJunSave_) return -1;
-
-  if (input_x < junction_list_.points[1].x
-    && input_y > junction_list_.points[0].y) return 2;
-  else if (input_x > junction_list_.points[3].x) return 5;
-  else if (input_x > junction_list_.points[2].x
-    && input_x < junction_list_.points[3].x) return 4;
-  else if (input_x > junction_list_.points[1].x
-    && input_x < junction_list_.points[2].x) return 3;
-  else return 1;
-}
 
 int MissionControl::isReadyToChangeMap(double input_x,double input_y) {
-  if (!isJunSave_) return -1;
+	int output = -1;
+  if (!isJunSave_) return output;
 
   double junction_range = 10;
+
+  double min_distance = 30;
+  int min_index = -1;
   for (int i = 0; i < junction_list_.points.size(); i++) {
-    if (hypot((junction_list_.points[i].x - input_x),
-      (junction_list_.points[i].y - input_y)) < junction_range)
-      return junction_list_.points[i].z;
+  	double junction_distance = hypot((junction_list_.points[i].x - input_x),
+      (junction_list_.points[i].y - input_y));
+    if (junction_distance < junction_range && junction_distance < min_distance ) {
+    	min_distance = (junction_list_.points[i].x - input_x),
+      (junction_list_.points[i].y - input_y);
+      min_index = i;
+    }
   }
-
-  return -1;
-}
-
-int MissionControl::findJunctionIndex(int goal,int robot) {
-  if (!isJunSave_) return -1;
-
-  for (int i = 0; i < junction_list_.points.size(); i++) {
-    int zone_1 = int(junction_list_.points[i].z) / 10;
-    int zone_2 = int(junction_list_.points[i].z) % 10;
-    if((robot==zone_1&&goal==zone_2)||(robot==zone_2&&goal==zone_1))return i;
-  }
-
-  return -1;
+  output = min_index;
+  return output;
 }
