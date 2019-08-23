@@ -102,6 +102,7 @@ private:
   double odom_angular_;
   double travel_distance_;
 
+  double obstalce_evaluation_;
   double distance_to_junciton_;
 
   int patrolIndex_;
@@ -129,6 +130,10 @@ private:
 
   void runDiagnostic();
   void computerBehavior();
+  bool updateVehicleInMap();
+  double evaluatePointCloud(sensor_msgs::PointCloud Input);
+
+  void fillCommand(geometry_msgs::Twist& Cmd_Vel);
 
   void initPatrol(){
     patrolIndex_ = 0;
@@ -161,6 +166,7 @@ private:
   
   void map_obs_callback(const sensor_msgs::PointCloud::ConstPtr& input) {
     map_obs_ = *input;
+    obstalce_evaluation_ = evaluatePointCloud(map_obs_);
   }
 
   void map_number_callback(const std_msgs::Int32::ConstPtr& input) {
@@ -289,6 +295,8 @@ private:
   void sonic_callback(const std_msgs::Int32::ConstPtr& input) {
     sonic_state_ = input->data;
   }
+
+
 
 
   inline double sign(double input) {
