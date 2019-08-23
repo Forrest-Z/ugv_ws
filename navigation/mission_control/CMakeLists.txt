@@ -30,6 +30,7 @@ add_library(${PROJECT_NAME}
 	include/Routing.cpp
 # 	include/Tools.cpp
 	src/libMissionControl.cpp
+	include/Dev.cpp
 )
 target_link_libraries(${PROJECT_NAME}  ${OpenCV_LIBS}  ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 

@@ -140,6 +140,7 @@ void ObstacleManager::publishMapObstacle() {
 void ObstacleManager::publishScanObstacle() {
   if(pointcloud_scan_.points.size()==0) return;
   for (int i = 0; i < pointcloud_scan_.points.size(); ++i) {
+    if(hypot(pointcloud_scan_.points[i].x,pointcloud_scan_.points[i].y) < 0.5) continue;
     pointcloud_scan_.points[i].z = 1;
     for (int j = 0; j < 16; ++j) {
       pointcloud_base_.points.push_back(pointcloud_scan_.points[i]);
