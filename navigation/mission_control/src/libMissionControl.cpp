@@ -22,6 +22,8 @@ MissionControl::MissionControl(){
   map_number_pub = n.advertise<std_msgs::Int32>("/map_number",1);
   junction_pub = n.advertise<sensor_msgs::PointCloud>("/junction_point",1);
 
+  diagnostic_pub = n.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostic_log",1);
+
   clean_path_arrow = n.advertise<visualization_msgs::Marker>("/clean_path",1);
 
   Initialization();
@@ -36,7 +38,7 @@ void MissionControl::Initialization() {
   vehicle_radius_ = 0.6;
   lookahead_time_ = 3;
 
-	max_speed_ = 2;
+	max_speed_ = 3;
 	max_rotation_ = 1.5;
 
 	max_acc_speed_ = 0.025;
@@ -47,10 +49,10 @@ void MissionControl::Initialization() {
   isJoy_ = false;
   isPatrol_ = false;
 
-  last_command_.linear.x = 0;
-  last_command_.angular.z = 0;
-
   isJunSave_ = false;
+
+	odom_speed_ = 0;
+	travel_distance_ = 0;
 
   loadJunctionFile();
   initPatrol();
@@ -63,6 +65,8 @@ void MissionControl::Execute() {
 	ros::Rate loop_rate(ROS_RATE_HZ);
 	Planning MyPlanner(0.5,1);
 	ros::Time last_timer = ros::Time::now();
+	ros::Time last_loop = ros::Time::now();
+	
   while (ros::ok()) {
     loop_rate.sleep();
     ros::spinOnce();
@@ -120,10 +124,19 @@ void MissionControl::Execute() {
 	    if(global_path_.poses.size() == 0) continue;
 
 	    double replann_timer = 1;
+
+	    travel_distance_ += (ros::Time::now()-last_loop).toSec() * odom_speed_;
+	    last_loop = ros::Time::now();
+
 	    if( (ros::Time::now()-last_timer).toSec() > replann_timer) {
 	    	makeGlobalPath(goal_in_map_);
+	    	runDiagnostic();
+
 	    	last_timer = ros::Time::now();
 	    }
+
+
+
 
 		  geometry_msgs::Point32 current_goal;
 		  geometry_msgs::Twist pp_command;
@@ -151,6 +164,7 @@ void MissionControl::Execute() {
 	  	vel_pub.publish(pp_command);
     }
   checkMapNumber();
+
   }
   
 }
@@ -262,9 +276,10 @@ void MissionControl::speedLimit(geometry_msgs::Twist& Cmd_Vel) {
 }
 
 void MissionControl::speedSmoother(geometry_msgs::Twist& Cmd_Vel) {
-	Cmd_Vel.linear.x = smootherLogic(Cmd_Vel.linear.x,last_command_.linear.x,max_acc_speed_);
+	static geometry_msgs::Twist last_command;
+	Cmd_Vel.linear.x = smootherLogic(Cmd_Vel.linear.x,last_command.linear.x,max_acc_speed_);
 	// Cmd_Vel.angular.z = smootherLogicAngular(Cmd_Vel.angular.z,last_command_.angular.z,max_acc_speed_);
-	last_command_ = Cmd_Vel;
+	last_command = Cmd_Vel;
 }
 
 double MissionControl::smootherLogic(double cmd,double last,double acc){
@@ -404,18 +419,97 @@ int MissionControl::isReadyToChangeMap(double input_x,double input_y) {
   if (!isJunSave_) return output;
 
   double junction_range = 10;
+  double min_distance = 999;
 
-  double min_distance = 30;
   int min_index = -1;
   for (int i = 0; i < junction_list_.points.size(); i++) {
-  	double junction_distance = hypot((junction_list_.points[i].x - input_x),
-      (junction_list_.points[i].y - input_y));
-    if (junction_distance < junction_range && junction_distance < min_distance ) {
-    	min_distance = (junction_list_.points[i].x - input_x),
-      (junction_list_.points[i].y - input_y);
+  	double junction_distance = 
+  		hypot((junction_list_.points[i].x - input_x),
+      			(junction_list_.points[i].y - input_y));
+    if (junction_distance < min_distance ) {
+    	min_distance = junction_distance;
       min_index = i;
     }
   }
-  output = min_index;
+
+  double min_junction_distance = 
+  		hypot((junction_list_.points[min_index].x - input_x),
+      			(junction_list_.points[min_index].y - input_y));
+
+  distance_to_junciton_ = min_junction_distance;
+  if(min_junction_distance < junction_range) output = min_index;
+  
   return output;
 }
+
+void MissionControl::runDiagnostic() {
+	diagnostic_msgs::DiagnosticArray temp_array;
+	diagnostic_msgs::DiagnosticStatus temp_status;
+	diagnostic_msgs::KeyValue temp_key;
+
+	temp_array.header.stamp = ros::Time::now();
+	temp_array.header.frame_id = "UGV STATUS";
+
+
+
+	temp_status.values.clear();
+	temp_status.level = 0;
+	temp_status.hardware_id = "UGV 001";
+	temp_status.name = "Map Info";
+	temp_status.message = "Map Information Status";
+
+	temp_key.key = "Map ID";
+	temp_key.value = "MAP-00"+to_string(map_number_);
+	temp_status.values.push_back(temp_key);
+
+	temp_key.key = "Closet Junction Point";
+	temp_key.value = roundString(distance_to_junciton_,2) + "m";
+	temp_status.values.push_back(temp_key);
+
+	temp_array.status.push_back(temp_status);
+
+
+
+
+
+	temp_status.values.clear();
+	temp_status.level = 1;
+	temp_status.hardware_id = "UGV 001";
+	temp_status.name = "Vehicle Info";
+	temp_status.message = "Vehicle Information Status";
+
+	temp_key.key = "Travel Distance";
+	temp_key.value = roundString(travel_distance_,2) + "m";
+	temp_status.values.push_back(temp_key);
+
+	temp_key.key = "Vehicle Speed";
+	temp_key.value = roundString(odom_speed_,2) + "m/s";
+	temp_status.values.push_back(temp_key);
+
+	temp_array.status.push_back(temp_status);
+
+
+
+
+	diagnostic_pub.publish(temp_array);
+
+}
+
+/*
+std_msgs/Header header
+  uint32 seq
+  time stamp
+  string frame_id
+diagnostic_msgs/DiagnosticStatus[] status
+  byte OK=0
+  byte WARN=1
+  byte ERROR=2
+  byte STALE=3
+  byte level
+  string name
+  string message
+  string hardware_id
+  diagnostic_msgs/KeyValue[] values
+    string key
+    string value
+*/

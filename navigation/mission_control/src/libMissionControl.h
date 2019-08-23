@@ -4,6 +4,11 @@
 #include <Routing.h>
 #include <Planning.h>
 #include <Controlling.h>
+#include <Dev.h>
+
+#include <diagnostic_msgs/DiagnosticArray.h>
+#include <diagnostic_msgs/DiagnosticStatus.h>
+#include <diagnostic_msgs/KeyValue.h>
 
 
 class MissionControl
@@ -16,7 +21,7 @@ public:
 	void Execute();
 
 private:
-	const int ROS_RATE_HZ = 40;
+	const int ROS_RATE_HZ = 50;
 	const double PI = 3.14159265359;
 
 	const int BUTTON_LB             = 4;
@@ -57,6 +62,7 @@ private:
   ros::Publisher map_number_pub;
   ros::Publisher clean_path_arrow;
   ros::Publisher junction_pub;
+  ros::Publisher diagnostic_pub;
 
   /** Parameters **/
   double vehicle_radius_;
@@ -81,7 +87,6 @@ private:
   geometry_msgs::Point32 goal_in_map_;
   int map_number_;
   nav_msgs::Path global_path_;
-  geometry_msgs::Twist last_command_;
 
   sensor_msgs::PointCloud junction_list_;
   geometry_msgs::Point32 current_goal_;
@@ -92,6 +97,12 @@ private:
 	double joy_rotation_;
   int sp_cmd_;
   int sonic_state_;
+
+  double odom_speed_;
+  double odom_angular_;
+  double travel_distance_;
+
+  double distance_to_junciton_;
 
   int patrolIndex_;
   vector<geometry_msgs::Point32> patrolA_;
@@ -115,6 +126,9 @@ private:
   void checkMapNumber();
   void loadJunctionFile();
   int isReadyToChangeMap(double input_x,double input_y);
+
+  void runDiagnostic();
+  void computerBehavior();
 
   void initPatrol(){
     patrolIndex_ = 0;
@@ -268,7 +282,8 @@ private:
     vehicle_in_map_.y = map_to_base.getOrigin().y();
     vehicle_in_map_.z = tf::getYaw(map_to_base.getRotation());
 
-    // cout<< vehicle_in_map_.x << ","<<vehicle_in_map_.y << "," << vehicle_in_map_.z << endl;
+    odom_speed_ = hypot(input->twist.twist.linear.x,input->twist.twist.linear.y);
+    odom_angular_ = input->twist.twist.angular.x;
   }
 
   void sonic_callback(const std_msgs::Int32::ConstPtr& input) {
@@ -279,6 +294,15 @@ private:
   inline double sign(double input) {
     return input < 0.0 ? -1.0 : 1.0;
   } 
+
+  inline string roundString(double input,double precision) {
+    int input_remainder = (input - int(input))*pow(10,precision);
+    return to_string(int(input)) + "." + to_string(input_remainder);
+  }
+
+  inline double computeSteering(double linear,double angular,double length) {
+    return length/fabs(linear/angular) ;
+  }
 
 	
 };
