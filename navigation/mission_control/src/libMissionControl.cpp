@@ -64,87 +64,51 @@ void MissionControl::Initialization() {
 void MissionControl::Execute() {
 	ros::Rate loop_rate(ROS_RATE_HZ);
 	Planning MyPlanner(0.5,1);
+
 	ros::Time last_timer = ros::Time::now();
 	ros::Time last_loop = ros::Time::now();
-	
+	ros::Time last_log = ros::Time::now();
+	double log_duration = 1;
+	double goal_tolerance = 2;
+
   while (ros::ok()) {
     loop_rate.sleep();
     ros::spinOnce();
 
-    // if(!checkAllStateReady()) continue;
 		sensor_msgs::PointCloud Cloud_Out;
 
     if(isJoy_){
-	    geometry_msgs::Twist test_cmd;
+	    geometry_msgs::Twist joy_cmd;
 
-	    test_cmd.linear.x = joy_speed_;
-	    test_cmd.linear.z = sp_cmd_;
-	    test_cmd.angular.z = joy_rotation_;
-	    speedLimit(test_cmd);
-	    pathPredict(test_cmd,map_obs_,Cloud_Out);
+	    fillCommand(joy_cmd);
+	    speedLimit(joy_cmd);
+	    pathPredict(joy_cmd,map_obs_,Cloud_Out);
 
-	    test_cmd.linear.x = joy_speed_;
-	    test_cmd.linear.z = sp_cmd_;
-	    test_cmd.angular.z = joy_rotation_;
-	    speedLimit(test_cmd);
-	    speedSmoother(test_cmd);
+			fillCommand(joy_cmd);
+	    speedLimit(joy_cmd);
+	    speedSmoother(joy_cmd);
 	    obs_pub.publish(Cloud_Out);
-	    vel_pub.publish(test_cmd);
+	    vel_pub.publish(joy_cmd);
 
-	    tf::StampedTransform transform;
-			try {
-		    listener.lookupTransform("/map", "/base_link",  
-		                             ros::Time(0), transform);
-		  }
-		  catch (tf::TransformException ex) {
-		  	cout << "Waiting For TF NAVI" << endl;
-		    continue;
-		  }
-
-		  vehicle_in_map_.x = transform.getOrigin().x();
-		  vehicle_in_map_.y = transform.getOrigin().y();
-		  vehicle_in_map_.z = tf::getYaw(transform.getRotation());
+			if(!updateVehicleInMap()) continue;
 
     } else {
+    	geometry_msgs::Point32 current_goal;
+		  geometry_msgs::Twist pp_command;
 
-    	tf::StampedTransform transform;
-			try {
-		    listener.lookupTransform("/map", "/base_link",  
-		                             ros::Time(0), transform);
-		  }
-		  catch (tf::TransformException ex) {
-		  	cout << "Waiting For TF NAVI" << endl;
-		    continue;
-		  }
-
-		  vehicle_in_map_.x = transform.getOrigin().x();
-		  vehicle_in_map_.y = transform.getOrigin().y();
-		  vehicle_in_map_.z = tf::getYaw(transform.getRotation());
-
+    	if(!updateVehicleInMap()) continue;
 	    if(global_path_.poses.size() == 0) continue;
 
-	    double replann_timer = 1;
-
-	    travel_distance_ += (ros::Time::now()-last_loop).toSec() * odom_speed_;
-	    last_loop = ros::Time::now();
-
-	    if( (ros::Time::now()-last_timer).toSec() > replann_timer) {
+	    if( (ros::Time::now()-last_timer).toSec() > log_duration) {
 	    	makeGlobalPath(goal_in_map_);
-	    	runDiagnostic();
-
 	    	last_timer = ros::Time::now();
 	    }
 
 
-
-
-		  geometry_msgs::Point32 current_goal;
-		  geometry_msgs::Twist pp_command;
-		  double goal_tolerance = 2;
-
 		  MyPlanner.findCurrentGoal(global_path_,vehicle_in_map_,current_goal);
 		  MyPlanner.computePurePursuitCommand(current_goal,vehicle_in_map_,pp_command);
 		 	speedLimit(pp_command);
+
 		  if (hypot(current_goal.x - vehicle_in_map_.x,
 	    current_goal.y - vehicle_in_map_.y) < goal_tolerance) {
 	    	global_path_.poses.clear();
@@ -163,7 +127,16 @@ void MissionControl::Execute() {
 	  	obs_pub.publish(Cloud_Out);
 	  	vel_pub.publish(pp_command);
     }
-  checkMapNumber();
+    
+	  checkMapNumber();
+
+	  travel_distance_ += (ros::Time::now()-last_loop).toSec() * odom_speed_;
+	  last_loop = ros::Time::now();
+	  if( (ros::Time::now()-last_log).toSec() > log_duration) {
+	  	runDiagnostic();
+	  	last_log = ros::Time::now();
+	  }
+ 	
 
   }
   
@@ -272,7 +245,6 @@ void MissionControl::speedLimit(geometry_msgs::Twist& Cmd_Vel) {
 	if(fabs(Cmd_Vel.angular.z) < oscillation_) {
 		Cmd_Vel.angular.z = 0;
 	}
-	
 }
 
 void MissionControl::speedSmoother(geometry_msgs::Twist& Cmd_Vel) {
@@ -442,6 +414,42 @@ int MissionControl::isReadyToChangeMap(double input_x,double input_y) {
   return output;
 }
 
+
+bool MissionControl::updateVehicleInMap() {
+  tf::StampedTransform transform;
+  try {
+    listener.lookupTransform("/map", "/base_link",  
+                             ros::Time(0), transform);
+  }
+  catch (tf::TransformException ex) {
+    cout << "Waiting For TF NAVI" << endl;
+    return false;
+  }
+
+  vehicle_in_map_.x = transform.getOrigin().x();
+  vehicle_in_map_.y = transform.getOrigin().y();
+  vehicle_in_map_.z = tf::getYaw(transform.getRotation());
+  return true;
+}
+
+void MissionControl::fillCommand(geometry_msgs::Twist& Cmd_Vel){
+	Cmd_Vel.linear.x = joy_speed_;
+	Cmd_Vel.linear.z = sp_cmd_;
+	Cmd_Vel.angular.z = joy_rotation_;
+}
+
+double MissionControl::evaluatePointCloud(sensor_msgs::PointCloud Input) {
+	double output = 0;
+
+	for (int i = 0; i < Input.points.size(); ++i) {
+		double distance = hypot(Input.points[i].x,Input.points[i].y);
+		output += 1/distance;
+	}
+
+	return output;
+}
+
+
 void MissionControl::runDiagnostic() {
 	diagnostic_msgs::DiagnosticArray temp_array;
 	diagnostic_msgs::DiagnosticStatus temp_status;
@@ -450,13 +458,68 @@ void MissionControl::runDiagnostic() {
 	temp_array.header.stamp = ros::Time::now();
 	temp_array.header.frame_id = "UGV STATUS";
 
+	temp_status.values.clear();
+	temp_status.level = 2;
+	temp_status.hardware_id = "UGV 001";
+	temp_status.name = "Status";
+	temp_status.message = "Environment and Driving Status";
+
+	temp_key.key = "Navigation Mode";
+	(isJoy_) ? temp_key.value = "Manual" : temp_key.value = "Automatic";
+	temp_status.values.push_back(temp_key);
+
+	temp_key.key = "Planning Status";
+	(global_path_.poses.size() == 0) ? temp_key.value = "No Plan" : temp_key.value = "Plan Received";
+	temp_status.values.push_back(temp_key);
+
+	vector<double> grade_level = {200,1000,4000};
+	string obstalce_state;
+
+	if(obstalce_evaluation_ < grade_level[0]) {
+		obstalce_state = "Clean Path";
+	}
+	else if(obstalce_evaluation_ < grade_level[1]) {
+		obstalce_state = "Obstalce Detected";
+	}
+	else if(obstalce_evaluation_ < grade_level[2]) {
+		obstalce_state = "Obstalce Around";
+	} else {
+		obstalce_state = "Blocked";
+	}
+
+	temp_key.key = "Environment Status";
+	temp_key.value = obstalce_state;
+	temp_status.values.push_back(temp_key);
+
+
+
+	temp_array.status.push_back(temp_status);
+
+
+
+	temp_status.values.clear();
+	temp_status.level = 1;
+	temp_status.hardware_id = "UGV 001";
+	temp_status.name = "Vehicle Info";
+	temp_status.message = "Vehicle Information";
+
+	temp_key.key = "Vehicle Speed";
+	temp_key.value = roundString(odom_speed_,2) + "m/s";
+	temp_status.values.push_back(temp_key);
+
+	temp_key.key = "Travel Distance";
+	temp_key.value = roundString(travel_distance_,2) + "m";
+	temp_status.values.push_back(temp_key);
+
+	temp_array.status.push_back(temp_status);
+
 
 
 	temp_status.values.clear();
 	temp_status.level = 0;
 	temp_status.hardware_id = "UGV 001";
 	temp_status.name = "Map Info";
-	temp_status.message = "Map Information Status";
+	temp_status.message = "Map Information";
 
 	temp_key.key = "Map ID";
 	temp_key.value = "MAP-00"+to_string(map_number_);
@@ -470,46 +533,6 @@ void MissionControl::runDiagnostic() {
 
 
 
-
-
-	temp_status.values.clear();
-	temp_status.level = 1;
-	temp_status.hardware_id = "UGV 001";
-	temp_status.name = "Vehicle Info";
-	temp_status.message = "Vehicle Information Status";
-
-	temp_key.key = "Travel Distance";
-	temp_key.value = roundString(travel_distance_,2) + "m";
-	temp_status.values.push_back(temp_key);
-
-	temp_key.key = "Vehicle Speed";
-	temp_key.value = roundString(odom_speed_,2) + "m/s";
-	temp_status.values.push_back(temp_key);
-
-	temp_array.status.push_back(temp_status);
-
-
-
-
 	diagnostic_pub.publish(temp_array);
 
 }
-
-/*
-std_msgs/Header header
-  uint32 seq
-  time stamp
-  string frame_id
-diagnostic_msgs/DiagnosticStatus[] status
-  byte OK=0
-  byte WARN=1
-  byte ERROR=2
-  byte STALE=3
-  byte level
-  string name
-  string message
-  string hardware_id
-  diagnostic_msgs/KeyValue[] values
-    string key
-    string value
-*/
