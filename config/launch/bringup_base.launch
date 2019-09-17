@@ -1,0 +1,7 @@
+<launch>
+  <node pkg="joy" type="joy_node" name="joystick"/> 
+
+  <node pkg="jc_base" type="jc_base_node" name="jc_base_node" output="screen" />
+
+  <node pkg="mission_control" type="mission_control_node" name="mission_control_node" output="screen" />
+</launch>

@@ -237,7 +237,7 @@ void Controlling::computeClearPath(geometry_msgs::Point32& Force,geometry_msgs::
     if(distance < min_distance) min_distance = distance;
 
     int point_width;
-    (pointcloud_filltered_.points[i].z == 10) ? point_width = width_index/3 : point_width = width_index;
+    (pointcloud_filltered_.points[i].z == 10) ? point_width = width_index/2 : point_width = width_index;
 
     // double factor_x;
     // (pointcloud_filltered_.points[i].z == 10) ? factor_x = factor/10 : factor_x = factor; ///pow(distance/5,2)
@@ -312,6 +312,7 @@ void Controlling::computeSafeSpeed(geometry_msgs::Point32& Force,geometry_msgs::
   }
   double min_distance = 100;
   for (int i = 0; i < pointcloud_filltered_.points.size(); ++i) {
+    if (pointcloud_filltered_.points[i].z == 10) continue;
     if (fabs(pointcloud_onpath_.points[i].y) > 1.5 * vehicle_radius_) continue;
     double distance = hypot(pointcloud_filltered_.points[i].x,pointcloud_filltered_.points[i].y);
     if(distance < min_distance) min_distance = distance;
