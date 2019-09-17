@@ -19,6 +19,7 @@ MissionControl::MissionControl(){
   vel_pub = n.advertise<geometry_msgs::Twist> ("/husky_velocity_controller/cmd_vel", 1);
   path_pred_pub = n.advertise<sensor_msgs::PointCloud>("/pred_path",1);
   obs_pub = n.advertise<sensor_msgs::PointCloud> ("/obs_points", 1);
+  obs_map_pub = n.advertise<sensor_msgs::PointCloud> ("/obs_points_map", 1);
   map_number_pub = n.advertise<std_msgs::Int32>("/map_number",1);
   junction_pub = n.advertise<sensor_msgs::PointCloud>("/junction_point",1);
 
@@ -33,18 +34,26 @@ MissionControl::~MissionControl(){
 
 
 void MissionControl::Initialization() {
-	map_number_ = 1;
 
-  vehicle_radius_ = 0.6;
-  lookahead_time_ = 3;
+	string config_folder;
+	(isUseSim_) ? config_folder = "/home/ha/Workspace/ugv_ws/src/ugv_ws/config/cfg/" : config_folder = "/home/gp/ha_ws/src/ugv_ws/config/config/cfg/";
 
-	max_speed_ = 3;
-	max_rotation_ = 1.5;
+	if(!readConfig(config_folder)){
+		map_number_ = 1;
 
-	max_acc_speed_ = 0.025;
-	max_acc_rotation_ = 0.1;
+	  vehicle_radius_ = 0.7;
+	  lookahead_time_ = 3;
 
-	oscillation_ = 0.02;
+		max_speed_ = 1.5;
+		max_rotation_ = 1.5;
+
+		max_acc_speed_ = 0.025;
+		max_acc_rotation_ = 0.1;
+
+		oscillation_ = 0.02;
+	}
+
+	printConfig();
 
   isJoy_ = false;
   isPatrol_ = false;
@@ -59,11 +68,9 @@ void MissionControl::Initialization() {
 
 }
 
-
-
 void MissionControl::Execute() {
 	ros::Rate loop_rate(ROS_RATE_HZ);
-	Planning MyPlanner(0.5,1);
+	Planning MyPlanner(1,1);
 
 	ros::Time last_timer = ros::Time::now();
 	ros::Time last_loop = ros::Time::now();
@@ -104,10 +111,12 @@ void MissionControl::Execute() {
 	    	last_timer = ros::Time::now();
 	    }
 
+	    // generateSafePath(filled_path_pointcloud_,vehicle_in_map_,obs_in_mapframe_);
 
 		  MyPlanner.findCurrentGoal(global_path_,vehicle_in_map_,current_goal);
 		  MyPlanner.computePurePursuitCommand(current_goal,vehicle_in_map_,pp_command);
 		 	speedLimit(pp_command);
+
 
 		  if (hypot(current_goal.x - vehicle_in_map_.x,
 	    current_goal.y - vehicle_in_map_.y) < goal_tolerance) {
@@ -136,8 +145,6 @@ void MissionControl::Execute() {
 	  	runDiagnostic();
 	  	last_log = ros::Time::now();
 	  }
- 	
-
   }
   
 }
@@ -154,6 +161,8 @@ void MissionControl::makeGlobalPath(geometry_msgs::Point32 goal_in_map) {
 	MyRouter.getPath(map,path,map_info);
 
 	publishPlan(map,path,map_info);
+
+	fillPointCloud(global_path_,filled_path_pointcloud_);
 }
 
 
@@ -183,7 +192,7 @@ void MissionControl::publishPlan(std::vector<MapGraph> Map,std::vector<int> Path
 
 	global_path_ = path;
 	plan_pub.publish(path);
-	plan_point_pub.publish(pointcloud);
+	// plan_point_pub.publish(pointcloud);
 }
 
 void MissionControl::pathPredict(geometry_msgs::Twist& Cmd_Vel,sensor_msgs::PointCloud& Cloud_In,sensor_msgs::PointCloud& Cloud_Out) {
@@ -226,6 +235,141 @@ void MissionControl::pathPredict(geometry_msgs::Twist& Cmd_Vel,sensor_msgs::Poin
 
 	Cloud_Out = MyController.pointcloud_filltered_;
 }
+
+void MissionControl::generateSafePath(sensor_msgs::PointCloud& pointcloud,geometry_msgs::Point32 Robot,sensor_msgs::PointCloud Obstalce) {
+
+	double modify_range = 30;
+	bool isModified = false;
+
+	ros::Time clock_1 = ros::Time::now();
+	int points_ct = 0;
+	for (int i = 0; i < pointcloud.points.size(); ++i) {
+		double distance_from_robot = 
+    hypot((pointcloud.points[i].x - Robot.x),
+      (pointcloud.points[i].y - Robot.y));
+
+		for (int j = 0; j < Obstalce.points.size(); ++j) {
+			if(Obstalce.points[j].z == 10) continue;
+			double diff_x = pointcloud.points[i].x - Obstalce.points[j].x;
+			double diff_y = pointcloud.points[i].y - Obstalce.points[j].y;			
+			double distance_to_path = hypot(diff_x,diff_y);
+    	if(distance_to_path < vehicle_radius_ * 3) {
+    		geometry_msgs::Point32 point_diff;
+    		movePoint(pointcloud.points[i],point_diff);
+    		pointcloud.points[i].x += 0.8 * point_diff.x;
+    		pointcloud.points[i].y += 0.8 * point_diff.y;
+    		pointcloud.points[i].z = 2;
+    		plan_point_pub.publish(pointcloud);
+    		sleep(1);
+    		isModified = true;
+    	}
+		}
+		pointcloud.points[i].z = 1;
+	}
+
+	// cout << "Duration "<< (ros::Time::now() - clock_1).toSec() << endl;
+
+	// cout << "Size " << pointcloud.points.size() << endl;
+
+	if(isModified) {
+		nav_msgs::Path path;
+		geometry_msgs::PoseStamped pose;
+		pose.header.frame_id = "/map";
+		path.header.frame_id = "/map";
+
+		for (int i = 0; i < pointcloud.points.size(); ++i) {
+			pose.header.seq = i;
+			pose.pose.position.x = pointcloud.points[i].x;
+			pose.pose.position.y = pointcloud.points[i].y;
+			path.poses.push_back(pose);
+		}
+
+		global_path_ = path;
+
+		plan_point_pub.publish(pointcloud);
+		plan_pub.publish(global_path_);
+
+		isModified = false; 
+	}
+
+}
+
+void MissionControl::movePoint(geometry_msgs::Point32& Input,geometry_msgs::Point32& Output) {
+	geometry_msgs::Point32 point_local;
+	point_local.x = Input.x * cos(Input.z) - Input.y * sin(Input.z);
+	point_local.y = Input.x * sin(Input.z) + Input.y * cos(Input.z);
+	point_local.z = Input.z; 
+
+	geometry_msgs::Point32 point_map;
+	point_map.x = point_local.x * cos(point_local.z);
+	point_map.y = point_local.x * sin(point_local.z);
+
+	Output.x = point_map.x - Input.x;
+	Output.y = point_map.y - Input.y;
+
+	cout << "Test movePoint" << endl;
+	cout << "Input: " << Input.x << ","<< Input.y<< endl;
+	cout << "Local: " << point_local.x << ","<< point_local.y<< endl;
+	cout << "Map: " << point_map.x << ","<< point_map.y<< endl;
+	cout << "Diff: " << Output.x << ","<< Output.y<< endl;
+	cout << "Angle: " << Input.z << endl;
+}
+
+
+
+void MissionControl::fillPointCloud(nav_msgs::Path& Path, sensor_msgs::PointCloud& Pointcloud) {
+	sensor_msgs::PointCloud output_pointcloud;
+	sensor_msgs::PointCloud temp_pointcloud;
+	output_pointcloud.header.frame_id = "/map";
+	temp_pointcloud.header.frame_id = "/map";
+
+	for (int i = 0; i < Path.poses.size(); ++i) {
+    geometry_msgs::Point32 point;
+    point.x = Path.poses[i].pose.position.x;
+    point.y = Path.poses[i].pose.position.y;
+    temp_pointcloud.points.push_back(point);
+	}
+
+
+	double points_gap = 2;
+	int points_number = 0;
+
+	if(temp_pointcloud.points.size() <= 1) return;
+	for (int i = 1; i < temp_pointcloud.points.size(); ++i){
+		double diff_x = temp_pointcloud.points[i].x - temp_pointcloud.points[i-1].x;
+		double diff_y = temp_pointcloud.points[i].y - temp_pointcloud.points[i-1].y;
+		double distance = hypot(diff_x,diff_y);
+    points_number = distance / points_gap;
+		double points_angle = atan2(diff_y,diff_x);
+
+		for (int j = 0; j < points_number; ++j){
+			geometry_msgs::Point32 point;
+			point.x = temp_pointcloud.points[i-1].x + j * points_gap * cos(points_angle);
+	    point.y = temp_pointcloud.points[i-1].y + j * points_gap * sin(points_angle);
+	    // point.z = points_angle;
+	    point.z = i;
+	    output_pointcloud.points.push_back(point);
+		}
+	}
+
+	nav_msgs::Path path;
+	geometry_msgs::PoseStamped pose;
+	pose.header.frame_id = "/map";
+	path.header.frame_id = "/map";
+
+	for (int i = 0; i < output_pointcloud.points.size(); ++i) {
+		pose.header.seq = i;
+		pose.pose.position.x = output_pointcloud.points[i].x;
+		pose.pose.position.y = output_pointcloud.points[i].y;
+		path.poses.push_back(pose);
+	}
+
+	Path = path;
+
+	Pointcloud = output_pointcloud;
+	plan_point_pub.publish(output_pointcloud);
+}
+
 
 void MissionControl::speedLimit(geometry_msgs::Twist& Cmd_Vel) {
 	if(Cmd_Vel.linear.y == 0) {
@@ -382,7 +526,7 @@ void MissionControl::loadJunctionFile() {
     junction_list_.points.push_back(point);
     line_num++;
   }
-  isJunSave_ = true;
+  (line_num == 0) ? isJunSave_ = false : isJunSave_ = true;
 }
 
 
@@ -416,19 +560,34 @@ int MissionControl::isReadyToChangeMap(double input_x,double input_y) {
 
 
 bool MissionControl::updateVehicleInMap() {
-  tf::StampedTransform transform;
+	tf::StampedTransform stampedtransform;
   try {
     listener.lookupTransform("/map", "/base_link",  
-                             ros::Time(0), transform);
+                             ros::Time(0), stampedtransform);
   }
   catch (tf::TransformException ex) {
     cout << "Waiting For TF NAVI" << endl;
     return false;
   }
 
-  vehicle_in_map_.x = transform.getOrigin().x();
-  vehicle_in_map_.y = transform.getOrigin().y();
-  vehicle_in_map_.z = tf::getYaw(transform.getRotation());
+  vehicle_in_map_.x = stampedtransform.getOrigin().x();
+  vehicle_in_map_.y = stampedtransform.getOrigin().y();
+  vehicle_in_map_.z = tf::getYaw(stampedtransform.getRotation());
+
+  geometry_msgs::TransformStamped temp_trans;
+  temp_trans.header.stamp = ros::Time::now();
+  temp_trans.header.frame_id = "/map";
+  temp_trans.child_frame_id = "/base_link";
+
+  temp_trans.transform.translation.x = stampedtransform.getOrigin().x();
+  temp_trans.transform.translation.y = stampedtransform.getOrigin().y();
+  temp_trans.transform.translation.z = stampedtransform.getOrigin().z();
+  temp_trans.transform.rotation.x = stampedtransform.getRotation().x();
+  temp_trans.transform.rotation.y = stampedtransform.getRotation().y();
+  temp_trans.transform.rotation.z = stampedtransform.getRotation().z();
+  temp_trans.transform.rotation.w = stampedtransform.getRotation().w();
+  transformMsgToTF(temp_trans.transform,map_to_base_);
+
   return true;
 }
 
@@ -442,6 +601,7 @@ double MissionControl::evaluatePointCloud(sensor_msgs::PointCloud Input) {
 	double output = 0;
 
 	for (int i = 0; i < Input.points.size(); ++i) {
+		if(Input.points[i].z == 10) continue;
 		double distance = hypot(Input.points[i].x,Input.points[i].y);
 		output += 1/distance;
 	}
@@ -472,9 +632,8 @@ void MissionControl::runDiagnostic() {
 	(global_path_.poses.size() == 0) ? temp_key.value = "No Plan" : temp_key.value = "Plan Received";
 	temp_status.values.push_back(temp_key);
 
-	vector<double> grade_level = {200,1000,4000};
+	vector<double> grade_level = {50,100,200};
 	string obstalce_state;
-
 	if(obstalce_evaluation_ < grade_level[0]) {
 		obstalce_state = "Clean Path";
 	}
@@ -486,12 +645,9 @@ void MissionControl::runDiagnostic() {
 	} else {
 		obstalce_state = "Blocked";
 	}
-
 	temp_key.key = "Environment Status";
 	temp_key.value = obstalce_state;
 	temp_status.values.push_back(temp_key);
-
-
 
 	temp_array.status.push_back(temp_status);
 
@@ -535,4 +691,121 @@ void MissionControl::runDiagnostic() {
 
 	diagnostic_pub.publish(temp_array);
 
+}
+
+void MissionControl::convertPointCloudtoMap(sensor_msgs::PointCloud Input,sensor_msgs::PointCloud& Output,tf::Transform Transform) {
+	// Transform = Transform.inverse();
+	double transform_m[4][4];
+  double mv[12];
+  Transform.getBasis().getOpenGLSubMatrix(mv);
+  tf::Vector3 origin = Transform.getOrigin();
+
+  transform_m[0][0] = mv[0];
+  transform_m[0][1] = mv[4];
+  transform_m[0][2] = mv[8];
+  transform_m[1][0] = mv[1];
+  transform_m[1][1] = mv[5];
+  transform_m[1][2] = mv[9];
+  transform_m[2][0] = mv[2];
+  transform_m[2][1] = mv[6];
+  transform_m[2][2] = mv[10];
+
+  transform_m[3][0] = transform_m[3][1] = transform_m[3][2] = 0;
+  transform_m[0][3] = origin.x();
+  transform_m[1][3] = origin.y();
+  transform_m[2][3] = origin.z();
+  transform_m[3][3] = 1;
+
+  Output = Input;
+  Output.header.frame_id = "/map";
+  for (int i = 0; i < Input.points.size(); ++i) {
+    Output.points[i].x 
+      = Input.points[i].x * transform_m[0][0] 
+      + Input.points[i].y * transform_m[0][1]
+      + Input.points[i].z * transform_m[0][2] 
+      + transform_m[0][3];
+    Output.points[i].y 
+      = Input.points[i].x * transform_m[1][0] 
+      + Input.points[i].y * transform_m[1][1] 
+      + Input.points[i].z * transform_m[1][2] 
+      + transform_m[1][3];   
+    Output.points[i].z = Input.points[i].z;
+  }
+}
+
+bool MissionControl::readConfig(string Folder_dir) {
+	std::ifstream yaml_file;
+  std::string file_name_node = Folder_dir + "navi_config.txt";
+  yaml_file.open(file_name_node);
+  if(!yaml_file.is_open()) {
+  	cout<<"Could not find Config File"<<endl;
+  	cout<<"File Not Exist: "<<file_name_node<<endl;
+  	return false;
+  }
+
+  string str;
+  int info_linenum = 0;
+  while (std::getline(yaml_file, str)) {
+		std::stringstream ss(str);
+		string yaml_info;
+		ss >> yaml_info;
+
+		if(yaml_info == "map_number") {	
+			ss >> map_number_;
+			info_linenum++;
+		}
+		else if(yaml_info == "vehicle_radius") {
+			ss >> vehicle_radius_;
+			info_linenum++;
+		}
+		else if(yaml_info == "lookahead_time") {
+			ss >> lookahead_time_;
+			info_linenum++;
+		}
+		else if(yaml_info == "max_speed") {
+			ss >> max_speed_;
+			info_linenum++;
+		}
+		else if(yaml_info == "max_rotation") {
+			ss >>max_rotation_;
+			info_linenum++;
+		}
+		else if(yaml_info == "max_acc_speed") {
+			ss >>max_acc_speed_;
+			info_linenum++;
+		}
+		else if(yaml_info == "max_acc_rotation") {
+			ss >>max_acc_rotation_;
+			info_linenum++;
+		}
+		else if(yaml_info == "oscillation") {
+			ss >>oscillation_;
+			info_linenum++;
+		}
+	}
+
+	yaml_file.close(); 
+
+	if(info_linenum == 8) {
+		return true;
+	} else {
+		cout << "Config File Incomplete, Using Default Value" << endl;
+		return false;
+	}
+}
+
+void MissionControl::printConfig() {
+	cout << "==================================" << endl;
+	cout << "           Configuration          " << endl;
+	cout << "==================================" << endl;
+
+	cout << "Initial Map Number        : "<< map_number_ << endl;
+	cout << "Vehicle Radius            : " << vehicle_radius_ << endl;
+	cout << "Lookahead Time            : " << lookahead_time_ << endl;
+	cout << "Max Speed                 : " << max_speed_ << endl;
+	cout << "Max Rotation              : " << max_rotation_ << endl;
+	cout << "Max Acceleration          : " << max_acc_speed_ << endl;
+	cout << "Max Rotation Acceleration : " << max_acc_rotation_ << endl;
+	cout << "Oscillation               : " << oscillation_ << endl;
+	cout << "==================================" << endl;
 }

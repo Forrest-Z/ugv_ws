@@ -1,0 +1,8 @@
+map_number 2
+vehicle_radius 0.7
+lookahead_time 3
+max_speed 3
+max_rotation 1.5
+max_acc_speed 0.025
+max_acc_rotation 0.2
+oscillation 0.02

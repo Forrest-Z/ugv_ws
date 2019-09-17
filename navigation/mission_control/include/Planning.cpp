@@ -4,6 +4,9 @@ void Planning::findCurrentGoal(nav_msgs::Path global_path,geometry_msgs::Point32
 // Searching for nearest sub-goal use next sub-goal as current goal.
   int min_index;
   double min_distance = DBL_MAX;
+  static double last_curve = 1;
+  double lookahead = 3;
+
   for (int i = 0; i < global_path.poses.size(); i++) {
     double goal_distance_from_robot = 
     hypot((global_path.poses[i].pose.position.x - robot_position.x),
@@ -14,7 +17,66 @@ void Planning::findCurrentGoal(nav_msgs::Path global_path,geometry_msgs::Point32
     }
   }
 
-  static double last_curve = 1;
+  min_distance = DBL_MAX;
+  for (int i = min_index; i < global_path.poses.size(); i++) {
+    double goal_distance_from_robot = 
+    hypot((global_path.poses[i].pose.position.x - robot_position.x),
+      (global_path.poses[i].pose.position.y - robot_position.y));
+    if (goal_distance_from_robot < lookahead) continue;
+    if (goal_distance_from_robot < min_distance) {
+      min_distance = goal_distance_from_robot;
+      min_index = i;
+    }
+  }
+
+  if(min_index >= global_path.poses.size() - 1) {
+    current_goal.x = global_path.poses[global_path.poses.size()-1].pose.position.x;
+    current_goal.y = global_path.poses[global_path.poses.size()-1].pose.position.y;
+  } else {
+    current_goal.x = global_path.poses[min_index+1].pose.position.x;
+    current_goal.y = global_path.poses[min_index+1].pose.position.y;
+  }
+
+  if(min_index < global_path.poses.size() - 6) {
+    double delta_x12 = global_path.poses[min_index+3].pose.position.x 
+                      - global_path.poses[min_index].pose.position.x;
+    double delta_x23 = global_path.poses[min_index+5].pose.position.x 
+                      - global_path.poses[min_index+3].pose.position.x; 
+    double delta_x13 = global_path.poses[min_index+5].pose.position.x 
+                      - global_path.poses[min_index].pose.position.x; 
+    double delta_y12 = global_path.poses[min_index+3].pose.position.y 
+                      - global_path.poses[min_index].pose.position.y;
+    double delta_y23 = global_path.poses[min_index+5].pose.position.y 
+                      - global_path.poses[min_index+3].pose.position.y;
+    double delta_y13 = global_path.poses[min_index+5].pose.position.y 
+                      - global_path.poses[min_index].pose.position.y;
+
+    double distance_12 = hypot(delta_x12,delta_y12);
+    double distance_23 = hypot(delta_x23,delta_y23);
+    double distance_13 = hypot(delta_x13,delta_y13);
+
+    double cos_2 = (pow(distance_12,2) + pow(distance_23,2) - pow(distance_13,2))
+                    / (2 * distance_12 * distance_23);
+    double angle_2 = acos(cos_2);
+
+    last_curve = angle_2/PI;
+    last_curve = last_curve * last_curve;
+    // last_curve = (last_curve+1)/2;
+    // cout << "last_curve " << last_curve << endl;
+    if(std::isnan(last_curve)) last_curve = 1;
+    if(std::isinf(last_curve)) last_curve = 1;
+    if(last_curve > 1) last_curve = 1;
+    current_goal.z = last_curve;
+  }
+
+
+  // current_goal.z = 0;
+  return;
+
+
+
+
+  
   double lookahead_distance = 5;
 
   // If nearest sub-goal is not final goal.

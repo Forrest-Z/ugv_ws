@@ -1,0 +1,7 @@
+image: 9.png
+resolution: 0.05000
+origin: [1258.3785,-1033.18, 0.000000]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.196
+

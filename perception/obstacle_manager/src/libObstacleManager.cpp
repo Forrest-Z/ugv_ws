@@ -51,6 +51,9 @@ void ObstacleManager::Mission() {
   publishLidarObstacle();
 
   pointcloud_base_.header.frame_id = "/base_link";
+
+  
+
   map_obs_pub.publish(pointcloud_base_);
   pointcloud_base_.points.clear();
 }
@@ -142,7 +145,7 @@ void ObstacleManager::publishScanObstacle() {
   for (int i = 0; i < pointcloud_scan_.points.size(); ++i) {
     if(hypot(pointcloud_scan_.points[i].x,pointcloud_scan_.points[i].y) < 0.5) continue;
     pointcloud_scan_.points[i].z = 1;
-    for (int j = 0; j < 16; ++j) {
+    for (int j = 0; j < 32; ++j) {
       pointcloud_base_.points.push_back(pointcloud_scan_.points[i]);
     }
     

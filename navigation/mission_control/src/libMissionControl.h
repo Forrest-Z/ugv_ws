@@ -6,10 +6,6 @@
 #include <Controlling.h>
 #include <Dev.h>
 
-#include <diagnostic_msgs/DiagnosticArray.h>
-#include <diagnostic_msgs/DiagnosticStatus.h>
-#include <diagnostic_msgs/KeyValue.h>
-
 
 class MissionControl
 {
@@ -59,6 +55,7 @@ private:
   ros::Publisher vel_pub;
   ros::Publisher path_pred_pub;
   ros::Publisher obs_pub;
+  ros::Publisher obs_map_pub;
   ros::Publisher map_number_pub;
   ros::Publisher clean_path_arrow;
   ros::Publisher junction_pub;
@@ -92,6 +89,9 @@ private:
   geometry_msgs::Point32 current_goal_;
 
   sensor_msgs::PointCloud map_obs_;
+  sensor_msgs::PointCloud obs_in_mapframe_;
+
+  sensor_msgs::PointCloud filled_path_pointcloud_;
 
   double joy_speed_;
 	double joy_rotation_;
@@ -111,10 +111,18 @@ private:
 
   tf::TransformListener listener;
 
-
+  tf::Transform map_to_base_;
 
   void makeGlobalPath(geometry_msgs::Point32 goal_in_map);
   void publishPlan(std::vector<MapGraph> Map,std::vector<int> Path,YamlInfo Map_info);
+
+  void convertPointCloudtoMap(sensor_msgs::PointCloud Input,sensor_msgs::PointCloud& Output,tf::Transform Transform);
+
+  void generateSafePath(sensor_msgs::PointCloud& pointcloud,geometry_msgs::Point32 Robot,sensor_msgs::PointCloud Obstalce);
+  void fillPointCloud(nav_msgs::Path& Path, sensor_msgs::PointCloud& Pointcloud);
+  void movePoint(geometry_msgs::Point32& Input,geometry_msgs::Point32& Output);
+
+
 
   void pathPredict(geometry_msgs::Twist& Cmd_Vel,sensor_msgs::PointCloud& Cloud_In,sensor_msgs::PointCloud& Cloud_Out);
 	void speedLimit(geometry_msgs::Twist& Cmd_Vel);
@@ -128,6 +136,9 @@ private:
   void loadJunctionFile();
   int isReadyToChangeMap(double input_x,double input_y);
 
+
+  bool readConfig(string Folder_dir);
+  void printConfig();
   void runDiagnostic();
   void computerBehavior();
   bool updateVehicleInMap();
@@ -167,6 +178,27 @@ private:
   void map_obs_callback(const sensor_msgs::PointCloud::ConstPtr& input) {
     map_obs_ = *input;
     obstalce_evaluation_ = evaluatePointCloud(map_obs_);
+    // cout << "obstalce_evaluation_ : " << obstalce_evaluation_ << endl;
+
+    convertPointCloudtoMap(map_obs_,obs_in_mapframe_,map_to_base_);
+
+
+    sensor_msgs::PointCloud2 output;
+    sensor_msgs::convertPointCloudToPointCloud2(obs_in_mapframe_,output);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ> ());
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZ> ());
+    pcl::fromROSMsg(output, *cloud);
+
+    pcl::ApproximateVoxelGrid<pcl::PointXYZ> approximate_voxel_filter;
+    approximate_voxel_filter.setInputCloud (cloud);
+    approximate_voxel_filter.setLeafSize (0.1, 0.1, 0.1);
+    approximate_voxel_filter.filter (*cloud_filtered);
+
+    pcl::toROSMsg(*cloud_filtered, output);
+    sensor_msgs::convertPointCloud2ToPointCloud(output,obs_in_mapframe_);
+
+    obs_map_pub.publish(obs_in_mapframe_);
+
   }
 
   void map_number_callback(const std_msgs::Int32::ConstPtr& input) {
@@ -216,14 +248,8 @@ private:
     position_home.x = -23.512510;
     position_home.y = -35.236523;
 
-    // goal_a: [643.462646,-30.777496]
-    //   goal_b: [2288.519775,514.973816]
-    //   goal_x: [-23.512510,-35.236523]
-    //   goal_y: [11.995888,11.043774]
 
     if (isJoy_ && input->buttons[BUTTON_A]) goal_in_map_ = position_subway;
-    if (isJoy_ && input->buttons[BUTTON_B]) goal_in_map_ = position_home;
-
     if (isJoy_ && input->buttons[BUTTON_B]) goal_in_map_ = position_home;
 
     sp_cmd_ = 0;

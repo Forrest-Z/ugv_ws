@@ -1,6 +1,6 @@
 image: 8.png
 resolution: 0.05000
-origin: [165.563461, -116.539276, 0.000000]
+origin: [1629.7,-1018.1357, 0.000000]
 negate: 0
 occupied_thresh: 0.65
 free_thresh: 0.196

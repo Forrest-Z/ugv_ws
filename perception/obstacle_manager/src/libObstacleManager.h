@@ -15,6 +15,8 @@
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
+#include <sensor_msgs/point_cloud_conversion.h>
+
 #include <geometry_msgs/Point32.h>
 #include <nav_msgs/Odometry.h>
 

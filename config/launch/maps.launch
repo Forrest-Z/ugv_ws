@@ -1,39 +1,74 @@
 <launch>
-  <node pkg="map_server" type="map_server" name="map_server_node_1" args="/home/ha/Desktop/ZJU_NAVI/1.yaml" output="screen">
+  <node pkg="map_server" type="map_server" name="map_server_node_1" args="/home/ha/Desktop/map_final/1.yaml" output="screen">
     <remap from="map" to="map_1"/>
   </node>
 
-  <node pkg="map_server" type="map_server" name="map_server_node_2" args="/home/ha/Desktop/ZJU_NAVI/2.yaml" output="screen">
+  <node pkg="map_server" type="map_server" name="map_server_node_2" args="/home/ha/Desktop/map_final/2.yaml" output="screen">
     <remap from="map" to="map_2"/>
   </node>
 
-  <node pkg="map_server" type="map_server" name="map_server_node_3" args="/home/ha/Desktop/ZJU_NAVI/3.yaml" output="screen">
+  <node pkg="map_server" type="map_server" name="map_server_node_3" args="/home/ha/Desktop/map_final/3.yaml" output="screen">
     <remap from="map" to="map_3"/>
   </node>
 
-  <node pkg="map_server" type="map_server" name="map_server_node_4" args="//home/ha/Desktop/ZJU_NAVI/4.yaml" output="screen">
+  <node pkg="map_server" type="map_server" name="map_server_node_4" args="//home/ha/Desktop/map_final/4.yaml" output="screen">
     <remap from="map" to="map_4"/>
   </node>
 
-  <node pkg="map_server" type="map_server" name="map_server_node_5" args="/home/ha/Desktop/ZJU_NAVI/5.yaml" output="screen">
+  <node pkg="map_server" type="map_server" name="map_server_node_5" args="/home/ha/Desktop/map_final/5.yaml" output="screen">
     <remap from="map" to="map_5"/>
   </node>
 
-  <node pkg="map_server" type="map_server" name="map_server_node_6" args="/home/ha/Desktop/ZJU_NAVI/6.yaml" output="screen">
+  <node pkg="map_server" type="map_server" name="map_server_node_6" args="/home/ha/Desktop/map_final/6.yaml" output="screen">
     <remap from="map" to="map_6"/>
   </node>
 
-  <node pkg="map_server" type="map_server" name="map_server_node_7" args="/home/ha/Desktop/ZJU_NAVI/7.yaml" output="screen">
+  <node pkg="map_server" type="map_server" name="map_server_node_7" args="/home/ha/Desktop/map_final/7.yaml" output="screen">
     <remap from="map" to="map_7"/>
   </node>
 
-  <node pkg="map_server" type="map_server" name="map_server_node_8" args="/home/ha/Desktop/ZJU_NAVI/8.yaml" output="screen">
+  <node pkg="map_server" type="map_server" name="map_server_node_8" args="/home/ha/Desktop/map_final/8.yaml" output="screen">
     <remap from="map" to="map_8"/>
   </node>
-<!-- 
-  <node pkg="map_server" type="map_server" name="map_server_node_9" args="/home/ha/Desktop/map_folder/ZJU_campus/yunfeng_nei.yaml" output="screen">
+
+  <node pkg="map_server" type="map_server" name="map_server_node_9" args="/home/ha/Desktop/map_final/9.yaml" output="screen">
     <remap from="map" to="map_9"/>
   </node>
- -->
+<!--
+  <node pkg="map_server" type="map_server" name="map_server_node_19" args="/home/ha/Desktop/map_final/10.yaml" output="screen">
+    <remap from="map" to="map_10"/>
+  </node>
 
+  <node pkg="map_server" type="map_server" name="map_server_node_11" args="/home/ha/Desktop/map_final/11.yaml" output="screen">
+    <remap from="map" to="map_11"/>
+  </node>
+
+   <node pkg="map_server" type="map_server" name="map_server_node_12" args="/home/ha/Desktop/map_final/12.yaml" output="screen">
+    <remap from="map" to="map_12"/>
+  </node>
+
+  <node pkg="map_server" type="map_server" name="map_server_node_13" args="/home/ha/Desktop/map/13.yaml" output="screen">
+    <remap from="map" to="map_13"/>
+  </node>
+
+  <node pkg="map_server" type="map_server" name="map_server_node_14" args="//home/ha/Desktop/map/14.yaml" output="screen">
+    <remap from="map" to="map_14"/>
+  </node>
+
+  <node pkg="map_server" type="map_server" name="map_server_node_15" args="/home/ha/Desktop/map/15.yaml" output="screen">
+    <remap from="map" to="map_15"/>
+  </node>
+
+  <node pkg="map_server" type="map_server" name="map_server_node_16" args="/home/ha/Desktop/map/16.yaml" output="screen">
+    <remap from="map" to="map_16"/>
+  </node>
+
+  <node pkg="map_server" type="map_server" name="map_server_node_17" args="/home/ha/Desktop/map/17.yaml" output="screen">
+    <remap from="map" to="map_17"/>
+  </node>
+
+  <node pkg="map_server" type="map_server" name="map_server_node_18" args="/home/ha/Desktop/map/18.yaml" output="screen">
+    <remap from="map" to="map_18"/>
+  </node>
+ -->
 </launch>
