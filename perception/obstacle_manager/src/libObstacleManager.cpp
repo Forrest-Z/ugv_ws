@@ -51,10 +51,17 @@ void ObstacleManager::Mission() {
   publishLidarObstacle();
 
   pointcloud_base_.header.frame_id = "/base_link";
+  sensor_msgs::PointCloud pointcloud_output;
+  pointcloud_output.header = pointcloud_base_.header;
+  for (int i = 0; i < pointcloud_base_.points.size(); ++i) {
+    double distance = hypot(pointcloud_base_.points[i].x,pointcloud_base_.points[i].y);
+    if(distance < 0.3) continue;
+    geometry_msgs::Point32 point;
+    point = pointcloud_base_.points[i];
+    pointcloud_output.points.push_back(point);
+  }
 
-  
-
-  map_obs_pub.publish(pointcloud_base_);
+  map_obs_pub.publish(pointcloud_output);
   pointcloud_base_.points.clear();
 }
 

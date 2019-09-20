@@ -42,6 +42,7 @@ void Routing::routingAnalyze(geometry_msgs::Point32 goal_in_map,string map_folde
 
 	if(!pathPlanner(start_id,end_id,point_index,path_astar)) {
 		cout<<"Global Plan Failded"<<endl;
+		path_.clear();
 	}
 }
 
@@ -137,10 +138,17 @@ bool Routing::pathPlanner(int Start_Id,int End_id,
 			isPathReady_ = true;
 			break;
 		}
+		if(next_point == -1) return false;
 		Path.push_back(next_point);
 		next_point = visited[next_point];
 	}
 	path_ = Path;
+
+	// cout << "size:"<< path_.size()<<endl;
+	// for (int i = 0; i < path_.size(); ++i) {
+	// 	cout << "i:"<< i << " | " << path_[i] <<endl;
+	// }
+	
 	return true;
 }
 

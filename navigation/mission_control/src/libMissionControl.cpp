@@ -70,7 +70,7 @@ void MissionControl::Initialization() {
 
 void MissionControl::Execute() {
 	ros::Rate loop_rate(ROS_RATE_HZ);
-	Planning MyPlanner(1,1);
+	Planning MyPlanner(2,2);
 
 	ros::Time last_timer = ros::Time::now();
 	ros::Time last_loop = ros::Time::now();
@@ -106,13 +106,13 @@ void MissionControl::Execute() {
     	if(!updateVehicleInMap()) continue;
 	    if(global_path_.poses.size() == 0) continue;
 
-	    if( (ros::Time::now()-last_timer).toSec() > log_duration) {
+	    if( (ros::Time::now()-last_timer).toSec() > 5 * log_duration) {
 	    	makeGlobalPath(goal_in_map_);
 	    	last_timer = ros::Time::now();
 	    }
+	    if(global_path_.poses.size() == 0) continue;
 
-	    // generateSafePath(filled_path_pointcloud_,vehicle_in_map_,obs_in_mapframe_);
-
+	    generateSafePath(filled_path_pointcloud_,vehicle_in_map_,obs_in_mapframe_);
 		  MyPlanner.findCurrentGoal(global_path_,vehicle_in_map_,current_goal);
 		  MyPlanner.computePurePursuitCommand(current_goal,vehicle_in_map_,pp_command);
 		 	speedLimit(pp_command);
@@ -191,13 +191,13 @@ void MissionControl::publishPlan(std::vector<MapGraph> Map,std::vector<int> Path
 	}
 
 	global_path_ = path;
-	plan_pub.publish(path);
+	// plan_pub.publish(path);
 	// plan_point_pub.publish(pointcloud);
 }
 
 void MissionControl::pathPredict(geometry_msgs::Twist& Cmd_Vel,sensor_msgs::PointCloud& Cloud_In,sensor_msgs::PointCloud& Cloud_Out) {
 
-	double inflation_rate = 5;
+	double inflation_rate = 8;
 	Controlling MyController(vehicle_radius_,inflation_rate,lookahead_time_,oscillation_);
 	MyController.getMovingState(Cmd_Vel);
 	MyController.getPredictPath(Cmd_Vel); 
@@ -236,40 +236,133 @@ void MissionControl::pathPredict(geometry_msgs::Twist& Cmd_Vel,sensor_msgs::Poin
 	Cloud_Out = MyController.pointcloud_filltered_;
 }
 
-void MissionControl::generateSafePath(sensor_msgs::PointCloud& pointcloud,geometry_msgs::Point32 Robot,sensor_msgs::PointCloud Obstalce) {
+void MissionControl::generateSafePath(sensor_msgs::PointCloud& Pointcloud,geometry_msgs::Point32 Robot,sensor_msgs::PointCloud&  Obstalce) {
 
-	double modify_range = 30;
 	bool isModified = false;
+	ros::Time clock_1 = ros::Time::now();
 
+	if(Pointcloud.points.size() == 0) return;
+
+	for (int i = 0; i < Pointcloud.points.size(); ++i) {
+
+		double distance_from_robot = 
+			hypot((Pointcloud.points[i].x - Robot.x),
+      (Pointcloud.points[i].y - Robot.y));
+
+		if(distance_from_robot > 10) continue;
+
+		if(Pointcloud.points[i].z == 5) continue;
+		double min_x_left = 999;
+		double min_x_right = 999;
+		double min_id_left = 0;
+		double min_id_right = 0;
+		double min_y_left = 999;
+		double min_y_right = 999;
+
+		double x_local = Pointcloud.points[i].x * cos(Pointcloud.points[i].z) + Pointcloud.points[i].y * sin(Pointcloud.points[i].z);
+		double y_local = Pointcloud.points[i].y * cos(Pointcloud.points[i].z) - Pointcloud.points[i].x * sin(Pointcloud.points[i].z);
+
+		for (int j = 0; j < Obstalce.points.size(); ++j) {
+			if(Obstalce.points[i].z != 10) continue;
+			double x_obs = Obstalce.points[j].x * cos(Pointcloud.points[i].z) + Obstalce.points[j].y * sin(Pointcloud.points[i].z);
+			double y_obs = Obstalce.points[j].y * cos(Pointcloud.points[i].z) - Obstalce.points[j].x * sin(Pointcloud.points[i].z);			
+
+			double diff_to_wall_x = x_local - x_obs;
+			double diff_to_wall_y = y_local - y_obs;
+
+			if(fabs(diff_to_wall_y) < 5){
+
+				if(diff_to_wall_y > 0) {
+					if(fabs(min_x_left) > fabs(diff_to_wall_x)){
+						min_x_left = diff_to_wall_x;
+						min_id_left = j;
+						min_y_left = diff_to_wall_y;
+					}
+				} 
+				else if (diff_to_wall_y < 0) {
+					if(fabs(min_x_right) > fabs(diff_to_wall_x)){
+						min_x_right = diff_to_wall_x;
+						min_id_right = j;
+						min_y_right = diff_to_wall_y;
+					}				
+				}
+
+			}
+		}
+
+		if(min_id_left != 0 && min_id_right != 0 && fabs(min_x_right) < 0.1 && fabs(min_x_left) < 0.1) {
+			double mid_x = (Obstalce.points[min_id_right].x + Obstalce.points[min_id_left].x)/2;
+			double mid_y = (Obstalce.points[min_id_right].y + Obstalce.points[min_id_left].y)/2;
+			double point_diff = hypot((mid_x - Pointcloud.points[i].x),(mid_y - Pointcloud.points[i].y));
+			if(point_diff > 3) continue;
+
+			// cout << endl;
+			// cout << "DEBUG DEBUG" << endl;
+			// cout << "point_diff  : " << point_diff << endl; 
+			// cout << "min_x_right : " << min_x_right << endl; 
+			// cout << "min_y_right : " << min_y_right << endl; 
+			// cout << "min_x_left  : " << min_x_left << endl; 
+			// cout << "min_y_left  : " << min_y_left << endl; 
+
+
+			isModified = true;
+			Pointcloud.points[i].x = mid_x;
+			Pointcloud.points[i].y = mid_y;
+			Pointcloud.points[i].z = 5;
+		}
+	}
+	if(isModified) {
+		nav_msgs::Path path;
+		geometry_msgs::PoseStamped pose;
+		pose.header.frame_id = "/map";
+		path.header.frame_id = "/map";
+
+		for (int i = 0; i < Pointcloud.points.size(); ++i) {
+			pose.header.seq = i;
+			pose.pose.position.x = Pointcloud.points[i].x;
+			pose.pose.position.y = Pointcloud.points[i].y;
+			path.poses.push_back(pose);
+		}
+
+		global_path_ = path;
+
+		plan_point_pub.publish(Pointcloud);
+		plan_pub.publish(global_path_);
+
+		isModified = false; 
+	}
+
+	// cout<< "compute time cost: " << (ros::Time::now() - clock_1).toSec() << endl;
+	return;
+
+	/*
+	double modify_range = 30;
+	
 	ros::Time clock_1 = ros::Time::now();
 	int points_ct = 0;
-	for (int i = 0; i < pointcloud.points.size(); ++i) {
+	for (int i = 0; i < Pointcloud.points.size(); ++i) {
 		double distance_from_robot = 
-    hypot((pointcloud.points[i].x - Robot.x),
-      (pointcloud.points[i].y - Robot.y));
+    hypot((Pointcloud.points[i].x - Robot.x),
+      (Pointcloud.points[i].y - Robot.y));
 
 		for (int j = 0; j < Obstalce.points.size(); ++j) {
 			if(Obstalce.points[j].z == 10) continue;
-			double diff_x = pointcloud.points[i].x - Obstalce.points[j].x;
-			double diff_y = pointcloud.points[i].y - Obstalce.points[j].y;			
+			double diff_x = Pointcloud.points[i].x - Obstalce.points[j].x;
+			double diff_y = Pointcloud.points[i].y - Obstalce.points[j].y;			
 			double distance_to_path = hypot(diff_x,diff_y);
     	if(distance_to_path < vehicle_radius_ * 3) {
     		geometry_msgs::Point32 point_diff;
-    		movePoint(pointcloud.points[i],point_diff);
-    		pointcloud.points[i].x += 0.8 * point_diff.x;
-    		pointcloud.points[i].y += 0.8 * point_diff.y;
-    		pointcloud.points[i].z = 2;
-    		plan_point_pub.publish(pointcloud);
+    		movePoint(Pointcloud.points[i],point_diff);
+    		Pointcloud.points[i].x += 0.8 * point_diff.x;
+    		Pointcloud.points[i].y += 0.8 * point_diff.y;
+    		Pointcloud.points[i].z = 2;
+    		plan_point_pub.publish(Pointcloud);
     		sleep(1);
     		isModified = true;
     	}
 		}
-		pointcloud.points[i].z = 1;
+		Pointcloud.points[i].z = 1;
 	}
-
-	// cout << "Duration "<< (ros::Time::now() - clock_1).toSec() << endl;
-
-	// cout << "Size " << pointcloud.points.size() << endl;
 
 	if(isModified) {
 		nav_msgs::Path path;
@@ -277,20 +370,21 @@ void MissionControl::generateSafePath(sensor_msgs::PointCloud& pointcloud,geomet
 		pose.header.frame_id = "/map";
 		path.header.frame_id = "/map";
 
-		for (int i = 0; i < pointcloud.points.size(); ++i) {
+		for (int i = 0; i < Pointcloud.points.size(); ++i) {
 			pose.header.seq = i;
-			pose.pose.position.x = pointcloud.points[i].x;
-			pose.pose.position.y = pointcloud.points[i].y;
+			pose.pose.position.x = Pointcloud.points[i].x;
+			pose.pose.position.y = Pointcloud.points[i].y;
 			path.poses.push_back(pose);
 		}
 
 		global_path_ = path;
 
-		plan_point_pub.publish(pointcloud);
+		plan_point_pub.publish(Pointcloud);
 		plan_pub.publish(global_path_);
 
 		isModified = false; 
 	}
+	*/
 
 }
 
@@ -331,7 +425,7 @@ void MissionControl::fillPointCloud(nav_msgs::Path& Path, sensor_msgs::PointClou
 	}
 
 
-	double points_gap = 2;
+	double points_gap = 1;
 	int points_number = 0;
 
 	if(temp_pointcloud.points.size() <= 1) return;
@@ -346,11 +440,12 @@ void MissionControl::fillPointCloud(nav_msgs::Path& Path, sensor_msgs::PointClou
 			geometry_msgs::Point32 point;
 			point.x = temp_pointcloud.points[i-1].x + j * points_gap * cos(points_angle);
 	    point.y = temp_pointcloud.points[i-1].y + j * points_gap * sin(points_angle);
-	    // point.z = points_angle;
-	    point.z = i;
+	    point.z = points_angle;
+	    // point.z = i;
 	    output_pointcloud.points.push_back(point);
 		}
 	}
+
 
 	nav_msgs::Path path;
 	geometry_msgs::PoseStamped pose;
@@ -358,9 +453,11 @@ void MissionControl::fillPointCloud(nav_msgs::Path& Path, sensor_msgs::PointClou
 	path.header.frame_id = "/map";
 
 	for (int i = 0; i < output_pointcloud.points.size(); ++i) {
+
 		pose.header.seq = i;
 		pose.pose.position.x = output_pointcloud.points[i].x;
 		pose.pose.position.y = output_pointcloud.points[i].y;
+
 		path.poses.push_back(pose);
 	}
 
@@ -455,6 +552,7 @@ void MissionControl::checkMapNumber() {
   static geometry_msgs::Point32 vehicle_enter;
   static double min_distance;
   static double max_angle;
+  static ros::Time last_plan = ros::Time::now();
 
   junction_list_.header.frame_id = "/map";
   junction_pub.publish(junction_list_);
@@ -470,7 +568,7 @@ void MissionControl::checkMapNumber() {
 	  	first_enter = false;
 	  	min_distance = 100;
 	  	max_angle = 0;
-	  	ROS_INFO("Enter Junction Zone");
+	  	cout << "Enter Junction Zone" << endl;
 	  }
 	  double distance_vehicle_to_points_enter = 
 	  		hypot((junction_list_.points[robot_in_junction].x - vehicle_enter.x),
@@ -499,8 +597,16 @@ void MissionControl::checkMapNumber() {
 	  	map_number.data = next_map;
 	  	first_enter = true;
   		map_number_pub.publish(map_number);
-  		makeGlobalPath(goal_in_map_);
+  		if(goal_in_map_.x != 0 && goal_in_map_.y != 0) makeGlobalPath(goal_in_map_);
+  		cout << "Change Map" << endl;
 	  }
+
+	  if((ros::Time::now()-last_plan).toSec() > 1){
+  		if(goal_in_map_.x != 0 && goal_in_map_.y != 0) makeGlobalPath(goal_in_map_);
+  		last_plan = ros::Time::now();
+	  }
+
+
 
 	  // ROS_INFO_STREAM("max_angle    = " << max_angle);
 	  // ROS_INFO_STREAM("min_distance = " << min_distance);
