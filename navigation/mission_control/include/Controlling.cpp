@@ -2,9 +2,10 @@
 
 void Controlling::getMovingState(geometry_msgs::Twist Cmd_Vel) {
   // Seting global variable "moving_state_" based on command.
-  if (fabs(Cmd_Vel.linear.x) <= 10 * oscillation_ && fabs(Cmd_Vel.angular.z) <= 10 * oscillation_) moving_state_= "stop";
-  else if (fabs(Cmd_Vel.linear.x) <= 10 * oscillation_ && fabs(Cmd_Vel.angular.z) > 10 * oscillation_) moving_state_= "rotation";
-  else if (fabs(Cmd_Vel.linear.x) > 10 * oscillation_ && fabs(Cmd_Vel.angular.z) <= 10 * oscillation_) moving_state_ = "stright";
+  double min_scale = 3;
+  if (fabs(Cmd_Vel.linear.x) <= min_scale * oscillation_ && fabs(Cmd_Vel.angular.z) <= min_scale * oscillation_) moving_state_= "stop";
+  else if (fabs(Cmd_Vel.linear.x) <= min_scale * oscillation_ && fabs(Cmd_Vel.angular.z) > min_scale * oscillation_) moving_state_= "rotation";
+  else if (fabs(Cmd_Vel.linear.x) > min_scale * oscillation_ && fabs(Cmd_Vel.angular.z) <= min_scale * oscillation_) moving_state_ = "stright";
   else moving_state_ = "moving";
 }
 
@@ -39,24 +40,24 @@ void Controlling::getPredictPath(geometry_msgs::Twist Cmd_Vel) {
     if (Cmd_Vel.linear.x >= 0) {
       if (Cmd_Vel.angular.z >= 0) {
         origin.y = path_radius;
-        end = 3*PI/2 + Cmd_Vel.linear.x/fabs(Cmd_Vel.linear.x) * Cmd_Vel.angular.z * lookahead_time_/2;
+        end = 3*PI/2 + Cmd_Vel.linear.x/fabs(Cmd_Vel.linear.x) * Cmd_Vel.angular.z * lookahead_time_;
         drawCircle(3*PI/2,end,point_step,inner_radius,origin,path_predict_);
         drawCircle(3*PI/2,end,point_step,outer_radius,origin,path_predict_);
       } else {
         origin.y = -path_radius;
-        end = PI/2 + Cmd_Vel.linear.x/fabs(Cmd_Vel.linear.x) * Cmd_Vel.angular.z * lookahead_time_/2;
+        end = PI/2 + Cmd_Vel.linear.x/fabs(Cmd_Vel.linear.x) * Cmd_Vel.angular.z * lookahead_time_;
         drawCircle(PI/2,end,point_step,inner_radius,origin,path_predict_);
         drawCircle(PI/2,end,point_step,outer_radius,origin,path_predict_);
       }
     } else {
       if (Cmd_Vel.angular.z >= 0) {
         origin.y = -path_radius;
-        end = PI/2 - Cmd_Vel.linear.x/fabs(Cmd_Vel.linear.x) * Cmd_Vel.angular.z * lookahead_time_/2;
+        end = PI/2 - Cmd_Vel.linear.x/fabs(Cmd_Vel.linear.x) * Cmd_Vel.angular.z * lookahead_time_;
         drawCircle(PI/2,end,point_step,inner_radius,origin,path_predict_);
         drawCircle(PI/2,end,point_step,outer_radius,origin,path_predict_);
       } else {
         origin.y = path_radius;
-        end = 3*PI/2 - Cmd_Vel.linear.x/fabs(Cmd_Vel.linear.x) * Cmd_Vel.angular.z * lookahead_time_/2;
+        end = 3*PI/2 - Cmd_Vel.linear.x/fabs(Cmd_Vel.linear.x) * Cmd_Vel.angular.z * lookahead_time_;
         drawCircle(3*PI/2,end,point_step,inner_radius,origin,path_predict_);
         drawCircle(3*PI/2,end,point_step,outer_radius,origin,path_predict_);
       }
@@ -223,7 +224,7 @@ void Controlling::computeClearPath(geometry_msgs::Point32& Force,geometry_msgs::
 
   int min_safe = -1;
 
-  double min_distance = 10;
+  double min_distance = 15;
   
   for (int i = 0; i < pointcloud_filltered_.points.size(); ++i) {
 

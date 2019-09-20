@@ -118,7 +118,7 @@ private:
 
   void convertPointCloudtoMap(sensor_msgs::PointCloud Input,sensor_msgs::PointCloud& Output,tf::Transform Transform);
 
-  void generateSafePath(sensor_msgs::PointCloud& pointcloud,geometry_msgs::Point32 Robot,sensor_msgs::PointCloud Obstalce);
+  void generateSafePath(sensor_msgs::PointCloud& pointcloud,geometry_msgs::Point32 Robot,sensor_msgs::PointCloud& Obstalce);
   void fillPointCloud(nav_msgs::Path& Path, sensor_msgs::PointCloud& Pointcloud);
   void movePoint(geometry_msgs::Point32& Input,geometry_msgs::Point32& Output);
 
