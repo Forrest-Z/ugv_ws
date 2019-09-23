@@ -2,13 +2,8 @@
 
 ObstacleManager::ObstacleManager():pn("~")
 { 
-  isUseSim_ = true;
-  string odom_topic;
-  (isUseSim_) ? odom_topic = "/odom" : odom_topic = "/ekf_2/odometry/filtered";
-
   map_sub = n.subscribe("/map",1, &ObstacleManager::map_callback,this);
-  scan_sub = n.subscribe("/scan",1, &ObstacleManager::scan_callback,this);
-  odom_sub = n.subscribe(odom_topic,1, &ObstacleManager::odom_callback,this); 
+  scan_sub = n.subscribe("/scan",1, &ObstacleManager::scan_callback,this); 
   pointcloud_sub = n.subscribe("/rslidar_points",1, &ObstacleManager::pointcloud_callback,this);
 
   map_obs_pub = n.advertise<sensor_msgs::PointCloud> ("/map_obs_points", 1);
@@ -28,18 +23,7 @@ void ObstacleManager::Manager() {
     loop_rate.sleep();
     ros::spinOnce();
 
-    try {
-      map_base_listener.lookupTransform("/map", "/base_link",  
-                               ros::Time(0), map_base_transform);
-    }
-    catch (tf::TransformException ex) {
-      cout << "Waiting For TF" << endl;
-      continue;
-    }
-
-    robot_in_map_.x = map_base_transform.getOrigin().x();
-    robot_in_map_.y = map_base_transform.getOrigin().y();
-    robot_in_map_.z = tf::getYaw(map_base_transform.getRotation());
+    if(!updateVehicleInMap()) continue;
 
     Mission();
   }
@@ -64,6 +48,40 @@ void ObstacleManager::Mission() {
   map_obs_pub.publish(pointcloud_output);
   pointcloud_base_.points.clear();
 }
+
+bool ObstacleManager::updateVehicleInMap() {
+  tf::StampedTransform stampedtransform;
+  try {
+    map_base_listener.lookupTransform("/map", "/base_link",  
+                             ros::Time(0), stampedtransform);
+  }
+  catch (tf::TransformException ex) {
+    cout << "Waiting For TF OBS" << endl;
+    return false;
+  }
+
+  robot_in_map_.x = stampedtransform.getOrigin().x();
+  robot_in_map_.y = stampedtransform.getOrigin().y();
+  robot_in_map_.z = tf::getYaw(stampedtransform.getRotation());
+
+  geometry_msgs::TransformStamped temp_trans;
+  temp_trans.header.stamp = ros::Time::now();
+  temp_trans.header.frame_id = "/map";
+  temp_trans.child_frame_id = "/base_link";
+
+  temp_trans.transform.translation.x = stampedtransform.getOrigin().x();
+  temp_trans.transform.translation.y = stampedtransform.getOrigin().y();
+  temp_trans.transform.translation.z = stampedtransform.getOrigin().z();
+  temp_trans.transform.rotation.x = stampedtransform.getRotation().x();
+  temp_trans.transform.rotation.y = stampedtransform.getRotation().y();
+  temp_trans.transform.rotation.z = stampedtransform.getRotation().z();
+  temp_trans.transform.rotation.w = stampedtransform.getRotation().w();
+  transformMsgToTF(temp_trans.transform,map_to_base_);
+  map_to_base_ = map_to_base_.inverse();
+  
+  return true;
+}
+
 
 void ObstacleManager::publishMapObstacle() {
   geometry_msgs::Point32 point;
