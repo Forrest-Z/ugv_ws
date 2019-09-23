@@ -46,7 +46,6 @@ private:
   ros::Subscriber map_number_sub;
   ros::Subscriber joy_sub;
   ros::Subscriber map_obs_sub;
-  ros::Subscriber odom_sub;
   ros::Subscriber sonic_sub;
 
   /** Publishers **/
@@ -76,7 +75,6 @@ private:
   /** Flag **/
   bool isJoy_;
   bool isPatrol_;
-  bool isUseSim_;
   bool isJunSave_;
 
   /** Variables **/
@@ -92,6 +90,8 @@ private:
   sensor_msgs::PointCloud obs_in_mapframe_;
 
   sensor_msgs::PointCloud filled_path_pointcloud_;
+
+  string workspace_folder_;
 
   double joy_speed_;
 	double joy_rotation_;
@@ -198,7 +198,6 @@ private:
     sensor_msgs::convertPointCloud2ToPointCloud(output,obs_in_mapframe_);
 
     obs_map_pub.publish(obs_in_mapframe_);
-
   }
 
   void map_number_callback(const std_msgs::Int32::ConstPtr& input) {
@@ -226,7 +225,7 @@ private:
 
 	  if (isJoy_) {
 	    joy_speed_    = scale * joy_x * max_speed_;
-	    joy_rotation_ = scale * joy_y * max_rotation_;
+	    joy_rotation_ = joy_y * max_rotation_;
 	  } else {
 	    joy_speed_    = 0;
 	    joy_rotation_ = 0;
@@ -249,74 +248,19 @@ private:
     position_home.y = -35.236523;
 
 
-    if (isJoy_ && input->buttons[BUTTON_A]) goal_in_map_ = position_subway;
-    if (isJoy_ && input->buttons[BUTTON_B]) goal_in_map_ = position_home;
+    if (isJoy_ && input->buttons[BUTTON_A]) {
+      goal_in_map_ = position_subway;
+      makeGlobalPath(position_subway);
+    }
+    if (isJoy_ && input->buttons[BUTTON_B]) {
+      goal_in_map_ = position_home;
+      makeGlobalPath(position_home);
+    }
 
     sp_cmd_ = 0;
     if (isJoy_ && input->buttons[BUTTON_START]) sp_cmd_=1;
-
   }
 
-
-  void odom_callback(const nav_msgs::Odometry::ConstPtr& input) {
-    geometry_msgs::TransformStamped odom_trans;
-
-    tf::Transform map_to_odom;
-    tf::Transform odom_to_base;
-    tf::Transform map_to_base;
-
-    if(isUseSim_){
-      odom_trans.header.stamp = ros::Time::now();
-      odom_trans.header.frame_id = "/odom";
-      odom_trans.child_frame_id = "/base_link";
-
-      odom_trans.transform.translation.x = input->pose.pose.position.x;
-      odom_trans.transform.translation.y = input->pose.pose.position.y;
-      odom_trans.transform.translation.z = input->pose.pose.position.z;
-      odom_trans.transform.rotation = input->pose.pose.orientation;
-      transformMsgToTF(odom_trans.transform,odom_to_base);
-
-      odom_trans.header.stamp = ros::Time::now();
-      odom_trans.header.frame_id = "/map";
-      odom_trans.child_frame_id = "/odom";
-
-      odom_trans.transform.translation.x = 0;
-      odom_trans.transform.translation.y = 0;
-      odom_trans.transform.translation.z = 0;
-      odom_trans.transform.rotation = tf::createQuaternionMsgFromRollPitchYaw(0,0,1.57);
-      transformMsgToTF(odom_trans.transform,map_to_odom);
-    } else {
-      odom_trans.header.stamp = ros::Time::now();
-      odom_trans.header.frame_id = "/odom";
-      odom_trans.child_frame_id = "/base_link";
-
-      odom_trans.transform.translation.x = 0;
-      odom_trans.transform.translation.y = 0;
-      odom_trans.transform.translation.z = 0;
-      odom_trans.transform.rotation = tf::createQuaternionMsgFromRollPitchYaw(0,0,0);
-      transformMsgToTF(odom_trans.transform,odom_to_base);
-
-      odom_trans.header.stamp = ros::Time::now();
-      odom_trans.header.frame_id = "/map";
-      odom_trans.child_frame_id = "/odom";
-
-      odom_trans.transform.translation.x = input->pose.pose.position.x;
-      odom_trans.transform.translation.y = input->pose.pose.position.y;
-      odom_trans.transform.translation.z = input->pose.pose.position.z;
-      odom_trans.transform.rotation = input->pose.pose.orientation;
-      transformMsgToTF(odom_trans.transform,map_to_odom);      
-    }
-
-    map_to_base = map_to_odom * odom_to_base;
-    map_to_base = map_to_base.inverse();
-
-    vehicle_in_map_.x = map_to_base.getOrigin().x();
-    vehicle_in_map_.y = map_to_base.getOrigin().y();
-    vehicle_in_map_.z = tf::getYaw(map_to_base.getRotation());
-
-    odom_speed_ = hypot(input->twist.twist.linear.x,input->twist.twist.linear.y);
-    odom_angular_ = input->twist.twist.angular.x;
-  }
 
   void sonic_callback(const std_msgs::Int32::ConstPtr& input) {
     sonic_state_ = input->data;

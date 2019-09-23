@@ -1,17 +1,14 @@
 #include "libMissionControl.h"
 
 MissionControl::MissionControl(){
-  isUseSim_ = true;
-  string odom_topic;
-  (isUseSim_) ? odom_topic = "/odom" : odom_topic = "/ekf_2/odometry/filtered";
+  bool isUseSim = true;
+	(isUseSim) ? workspace_folder_ = "/home/ha/Workspace/ugv_ws/src/ugv_ws/" : workspace_folder_ = "/home/gp/ha_ws/src/ugv_ws/";
 
 	goal_sub = n.subscribe("/goal",1, &MissionControl::goal_callback,this);
   map_number_sub = n.subscribe("/map_number",1, &MissionControl::map_number_callback,this);
   map_obs_sub = n.subscribe("/map_obs_points",1, &MissionControl::map_obs_callback,this); 
   joy_sub = n.subscribe("/joy",1, &MissionControl::joy_callback,this);
-  odom_sub = n.subscribe(odom_topic,1, &MissionControl::odom_callback,this);
   sonic_sub = n.subscribe("/sonic_state",1, &MissionControl::sonic_callback,this);
-
 
 
   plan_pub = n.advertise<nav_msgs::Path>("/Astar_plan",1);
@@ -24,7 +21,6 @@ MissionControl::MissionControl(){
   junction_pub = n.advertise<sensor_msgs::PointCloud>("/junction_point",1);
 
   diagnostic_pub = n.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostic_log",1);
-
   clean_path_arrow = n.advertise<visualization_msgs::Marker>("/clean_path",1);
 
   Initialization();
@@ -34,9 +30,7 @@ MissionControl::~MissionControl(){
 
 
 void MissionControl::Initialization() {
-
-	string config_folder;
-	(isUseSim_) ? config_folder = "/home/ha/Workspace/ugv_ws/src/ugv_ws/config/cfg/" : config_folder = "/home/gp/ha_ws/src/ugv_ws/config/config/cfg/";
+	string config_folder = workspace_folder_ + "config/cfg/";
 
 	if(!readConfig(config_folder)){
 		map_number_ = 1;
@@ -70,11 +64,11 @@ void MissionControl::Initialization() {
 
 void MissionControl::Execute() {
 	ros::Rate loop_rate(ROS_RATE_HZ);
-	Planning MyPlanner(2,2);
+	Planning MyPlanner(2,4);
 
 	ros::Time last_timer = ros::Time::now();
-	ros::Time last_loop = ros::Time::now();
-	ros::Time last_log = ros::Time::now();
+	ros::Time last_log   = ros::Time::now();
+	geometry_msgs::Point32 last_pos;
 	double log_duration = 1;
 	double goal_tolerance = 2;
 
@@ -138,10 +132,17 @@ void MissionControl::Execute() {
     }
     
 	  checkMapNumber();
+	  
+	
+	  if( (ros::Time::now()-last_log).toSec() > log_duration ) {
+	  	double travel_x = last_pos.x - vehicle_in_map_.x;
+	  	double travel_y = last_pos.y - vehicle_in_map_.y;
+	  	double travel_loop = hypot(travel_x,travel_y); 
+	  	odom_speed_ = travel_loop/(ros::Time::now()-last_log).toSec();
+	  	travel_distance_ += travel_loop;
+	  	if(last_pos.x == 0 && last_pos.y == 0)travel_distance_ = 0;
+	  	last_pos = vehicle_in_map_;
 
-	  travel_distance_ += (ros::Time::now()-last_loop).toSec() * odom_speed_;
-	  last_loop = ros::Time::now();
-	  if( (ros::Time::now()-last_log).toSec() > log_duration) {
 	  	runDiagnostic();
 	  	last_log = ros::Time::now();
 	  }
@@ -151,8 +152,7 @@ void MissionControl::Execute() {
 
 void MissionControl::makeGlobalPath(geometry_msgs::Point32 goal_in_map) {
 	Routing MyRouter;
-	string map_folder;
-	(isUseSim_) ? map_folder = "/home/ha/Workspace/ugv_ws/src/ugv_ws/config/map/" : map_folder = "/home/gp/ha_ws/src/ugv_ws/config/map/";
+	string map_folder = workspace_folder_ + "config/map/";
 	std::vector<MapGraph> map;
 	std::vector<int> path;
 	YamlInfo map_info;
@@ -237,7 +237,6 @@ void MissionControl::pathPredict(geometry_msgs::Twist& Cmd_Vel,sensor_msgs::Poin
 }
 
 void MissionControl::generateSafePath(sensor_msgs::PointCloud& Pointcloud,geometry_msgs::Point32 Robot,sensor_msgs::PointCloud&  Obstalce) {
-
 	bool isModified = false;
 	ros::Time clock_1 = ros::Time::now();
 
@@ -250,7 +249,6 @@ void MissionControl::generateSafePath(sensor_msgs::PointCloud& Pointcloud,geomet
       (Pointcloud.points[i].y - Robot.y));
 
 		if(distance_from_robot > 10) continue;
-
 		if(Pointcloud.points[i].z == 5) continue;
 		double min_x_left = 999;
 		double min_x_right = 999;
@@ -263,7 +261,7 @@ void MissionControl::generateSafePath(sensor_msgs::PointCloud& Pointcloud,geomet
 		double y_local = Pointcloud.points[i].y * cos(Pointcloud.points[i].z) - Pointcloud.points[i].x * sin(Pointcloud.points[i].z);
 
 		for (int j = 0; j < Obstalce.points.size(); ++j) {
-			if(Obstalce.points[i].z != 10) continue;
+			if(Obstalce.points[j].z != 10) continue;
 			double x_obs = Obstalce.points[j].x * cos(Pointcloud.points[i].z) + Obstalce.points[j].y * sin(Pointcloud.points[i].z);
 			double y_obs = Obstalce.points[j].y * cos(Pointcloud.points[i].z) - Obstalce.points[j].x * sin(Pointcloud.points[i].z);			
 
@@ -304,7 +302,6 @@ void MissionControl::generateSafePath(sensor_msgs::PointCloud& Pointcloud,geomet
 			// cout << "min_x_left  : " << min_x_left << endl; 
 			// cout << "min_y_left  : " << min_y_left << endl; 
 
-
 			isModified = true;
 			Pointcloud.points[i].x = mid_x;
 			Pointcloud.points[i].y = mid_y;
@@ -334,57 +331,6 @@ void MissionControl::generateSafePath(sensor_msgs::PointCloud& Pointcloud,geomet
 
 	// cout<< "compute time cost: " << (ros::Time::now() - clock_1).toSec() << endl;
 	return;
-
-	/*
-	double modify_range = 30;
-	
-	ros::Time clock_1 = ros::Time::now();
-	int points_ct = 0;
-	for (int i = 0; i < Pointcloud.points.size(); ++i) {
-		double distance_from_robot = 
-    hypot((Pointcloud.points[i].x - Robot.x),
-      (Pointcloud.points[i].y - Robot.y));
-
-		for (int j = 0; j < Obstalce.points.size(); ++j) {
-			if(Obstalce.points[j].z == 10) continue;
-			double diff_x = Pointcloud.points[i].x - Obstalce.points[j].x;
-			double diff_y = Pointcloud.points[i].y - Obstalce.points[j].y;			
-			double distance_to_path = hypot(diff_x,diff_y);
-    	if(distance_to_path < vehicle_radius_ * 3) {
-    		geometry_msgs::Point32 point_diff;
-    		movePoint(Pointcloud.points[i],point_diff);
-    		Pointcloud.points[i].x += 0.8 * point_diff.x;
-    		Pointcloud.points[i].y += 0.8 * point_diff.y;
-    		Pointcloud.points[i].z = 2;
-    		plan_point_pub.publish(Pointcloud);
-    		sleep(1);
-    		isModified = true;
-    	}
-		}
-		Pointcloud.points[i].z = 1;
-	}
-
-	if(isModified) {
-		nav_msgs::Path path;
-		geometry_msgs::PoseStamped pose;
-		pose.header.frame_id = "/map";
-		path.header.frame_id = "/map";
-
-		for (int i = 0; i < Pointcloud.points.size(); ++i) {
-			pose.header.seq = i;
-			pose.pose.position.x = Pointcloud.points[i].x;
-			pose.pose.position.y = Pointcloud.points[i].y;
-			path.poses.push_back(pose);
-		}
-
-		global_path_ = path;
-
-		plan_point_pub.publish(Pointcloud);
-		plan_pub.publish(global_path_);
-
-		isModified = false; 
-	}
-	*/
 
 }
 
@@ -616,8 +562,7 @@ void MissionControl::checkMapNumber() {
 }
 
 void MissionControl::loadJunctionFile() {
-	string filename;
-	(isUseSim_) ? filename = "/home/ha/Workspace/ugv_ws/src/ugv_ws/config/map/junction.txt" : filename = "/home/gp/ha_ws/src/ugv_ws/config/map/junction.txt";
+	string filename = workspace_folder_ + "config/map/junction.txt";
 
   ifstream my_file;
   my_file.open(filename);

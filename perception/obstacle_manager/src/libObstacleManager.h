@@ -37,7 +37,7 @@ using std::endl;
 using std::isnan;
 using std::string;
 
-const int ROS_RATE_HZ = 20;
+const int ROS_RATE_HZ = 50;
 
 class ObstacleManager
 {
@@ -59,16 +59,13 @@ private:
   /** Subscribers **/
   ros::Subscriber map_sub;
   ros::Subscriber scan_sub;
-  ros::Subscriber odom_sub;
   ros::Subscriber pointcloud_sub;
 
   /** Parameters **/
   tf::TransformListener map_base_listener;
-  tf::StampedTransform map_base_transform;
 
   /** Flags **/
   bool isMapSave_;
-  bool isUseSim_;
   /** Variables **/
   laser_geometry::LaserProjection projector;
   nav_msgs::OccupancyGrid static_map_;
@@ -82,6 +79,9 @@ private:
   double inflation_;
 
   /** Functions **/
+
+  bool updateVehicleInMap();
+
   void publishMapObstacle();
   void publishScanObstacle();
   void publishLidarObstacle();
@@ -96,91 +96,6 @@ private:
   
   void scan_callback(const sensor_msgs::LaserScan::ConstPtr& input) {
     projector.projectLaser(*input, pointcloud_scan_);
-  }
-
-
-/*
-  void odom_callback(const nav_msgs::Odometry::ConstPtr& input) {
-    geometry_msgs::TransformStamped odom_trans;
-
-    tf::Transform map_to_odom;
-    tf::Transform odom_to_base;
-
-    odom_trans.header.stamp = ros::Time::now();
-    odom_trans.header.frame_id = "/odom";
-    odom_trans.child_frame_id = "/base_link";
-
-
-    odom_trans.transform.translation.x = input->pose.pose.position.x;
-    odom_trans.transform.translation.y = input->pose.pose.position.y;
-    odom_trans.transform.translation.z = input->pose.pose.position.z;
-    odom_trans.transform.rotation = input->pose.pose.orientation;
-    transformMsgToTF(odom_trans.transform,odom_to_base);
-
-    odom_trans.header.stamp = ros::Time::now();
-    odom_trans.header.frame_id = "/map";
-    odom_trans.child_frame_id = "/odom";
-
-    odom_trans.transform.translation.x = 0;
-    odom_trans.transform.translation.y = 0;
-    odom_trans.transform.translation.z = 0;
-    odom_trans.transform.rotation = tf::createQuaternionMsgFromRollPitchYaw(0,0,1.57);
-    transformMsgToTF(odom_trans.transform,map_to_odom);
-
-    map_to_base_ = map_to_odom * odom_to_base;
-    map_to_base_ = map_to_base_.inverse();
-  }
-  */
-  void odom_callback(const nav_msgs::Odometry::ConstPtr& input) {
-    geometry_msgs::TransformStamped odom_trans;
-
-    tf::Transform map_to_odom;
-    tf::Transform odom_to_base;
-
-    if(isUseSim_){
-      odom_trans.header.stamp = ros::Time::now();
-      odom_trans.header.frame_id = "/odom";
-      odom_trans.child_frame_id = "/base_link";
-
-      odom_trans.transform.translation.x = input->pose.pose.position.x;
-      odom_trans.transform.translation.y = input->pose.pose.position.y;
-      odom_trans.transform.translation.z = input->pose.pose.position.z;
-      odom_trans.transform.rotation = input->pose.pose.orientation;
-      transformMsgToTF(odom_trans.transform,odom_to_base);
-
-      odom_trans.header.stamp = ros::Time::now();
-      odom_trans.header.frame_id = "/map";
-      odom_trans.child_frame_id = "/odom";
-
-      odom_trans.transform.translation.x = 0;
-      odom_trans.transform.translation.y = 0;
-      odom_trans.transform.translation.z = 0;
-      odom_trans.transform.rotation = tf::createQuaternionMsgFromRollPitchYaw(0,0,1.57);
-      transformMsgToTF(odom_trans.transform,map_to_odom);
-    } else {
-      odom_trans.header.stamp = ros::Time::now();
-      odom_trans.header.frame_id = "/odom";
-      odom_trans.child_frame_id = "/base_link";
-
-      odom_trans.transform.translation.x = 0;
-      odom_trans.transform.translation.y = 0;
-      odom_trans.transform.translation.z = 0;
-      odom_trans.transform.rotation = tf::createQuaternionMsgFromRollPitchYaw(0,0,0);
-      transformMsgToTF(odom_trans.transform,odom_to_base);
-
-      odom_trans.header.stamp = ros::Time::now();
-      odom_trans.header.frame_id = "/map";
-      odom_trans.child_frame_id = "/odom";
-
-      odom_trans.transform.translation.x = input->pose.pose.position.x;
-      odom_trans.transform.translation.y = input->pose.pose.position.y;
-      odom_trans.transform.translation.z = input->pose.pose.position.z;
-      odom_trans.transform.rotation = input->pose.pose.orientation;
-      transformMsgToTF(odom_trans.transform,map_to_odom);      
-    }
-
-    map_to_base_ = map_to_odom * odom_to_base;
-    map_to_base_ = map_to_base_.inverse();
   }
 
 
