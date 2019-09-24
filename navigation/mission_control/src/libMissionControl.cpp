@@ -294,6 +294,10 @@ void MissionControl::generateSafePath(sensor_msgs::PointCloud& Pointcloud,geomet
 			double point_diff = hypot((mid_x - Pointcloud.points[i].x),(mid_y - Pointcloud.points[i].y));
 			if(point_diff > 3) continue;
 
+			isModified = true;
+			Pointcloud.points[i].x = mid_x;
+			Pointcloud.points[i].y = mid_y;
+			Pointcloud.points[i].z = 5;
 			// cout << endl;
 			// cout << "DEBUG DEBUG" << endl;
 			// cout << "point_diff  : " << point_diff << endl; 
@@ -301,11 +305,6 @@ void MissionControl::generateSafePath(sensor_msgs::PointCloud& Pointcloud,geomet
 			// cout << "min_y_right : " << min_y_right << endl; 
 			// cout << "min_x_left  : " << min_x_left << endl; 
 			// cout << "min_y_left  : " << min_y_left << endl; 
-
-			isModified = true;
-			Pointcloud.points[i].x = mid_x;
-			Pointcloud.points[i].y = mid_y;
-			Pointcloud.points[i].z = 5;
 		}
 	}
 	if(isModified) {
