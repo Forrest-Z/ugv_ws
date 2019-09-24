@@ -3,6 +3,6 @@ vehicle_radius 0.5
 lookahead_time 2
 max_speed 2.5
 max_rotation 1.5
-max_acc_speed 0.03
-max_acc_rotation 0.4
+max_acc_speed 2
+max_acc_rotation 1
 oscillation 0.02
