@@ -240,12 +240,12 @@ private:
     if (isJoy_ && input->buttons[BUTTON_BACK]) global_path_.poses.clear();
 
     geometry_msgs::Point32 position_subway;
-    position_subway.x = 2288.519775;
-    position_subway.y = 514.973816;
+    position_subway.x = 1892.758;
+    position_subway.y =  -881.343;
 
     geometry_msgs::Point32 position_home;
-    position_home.x = -23.512510;
-    position_home.y = -35.236523;
+    position_home.x = 2022.000;
+    position_home.y = -754.973;
 
 
     if (isJoy_ && input->buttons[BUTTON_A]) {

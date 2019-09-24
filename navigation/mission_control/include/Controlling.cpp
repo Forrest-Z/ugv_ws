@@ -204,6 +204,7 @@ void Controlling::computeSafePath(geometry_msgs::Twist& Cmd_Vel){
   rep_force.x = 0;
   computeSafeSpeed(rep_force,Cmd_Vel);
   Cmd_Vel.linear.x -= rep_force.x;
+  // cout <<"Controlling repulsive force:"<<rep_force.x << endl;
 
   if(rep_force.z == 1) Cmd_Vel.linear.x = 0;
 }
