@@ -41,11 +41,15 @@ void MissionControl::Initialization() {
 		max_speed_ = 1.5;
 		max_rotation_ = 1.5;
 
-		max_acc_speed_ = 0.025;
-		max_acc_rotation_ = 0.1;
+		max_acc_speed_ = 1;
+		max_acc_rotation_ = 1;
 
 		oscillation_ = 0.02;
 	}
+
+
+	max_acc_speed_ /= (double)ROS_RATE_HZ;
+	max_acc_rotation_ /= (double)ROS_RATE_HZ;
 
 	printConfig();
 
@@ -64,7 +68,7 @@ void MissionControl::Initialization() {
 
 void MissionControl::Execute() {
 	ros::Rate loop_rate(ROS_RATE_HZ);
-	Planning MyPlanner(2,4);
+	Planning MyPlanner(2,2);
 
 	ros::Time last_timer = ros::Time::now();
 	ros::Time last_log   = ros::Time::now();
@@ -83,6 +87,7 @@ void MissionControl::Execute() {
 
 	    fillCommand(joy_cmd);
 	    speedLimit(joy_cmd);
+	    speedSmoother(joy_cmd);
 	    pathPredict(joy_cmd,map_obs_,Cloud_Out);
 
 			fillCommand(joy_cmd);
@@ -125,6 +130,7 @@ void MissionControl::Execute() {
 	  		pp_command.angular.z  = 0;
 	  	}
 
+	  	speedSmoother(pp_command);
 	  	pathPredict(pp_command,map_obs_,Cloud_Out);
 	  	speedSmoother(pp_command);
 	  	obs_pub.publish(Cloud_Out);
@@ -268,7 +274,7 @@ void MissionControl::generateSafePath(sensor_msgs::PointCloud& Pointcloud,geomet
 			double diff_to_wall_x = x_local - x_obs;
 			double diff_to_wall_y = y_local - y_obs;
 
-			if(fabs(diff_to_wall_y) < 5){
+			if(fabs(diff_to_wall_y) < 8){
 
 				if(diff_to_wall_y > 0) {
 					if(fabs(min_x_left) > fabs(diff_to_wall_x)){
@@ -292,7 +298,7 @@ void MissionControl::generateSafePath(sensor_msgs::PointCloud& Pointcloud,geomet
 			double mid_x = (Obstalce.points[min_id_right].x + Obstalce.points[min_id_left].x)/2;
 			double mid_y = (Obstalce.points[min_id_right].y + Obstalce.points[min_id_left].y)/2;
 			double point_diff = hypot((mid_x - Pointcloud.points[i].x),(mid_y - Pointcloud.points[i].y));
-			if(point_diff > 3) continue;
+			if(point_diff > 5) continue;
 
 			isModified = true;
 			Pointcloud.points[i].x = mid_x;
@@ -437,6 +443,18 @@ void MissionControl::speedSmoother(geometry_msgs::Twist& Cmd_Vel) {
 	static geometry_msgs::Twist last_command;
 	Cmd_Vel.linear.x = smootherLogic(Cmd_Vel.linear.x,last_command.linear.x,max_acc_speed_);
 	// Cmd_Vel.angular.z = smootherLogicAngular(Cmd_Vel.angular.z,last_command_.angular.z,max_acc_speed_);
+
+	double angular_limit = max_rotation_ * (1.2 - fabs(Cmd_Vel.linear.x/max_speed_));
+
+	if(fabs(Cmd_Vel.angular.z) > angular_limit) {
+		Cmd_Vel.angular.z = angular_limit * (Cmd_Vel.angular.z / fabs(Cmd_Vel.angular.z));
+	}		
+	
+	if(fabs(Cmd_Vel.angular.z) < oscillation_) {
+		Cmd_Vel.angular.z = 0;
+	}
+
+
 	last_command = Cmd_Vel;
 }
 
