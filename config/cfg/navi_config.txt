@@ -11,3 +11,4 @@ controller_linear_scale 1
 controller_rotation_scale 1
 
 vehicle_radius 0.3
+wait_obstacle false

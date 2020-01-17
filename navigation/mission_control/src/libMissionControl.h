@@ -76,6 +76,7 @@ private:
   double min_translational_velocity_;
 
   double vehicle_radius_;
+  bool wait_obstacle_;
 
   double controller_linear_scale_;
   double controller_rotation_scale_;

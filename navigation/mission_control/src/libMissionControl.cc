@@ -51,6 +51,8 @@ bool MissionControl::Initialization() {
     controller_rotation_scale_ = 1;
 
     vehicle_radius_ = 0.3;
+
+    wait_obstacle_ = true;
   }
 
   isManualControl_  = false;
@@ -105,39 +107,40 @@ void MissionControl::ApplyAutoControl(ros::Time& Timer,double& Duration_Limit) {
   sensor_msgs::PointCloud trajectory_global;
   geometry_msgs::Point32 destination;
 
-  static ros::Time detecting_timer;
-  static ros::Time waiting_timer;
-
   double min_distance = ComputeMinDistance();
 
   int search_grid = 3;
   if(min_distance > 3) search_grid = 5;
- 
-  if((ros::Time::now() - waiting_timer).toSec() < 3) {
-    planner_state_ = 0;
-    detecting_timer = ros::Time::now();
-  } 
-  else if((ros::Time::now() - detecting_timer).toSec() > 6) {
-    for (int i = 0; i < obstacle_in_base_.points.size(); ++i) {
-      if(obstacle_in_base_.points[i].z > 5) continue;
-      double window_size = 5;
-      double obstacle_distance = hypot(obstacle_in_base_.points[i].x,obstacle_in_base_.points[i].y);
-      double obstacle_edge = hypot(obstacle_in_base_.points[i].x,(obstacle_in_base_.points[i].y - window_size) );
-      if(obstacle_in_base_.points[i].x > 0 && obstacle_distance < window_size) {
-        double obstacle_cosine = ( pow(window_size,2) + pow(obstacle_distance,2) - pow(obstacle_edge,2) ) / ( 2 * window_size * obstacle_distance );
-        double obstacle_angle = acos(obstacle_cosine);
-        int obstacle_zone = (obstacle_angle/PI) * 5;
-        if(obstacle_zone == 2) {
-          waiting_timer = ros::Time::now();
-          break;
+
+  if(wait_obstacle_) {
+    static ros::Time detecting_timer;
+    static ros::Time waiting_timer;
+    if((ros::Time::now() - waiting_timer).toSec() < 3) {
+      planner_state_ = 0;
+      detecting_timer = ros::Time::now();
+    } 
+    else if((ros::Time::now() - detecting_timer).toSec() > 6) {
+      for (int i = 0; i < obstacle_in_base_.points.size(); ++i) {
+        if(obstacle_in_base_.points[i].z > 5) continue;
+        double window_size = 5;
+        double obstacle_distance = hypot(obstacle_in_base_.points[i].x,obstacle_in_base_.points[i].y);
+        double obstacle_edge = hypot(obstacle_in_base_.points[i].x,(obstacle_in_base_.points[i].y - window_size) );
+        if(obstacle_in_base_.points[i].x > 0 && obstacle_distance < window_size) {
+          double obstacle_cosine = ( pow(window_size,2) + pow(obstacle_distance,2) - pow(obstacle_edge,2) ) / ( 2 * window_size * obstacle_distance );
+          double obstacle_angle = acos(obstacle_cosine);
+          int obstacle_zone = (obstacle_angle/PI) * 5;
+          if(obstacle_zone == 2) {
+            waiting_timer = ros::Time::now();
+            break;
+          }
         }
       }
+      planner_state_ = 1; 
+    } else {
+      planner_state_ = 1; 
     }
-    planner_state_ = 1; 
-  } else {
-    planner_state_ = 1; 
   }
-
+ 
 
   if(planner_state_ == 1) {
     MyPlanner_.set_safe_path_search_grid(search_grid);
@@ -516,6 +519,8 @@ void MissionControl::PrintConfig() {
   cout << "Controller Rotation Scale  : " << controller_rotation_scale_ << endl;
 
   cout << "Vehicle Radius             : " << vehicle_radius_ << endl;
+  cout << "Wait Obstacle              : " << wait_obstacle_ << endl;
+  
 
   cout << "==================================" << endl;
 }
@@ -574,11 +579,20 @@ bool MissionControl::ReadConfig() {
       ss >> vehicle_radius_;
       info_linenum++;
     }
+    else if(yaml_info == "wait_obstacle") {
+      string reading_data;
+      ss >> reading_data;
+      if(reading_data == "true") wait_obstacle_ = true;
+      else if(reading_data == "false") wait_obstacle_ = false;
+      else info_linenum--;
+      info_linenum++;
+    }
+
   }
 
   yaml_file.close(); 
 
-  if(info_linenum == 9) {
+  if(info_linenum == 10) {
     return true;
   } else {
     cout << "Config File Incomplete, Using Default Value" << endl;
