@@ -9,7 +9,7 @@ Package Description
 
 Welcome to Genius Pros - UGV Project GitHub page
 
-
+![alt text](https://github.com/timha92/ugv_ws/blob/master/config/docs/homepage_ugv.jpg "Homepage Ugv")
 
 ### Update Logs
 
