@@ -1,8 +1,13 @@
-map_number 2
-vehicle_radius 0.5
-lookahead_time 2
-max_speed 2.5
-max_rotation 1.5
-max_acc_speed 2
-max_acc_rotation 1
-oscillation 0.02
+max_linear_velocity 1.5
+max_rotation_velocity 1.5
+
+max_linear_acceleration 1
+max_rotation_acceleration 1
+
+max_translational_velocity 2
+min_translational_velocity 0.1
+
+controller_linear_scale 1
+controller_rotation_scale 1
+
+vehicle_radius 0.3

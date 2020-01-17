@@ -13,14 +13,6 @@
 
 #include <geometry_msgs/Point32.h>
 #include <sensor_msgs/PointCloud.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <nav_msgs/Odometry.h>
-#include <nav_msgs/Path.h>
-#include <std_msgs/Int32.h>
-
-#include <tf/transform_broadcaster.h>
-#include <tf/transform_listener.h>
-#include <geometry_msgs/TransformStamped.h>
 
 
 using std::vector;
@@ -75,41 +67,71 @@ public:
   Routing(){};
   ~Routing(){};
 
-  void routingAnalyze(geometry_msgs::Point32 goal_in_map,string map_folder,int map_number);
-  void getPath(std::vector<MapGraph>& Map,std::vector<int>& Path,YamlInfo& Map_info);
-
+  void RoutingAnalyze(geometry_msgs::Point32& goal_in_map,geometry_msgs::Point32 vehicle_in_map,string map_folder,int map_number);
+  sensor_msgs::PointCloud path_pointcloud(){ return path_pointcloud_; };
 private:
-
   /** Parameters **/
   std::string map_folder_;
-  tf::TransformListener listener;
 
   /** Flags **/
   bool isPathReady_;
   bool isGoalReached_;
+
   /** Variables **/
   YamlInfo map_info_;
+  vector<MapGraph> node_info_;
+  vector<int> path_;
+  sensor_msgs::PointCloud path_pointcloud_;
 
-  std::vector<MapGraph> map_;
-  std::vector<int> path_;
-  std::vector<RoutingBlock> routing_info_; 
-
+  vector<RoutingBlock> routing_info_; 
 
   /** Functions **/
-  bool readNodeTXT(std::vector<MapGraph>& Index,string map_folder,int map_number);
-  bool readYamlFile(string map_folder,int map_number);
+  bool ReadNodeTXT(string Map_folder,int Map_number);
+  bool ReadYamlFile(string Map_folder,int Map_number);
 
-  void mapToPixel(geometry_msgs::Point32 Input,geometry_msgs::Point32& Output);
-  void findPointId(std::vector<MapGraph>& Map,geometry_msgs::Point32 Input,int& Output);
-  bool pathPlanner(int Start_Id,int End_id,
-    std::vector<MapGraph> Index,std::vector<int>& Path);
+  int FindPointId(geometry_msgs::Point32 Input);
 
-  void findNeighbor(int Id,std::vector<MapGraph> Index,std::vector<int>& Neighbor);
-  double computeHeuristic(int Start_Id,int End_id,std::vector<MapGraph> Index);
-  double computeRoutingCost(int id_1,int id_2);
+  bool ComputePath(int Start_Id,int End_id);
+  void SetPathtoPointcloud();
+  void CleanAllState();
 
+  /** Inline Function **/ 
   inline bool checkIndexVaild(int input,std::vector<MapGraph> Index) {
     return ( input > 0 && input <= Index.size() );
+  }
+
+  inline double computeHeuristic(int Start_Id,int End_id,std::vector<MapGraph> Index) {
+    double distances_cost = hypot(abs(Index[End_id-1].position.x-Index[Start_Id-1].position.x)
+        ,abs(Index[End_id-1].position.y-Index[Start_Id-1].position.y));
+     double global_cost = computeRoutingCost(Start_Id,End_id);
+
+     return (distances_cost + global_cost);
+  }
+
+  inline double computeRoutingCost(int id_1,int id_2) {
+    for (int i = 0; i < routing_info_.size(); ++i) {
+      if( id_1 == routing_info_[i].id_1  || id_2 == routing_info_[i].id_1 ) {
+          return routing_info_[i].cost;
+      }
+    }
+    return 0;
+  }
+
+  inline void findNeighbor(int Id,std::vector<MapGraph> Index,std::vector<int>& Neighbor) {
+    Neighbor.clear();
+
+    for (int i = 0; i < Index[Id-1].neighbor.size(); i++)
+    {
+      if( Index[Id-1].neighbor[i] == 0 ) continue;
+      Neighbor.push_back(Index[Id-1].neighbor[i]);
+    }
+  }
+
+  inline geometry_msgs::Point32 ConvertMapToPixel(geometry_msgs::Point32 Input) {
+    geometry_msgs::Point32 output;
+    output.x = (map_info_.height - ((Input.y - map_info_.origin.y)/map_info_.resolution)) * map_info_.ratio;
+    output.y = ((Input.x - map_info_.origin.x)/map_info_.resolution) * map_info_.ratio;
+    return output;
   }
 
   

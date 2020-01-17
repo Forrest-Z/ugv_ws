@@ -32,7 +32,7 @@ using std::string;
 using std::vector;
 using std::to_string;
 
-const int ROS_RATE_HZ   = 20;
+const int ROS_RATE_HZ   = 10;
 const double PI = 3.14159265359;
 
 const double WHEEL_RADIUS_M = 0.165;

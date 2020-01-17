@@ -25,17 +25,16 @@ include_directories(
 
 
 add_library(${PROJECT_NAME} 
- 	include/Planning.cpp
-	include/Controlling.cpp
-	include/Routing.cpp
-# 	include/Tools.cpp
-	src/libMissionControl.cpp
-	include/Dev.cpp
+ 	include/Planning.cc
+ 	include/Controlling.cc
+	include/Routing.cc
+	include/Tools.cc
+	src/libMissionControl.cc
 )
 target_link_libraries(${PROJECT_NAME}  ${OpenCV_LIBS}  ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
 
 
-add_executable(mission_control_node src/MissionControl.cpp)
+add_executable(mission_control_node src/MissionControl.cc)
 target_link_libraries(mission_control_node ${PROJECT_NAME} )
 

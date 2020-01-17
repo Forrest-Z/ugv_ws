@@ -8,7 +8,7 @@ Package Description
 ### Genius Pros - UGV Project
 ### Update Logs
 
-##### v2.0 - Adapted to New Base Structure with New Framework <br>
+##### v1.5 - Adapted to New Base Structure with New Framework <br>
 * Project are running on new base which faster and heavier.
 * Adding base communication node that directly control motor RPM via RS232.
 * Changing local obstacle avoidance algorithm to path-based frame clean path search. Similar to Automation vehicle avoidance method without lane detection requirement.

@@ -16,8 +16,8 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
 #include <sensor_msgs/point_cloud_conversion.h>
-
 #include <geometry_msgs/Point32.h>
+#include <geometry_msgs/PointStamped.h>
 #include <nav_msgs/Odometry.h>
 
 #include <nav_msgs/OccupancyGrid.h>
@@ -37,7 +37,8 @@ using std::endl;
 using std::isnan;
 using std::string;
 
-const int ROS_RATE_HZ = 50;
+const int ROS_RATE_HZ = 100;
+const double PI = 3.14159265359;
 
 class ObstacleManager
 {
@@ -55,17 +56,22 @@ private:
 
   /** Publishers **/
   ros::Publisher map_obs_pub;
+  ros::Publisher odom_pub;
 
   /** Subscribers **/
   ros::Subscriber map_sub;
   ros::Subscriber scan_sub;
   ros::Subscriber pointcloud_sub;
+  ros::Subscriber scan_points_sub;
+  ros::Subscriber rviz_click_sub;
+  ros::Subscriber odom_sub;
 
   /** Parameters **/
   tf::TransformListener map_base_listener;
 
   /** Flags **/
   bool isMapSave_;
+  bool isUseSim_;
   /** Variables **/
   laser_geometry::LaserProjection projector;
   nav_msgs::OccupancyGrid static_map_;
@@ -74,65 +80,24 @@ private:
   sensor_msgs::PointCloud pointcloud_base_;
   sensor_msgs::PointCloud pointcloud_scan_;
   sensor_msgs::PointCloud pointcloud_lidar_;
+  sensor_msgs::PointCloud pointcloud_rviz_;
 
   tf::Transform map_to_base_;
   double inflation_;
 
   /** Functions **/
-
   bool updateVehicleInMap();
-
   void publishMapObstacle();
   void publishScanObstacle();
   void publishLidarObstacle();
+  void publishRvizObstacle();
 
-  void map_callback(const nav_msgs::OccupancyGrid::ConstPtr& input) {
-    cout << "Map Received, size " << input->info.width << "x" << input->info.height << endl;
-
-    static_map_ = *input;
-    static_map_info_ = input->info;
-  }
-
-  
-  void scan_callback(const sensor_msgs::LaserScan::ConstPtr& input) {
-    projector.projectLaser(*input, pointcloud_scan_);
-  }
-
-
-  void pointcloud_callback(const sensor_msgs::PointCloud2::ConstPtr& input) {
-    pointcloud_lidar_.points.clear();
-    double x_fix = 0.08;
-    double z_fix = 0;//0.64;
-
-    double ground_height = 0.1;
-
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ> ());
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZ> ());
-
-    pcl::fromROSMsg(*input, *cloud);
-
-    pcl::ApproximateVoxelGrid<pcl::PointXYZ> approximate_voxel_filter;
-    approximate_voxel_filter.setInputCloud (cloud);
-    approximate_voxel_filter.setLeafSize (0.1, 0.1, 0.1);
-    approximate_voxel_filter.filter (*cloud_filtered);
-
-    for (int i = 0; i < cloud_filtered->points.size(); ++i) {
-      geometry_msgs::Point32 point;
-      point.x = cloud_filtered->points[i].x - x_fix;
-      point.y = cloud_filtered->points[i].y;
-      point.z = cloud_filtered->points[i].z - z_fix;
-
-      double range = hypot(point.x, point.y);
-      double height = point.z;
-      if(height < -0.1) continue;
-      if(height > 1) continue;
-      if(range < 0.5) continue;
-      pointcloud_lidar_.points.push_back(point);
-    }
-
-  }
-
-
+  void map_callback(const nav_msgs::OccupancyGrid::ConstPtr& input);
+  void scan_callback(const sensor_msgs::LaserScan::ConstPtr& input);
+  void scanpoints_callback(const sensor_msgs::PointCloud::ConstPtr& input);
+  void pointcloud_callback(const sensor_msgs::PointCloud2::ConstPtr& input);
+  void clickpoint_callback(const geometry_msgs::PointStamped::ConstPtr& input);
+  void OdomCallback(const nav_msgs::Odometry::ConstPtr& input);
 
   
 };

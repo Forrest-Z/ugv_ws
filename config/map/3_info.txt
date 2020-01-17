@@ -2,5 +2,5 @@ resolution 0.05
 origin 612.636047 -10.785126
 width 13091
 height 3038
-ratio 0.0977771
+ratio 0.137499
 

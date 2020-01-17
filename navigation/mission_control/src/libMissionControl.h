@@ -4,285 +4,195 @@
 #include <Routing.h>
 #include <Planning.h>
 #include <Controlling.h>
-#include <Dev.h>
+#include <Tools.h>
+
+#include <std_msgs/Int32.h>
 
 
 class MissionControl
 {
 public:
-	MissionControl();
-	~MissionControl(); 
-  void Initialization();
-
-	void Execute();
+  MissionControl();
+  ~MissionControl(); 
+  bool Initialization();
+  void Execute();
 
 private:
-	const int ROS_RATE_HZ = 50;
-	const double PI = 3.14159265359;
+  const int ROS_RATE_HZ = 50;
+  const double PI = 3.14159265359;
 
-	const int BUTTON_LB             = 4;
-	const int BUTTON_RB             = 5;
+  const int BUTTON_LB             = 4;
+  const int BUTTON_RB             = 5;
 
-	const int BUTTON_A              = 0;
-	const int BUTTON_B              = 1;
-	const int BUTTON_X              = 2;
-	const int BUTTON_Y              = 3;
+  const int BUTTON_A              = 0;
+  const int BUTTON_B              = 1;
+  const int BUTTON_X              = 2;
+  const int BUTTON_Y              = 3;
 
-	const int BUTTON_BACK           = 6;
-	const int BUTTON_START          = 7;
+  const int BUTTON_BACK           = 6;
+  const int BUTTON_START          = 7;
 
-	const int AXIS_LEFT_LEFT_RIGHT  = 0;
-	const int AXIS_LEFT_UP_DOWN     = 1;
-	const int AXIS_RIGHT_LEFT_RIGHT = 3;
-	const int AXIS_RIGHT_UP_DOWN    = 4;
+  const int AXIS_LEFT_LEFT_RIGHT  = 0;
+  const int AXIS_LEFT_UP_DOWN     = 1;
+  const int AXIS_RIGHT_LEFT_RIGHT = 3;
+  const int AXIS_RIGHT_UP_DOWN    = 4;
 
 
-	/** Node Handle **/
-	ros::NodeHandle n;
-  ros::NodeHandle pn;
+  /** Node Handle **/
+  ros::NodeHandle n;
 
   /** Subscribers **/
-  ros::Subscriber goal_sub;
-  ros::Subscriber map_number_sub;
   ros::Subscriber joy_sub;
-  ros::Subscriber map_obs_sub;
-  ros::Subscriber sonic_sub;
+  ros::Subscriber goal_sub;
+  ros::Subscriber obstacle_sub;
+  ros::Subscriber map_number_sub;
 
   /** Publishers **/
-  ros::Publisher plan_pub;
-  ros::Publisher plan_point_pub;
-  ros::Publisher vel_pub;
   ros::Publisher path_pred_pub;
-  ros::Publisher obs_pub;
-  ros::Publisher obs_map_pub;
+  ros::Publisher cmd_vel_pub;
+  ros::Publisher local_costmap_pub;
+
+  ros::Publisher local_goal_pub;
+  ros::Publisher local_all_pub;
+  ros::Publisher local_safe_pub;
+  ros::Publisher local_best_pub;
+
+  ros::Publisher global_goal_pub;
+  ros::Publisher global_path_pub;
+
   ros::Publisher map_number_pub;
-  ros::Publisher clean_path_arrow;
-  ros::Publisher junction_pub;
-  ros::Publisher diagnostic_pub;
+  ros::Publisher junction_points_pub;
+
+  /** ROS Components **/
+  tf::TransformListener listener_map_to_base;
 
   /** Parameters **/
+  double max_linear_velocity_;
+  double max_rotation_velocity_;
+  double max_linear_acceleration_;
+  double max_rotation_acceleration_;
+
+  double max_translational_velocity_;
+  double min_translational_velocity_;
+
   double vehicle_radius_;
-  double lookahead_time_;
 
-  double max_speed_;
-  double max_rotation_;
-
-  double max_acc_speed_;
-  double max_acc_rotation_;
-
-  double oscillation_;
+  double controller_linear_scale_;
+  double controller_rotation_scale_;
 
   /** Flag **/
-  bool isJoy_;
-  bool isPatrol_;
+  bool isManualControl_;
+  bool isLocationUpdate_;
   bool isJunSave_;
 
   /** Variables **/
+  Tools MyTools_;
+  Planning MyPlanner_;
+  Controlling MyController_;
+  Routing MyRouter_;
+
   geometry_msgs::Point32 vehicle_in_map_;
   geometry_msgs::Point32 goal_in_map_;
-  int map_number_;
-  nav_msgs::Path global_path_;
 
+  geometry_msgs::Twist joy_cmd_;
+
+  tf::Transform map_to_base_;
+  tf::Transform base_to_map_;
+
+  sensor_msgs::PointCloud global_path_pointcloud_;
+  sensor_msgs::PointCloud obstacle_in_base_;
   sensor_msgs::PointCloud junction_list_;
-  geometry_msgs::Point32 current_goal_;
 
-  sensor_msgs::PointCloud map_obs_;
-  sensor_msgs::PointCloud obs_in_mapframe_;
+  int map_number_;
 
-  sensor_msgs::PointCloud filled_path_pointcloud_;
+  /* 
+  uninit   -1
+  wait     0
+  move     1
+  rotation 2
+  back     3
+  */
+  int planner_state_;
 
   string workspace_folder_;
 
-  double joy_speed_;
-	double joy_rotation_;
-  int sp_cmd_;
-  int sonic_state_;
-
-  double odom_speed_;
-  double odom_angular_;
-  double travel_distance_;
-
-  double obstalce_evaluation_;
-  double distance_to_junciton_;
-
-  int patrolIndex_;
-  vector<geometry_msgs::Point32> patrolA_;
-  vector<geometry_msgs::Point32> patrolB_;
-
-  tf::TransformListener listener;
-
-  tf::Transform map_to_base_;
-
-  void makeGlobalPath(geometry_msgs::Point32 goal_in_map);
-  void publishPlan(std::vector<MapGraph> Map,std::vector<int> Path,YamlInfo Map_info);
-
-  void convertPointCloudtoMap(sensor_msgs::PointCloud Input,sensor_msgs::PointCloud& Output,tf::Transform Transform);
-
-  void generateSafePath(sensor_msgs::PointCloud& pointcloud,geometry_msgs::Point32 Robot,sensor_msgs::PointCloud& Obstalce);
-  void fillPointCloud(nav_msgs::Path& Path, sensor_msgs::PointCloud& Pointcloud);
-  void movePoint(geometry_msgs::Point32& Input,geometry_msgs::Point32& Output);
-
-
-
-  void pathPredict(geometry_msgs::Twist& Cmd_Vel,sensor_msgs::PointCloud& Cloud_In,sensor_msgs::PointCloud& Cloud_Out);
-	void speedLimit(geometry_msgs::Twist& Cmd_Vel);
-  void speedSmoother(geometry_msgs::Twist& Cmd_Vel);
-  double smootherLogic(double cmd,double last,double acc);
-  double smootherLogicAngular(double cmd,double last,double acc);
-
-  void runPatrolMission(int case_num);
-
-  void checkMapNumber();
-  void loadJunctionFile();
-  int isReadyToChangeMap(double input_x,double input_y);
-
-
-  bool readConfig(string Folder_dir);
-  void printConfig();
-  void runDiagnostic();
-  void computerBehavior();
-  bool updateVehicleInMap();
-  double evaluatePointCloud(sensor_msgs::PointCloud Input);
-
-  void fillCommand(geometry_msgs::Twist& Cmd_Vel);
-
-  void initPatrol(){
-    patrolIndex_ = 0;
-
-    geometry_msgs::Point32 goal;
-    goal.x = 44.565;
-    goal.y = -34.934;
-    patrolA_.push_back(goal);
-    goal.x = -88.596;
-    goal.y = -33.770;
-    patrolA_.push_back(goal);
-    goal.x = -76.665;
-    goal.y = 50.942;
-    patrolA_.push_back(goal);
-    goal.x = 2.746;
-    goal.y = 92.521;
-    patrolA_.push_back(goal);
-    patrolB_ = patrolA_;
-  }
-
-  void goal_callback(const geometry_msgs::PoseStamped::ConstPtr& input) {
-    isPatrol_ = false;
-  	
-    goal_in_map_.x = input->pose.position.x;
-    goal_in_map_.y = input->pose.position.y;
-
-    makeGlobalPath(goal_in_map_);
-  }
+  /** Functions **/
+  void ApplyAutoControl(ros::Time& Timer,double& Duration_Limit);
+  void ApplyJoyControl();
+  void CheckNavigationState(geometry_msgs::Point32 Goal,geometry_msgs::Twist& Cmd_vel);
+  double ComputeMinDistance();
+  void CheckMapNumber(); 
+  void ComputeGlobalPlan(geometry_msgs::Point32& Goal);
+  int ComputeJunctionDistance(geometry_msgs::Point32 Input);
+  void ConvertPointcloud(sensor_msgs::PointCloud Input,sensor_msgs::PointCloud& Output,tf::Transform Transform);
+  void ConvertPoint(geometry_msgs::Point32 Input,geometry_msgs::Point32& Output,tf::Transform Transform);
+  int FindCurrentGoalRoute(sensor_msgs::PointCloud Path,geometry_msgs::Point32 Robot,double Lookahead);
+  void LimitCommand(geometry_msgs::Twist& Cmd_vel);
+  bool LoadJunctionFile();
+  void PrintConfig();
+  bool ReadConfig();
+  bool UpdateVehicleLocation();
 
   
-  void map_obs_callback(const sensor_msgs::PointCloud::ConstPtr& input) {
-    map_obs_ = *input;
-    obstalce_evaluation_ = evaluatePointCloud(map_obs_);
-    // cout << "obstalce_evaluation_ : " << obstalce_evaluation_ << endl;
 
-    convertPointCloudtoMap(map_obs_,obs_in_mapframe_,map_to_base_);
-
-
-    sensor_msgs::PointCloud2 output;
-    sensor_msgs::convertPointCloudToPointCloud2(obs_in_mapframe_,output);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ> ());
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZ> ());
-    pcl::fromROSMsg(output, *cloud);
-
-    pcl::ApproximateVoxelGrid<pcl::PointXYZ> approximate_voxel_filter;
-    approximate_voxel_filter.setInputCloud (cloud);
-    approximate_voxel_filter.setLeafSize (0.1, 0.1, 0.1);
-    approximate_voxel_filter.filter (*cloud_filtered);
-
-    pcl::toROSMsg(*cloud_filtered, output);
-    sensor_msgs::convertPointCloud2ToPointCloud(output,obs_in_mapframe_);
-
-    obs_map_pub.publish(obs_in_mapframe_);
+  /** Inline Function **/ 
+  inline void ZeroCommand(geometry_msgs::Twist& Cmd_vel) {
+    Cmd_vel.linear.x  = 0;
+    Cmd_vel.angular.z = 0;
   }
 
-  void map_number_callback(const std_msgs::Int32::ConstPtr& input) {
-    map_number_ = input->data;
-  }
-
-  void joy_callback(const sensor_msgs::Joy::ConstPtr& input) {
-  	double joy_x;
-	  double joy_y;
-	  double min_axis = 0.1;
-	  double scale = 1;
-    static bool isPower = true;
-
-    if (input->buttons[BUTTON_X] && input->buttons[BUTTON_LB]) isPower = false;
-    if (input->buttons[BUTTON_Y] && input->buttons[BUTTON_LB]) isPower = true;
-
-  	(input->buttons[BUTTON_LB]) ? isJoy_ = true : isJoy_ = false;
-  	(input->buttons[BUTTON_RB]) ? scale = 0.5 : scale = 1;
-
-  	joy_x = input->axes[AXIS_LEFT_UP_DOWN];
-	  joy_y = input->axes[AXIS_RIGHT_LEFT_RIGHT];
-
-	  if (fabs(joy_x)<min_axis) joy_x = 0;
-	  if (fabs(joy_y)<min_axis) joy_y = 0;
-
-	  if (isJoy_) {
-	    joy_speed_    = scale * joy_x * max_speed_;
-	    joy_rotation_ = joy_y * max_rotation_;
-	  } else {
-	    joy_speed_    = 0;
-	    joy_rotation_ = 0;
-	  }
-
-    if(!isPower){
-      isJoy_ = true;
-      joy_speed_    = 0;
-      joy_rotation_ = 0;
-    }
-
-    if (isJoy_ && input->buttons[BUTTON_BACK]) global_path_.poses.clear();
-
-    geometry_msgs::Point32 position_subway;
-    position_subway.x = 1892.758;
-    position_subway.y =  -881.343;
-
-    geometry_msgs::Point32 position_home;
-    position_home.x = 2022.000;
-    position_home.y = -754.973;
-
-
-    if (isJoy_ && input->buttons[BUTTON_A]) {
-      goal_in_map_ = position_subway;
-      makeGlobalPath(position_subway);
-    }
-    if (isJoy_ && input->buttons[BUTTON_B]) {
-      goal_in_map_ = position_home;
-      makeGlobalPath(position_home);
-    }
-
-    sp_cmd_ = 0;
-    if (isJoy_ && input->buttons[BUTTON_START]) sp_cmd_=1;
-  }
-
-
-  void sonic_callback(const std_msgs::Int32::ConstPtr& input) {
-    sonic_state_ = input->data;
-  }
-
-
-
-
-  inline double sign(double input) {
-    return input < 0.0 ? -1.0 : 1.0;
+  inline double ComputeSign(double Input){
+    return (Input / fabs(Input)); 
   } 
 
-  inline string roundString(double input,double precision) {
-    int input_remainder = (input - int(input))*pow(10,precision);
-    return to_string(int(input)) + "." + to_string(input_remainder);
+  inline string GetCurrentWorkingDir() {
+    string cwd("\0",FILENAME_MAX+1);
+    return getcwd(&cwd[0],cwd.capacity());
   }
 
-  inline double computeSteering(double linear,double angular,double length) {
-    return length/fabs(linear/angular) ;
+
+
+  /** Callbacks **/
+  void JoyCallback(const sensor_msgs::Joy::ConstPtr& Input) {
+    static bool isLock = false;
+    double axis_deadzone = 0.1;
+
+    (Input->buttons[BUTTON_LB]) ? isManualControl_ = true : isManualControl_ = false;
+
+    if (Input->buttons[BUTTON_LB] && Input->buttons[BUTTON_X]) isLock = true;
+    if (Input->buttons[BUTTON_LB] && Input->buttons[BUTTON_Y]) isLock = false;
+
+    double axis_x = Input->axes[AXIS_LEFT_UP_DOWN];
+    double axis_y = Input->axes[AXIS_RIGHT_LEFT_RIGHT];
+    if(fabs(axis_x) < axis_deadzone) axis_x = 0;
+    if(fabs(axis_y) < axis_deadzone) axis_y = 0;
+
+    if(isLock) {
+      isManualControl_ = true;
+      ZeroCommand(joy_cmd_);
+    } else {
+      joy_cmd_.linear.x  = axis_x * max_linear_velocity_;
+      joy_cmd_.angular.z = axis_y * max_rotation_velocity_;      
+    }
+
+    if(isManualControl_ && Input->buttons[BUTTON_BACK]) global_path_pointcloud_.points.clear();
   }
 
-	
+  void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& input) {
+    goal_in_map_.x = input->pose.position.x;
+    goal_in_map_.y = input->pose.position.y;
+    // cout << goal_in_map_.x << "," << goal_in_map_.y << endl;
+    ComputeGlobalPlan(goal_in_map_);
+    // cout << goal_in_map_.x << "," << goal_in_map_.y << endl << endl;
+  }
+
+  void ObstacleCallback(const sensor_msgs::PointCloud::ConstPtr& Input) {
+    obstacle_in_base_ = *Input;
+  }
+
+  void MapNumberCallback(const std_msgs::Int32::ConstPtr& input) {
+    map_number_ = input->data;
+  }
+  
 };
-
 #endif
