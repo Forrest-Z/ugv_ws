@@ -1,6 +1,6 @@
 resolution 0.05
-origin -45.954582 -105.620399
-width 3261
-height 3638
-ratio 0.274876
+origin -378.451721 -186.985562
+width 10817
+height 8308
+ratio 0.120366
 
