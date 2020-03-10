@@ -28,7 +28,7 @@ class Tools
 {
 public:
   Tools() {
-  	vehicle_radius_ = 0.5;
+  	vehicle_radius_ = 0.3;
 		lookahead_time_ = 3;
 		oscillation_    = 0.05;
   }

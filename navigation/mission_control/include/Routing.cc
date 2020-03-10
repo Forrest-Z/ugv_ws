@@ -92,7 +92,7 @@ void Routing::CleanAllState() {
 
 void Routing::SetPathtoPointcloud() {
 	int node_size = path_.size();
-  double points_gap = 10;
+  double points_gap = 1.2;
   geometry_msgs::Point32 last_point;
 
 	sensor_msgs::PointCloud pointcloud;
@@ -105,7 +105,7 @@ void Routing::SetPathtoPointcloud() {
       + map_info_.origin.x;
     point.y = (map_info_.height - (node_info_[node_index].position.x / map_info_.ratio)) * map_info_.resolution 
       + map_info_.origin.y;
-    point.z = -1;
+    point.z = node_info_[node_index].position.z;
 
     if(i > 0) {
 		  double diff_x = point.x - last_point.x;
@@ -118,7 +118,7 @@ void Routing::SetPathtoPointcloud() {
 	      geometry_msgs::Point32 point_mid;
 	      point_mid.x = last_point.x + j * points_gap * cos(points_angle);
 	      point_mid.y = last_point.y + j * points_gap * sin(points_angle);
-	      point_mid.z = -1;
+	      point_mid.z = last_point.z;
 	      pointcloud.points.push_back(point_mid);
 	    }
     } 
@@ -148,12 +148,13 @@ bool Routing::ReadNodeTXT(string Map_folder,int Map_number) {
   string str;
   while (std::getline(node_file, str)) {
 		std::stringstream ss(str);
-		int xxx,yyy;
+		int xxx,yyy,zzz;
 		vector<int> read_neighbor(8.0);
-		ss >> linenum >> xxx >> yyy>> read_neighbor[0] >> read_neighbor[1] >> read_neighbor[2] >> read_neighbor[3] >> read_neighbor[4] >> read_neighbor[5] >> read_neighbor[6] >> read_neighbor[7];
+		ss >> linenum >> xxx >> yyy >> zzz >> read_neighbor[0] >> read_neighbor[1] >> read_neighbor[2] >> read_neighbor[3] >> read_neighbor[4] >> read_neighbor[5] >> read_neighbor[6] >> read_neighbor[7];
 		graph.id = linenum;
-		graph.position.x = yyy;
-		graph.position.y = xxx;
+		graph.position.x = xxx;
+		graph.position.y = yyy;
+		graph.position.z = zzz;
 		graph.neighbor = read_neighbor;
 		node_info_.push_back(graph);
 	}

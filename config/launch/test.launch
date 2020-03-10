@@ -20,6 +20,11 @@
   
 -->
 
+  <node pkg="map_server" type="map_server" name="map_server_node_2" args="$(find config)/map/raw.yaml" output="screen">
+    <param name="map_folder"  value="$(find config)/map/"/>
+    <remap from="map" to="map_raw"/>
+  </node>
+
 
 
 </launch>

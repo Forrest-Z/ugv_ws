@@ -19,10 +19,10 @@ bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::Po
   path_result = CheckIdealPath(Goal);
 
   while(!(path_result || attend_ct > attend_limit)) {
-    if(attend_ct > 1){
-      cout << "Timer  : " << attend_ct << endl;
-      cout << "Radius : " << path_window_radius_ << endl << endl;
-    }
+    // if(attend_ct > 1){
+    //   cout << "Timer  : " << attend_ct << endl;
+    //   cout << "Radius : " << path_window_radius_ << endl << endl;
+    // }
     GenerateSplinesJoints(joints_set);
     GenerateSplinesPath(path_set,joints_set,path_set_2d);
 
@@ -304,7 +304,7 @@ void Planning::SetLocalCostmap(nav_msgs::OccupancyGrid& Costmap,sensor_msgs::Poi
 
   for (int i = 0; i < Obstacle.points.size(); ++i) {
     if(fabs(Obstacle.points[i].x) > path_window_radius_ || fabs(Obstacle.points[i].y) > path_window_radius_) continue;
-    if(hypot(Obstacle.points[i].x,Obstacle.points[i].y) < 1) continue;
+    if(hypot(Obstacle.points[i].x,Obstacle.points[i].y) < 0.3) continue;
     int obstacle_in_map = ConvertCartesianToLocalOccupany(Costmap,Obstacle.points[i]);
     if (obstacle_in_map < 0) continue;
     Costmap.data[obstacle_in_map] = obstacle_occupancy;

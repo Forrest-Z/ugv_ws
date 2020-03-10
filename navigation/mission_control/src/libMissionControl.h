@@ -7,7 +7,8 @@
 #include <Tools.h>
 
 #include <std_msgs/Int32.h>
-
+#include <std_msgs/Int32MultiArray.h>
+#include <visualization_msgs/Marker.h>
 
 class MissionControl
 {
@@ -37,6 +38,8 @@ private:
   const int AXIS_RIGHT_LEFT_RIGHT = 3;
   const int AXIS_RIGHT_UP_DOWN    = 4;
 
+  const int AXIS_CROSS_LEFT_RIGHT = 6;
+  const int AXIS_CROSS_UP_DOWN    = 7;
 
   /** Node Handle **/
   ros::NodeHandle n;
@@ -46,6 +49,7 @@ private:
   ros::Subscriber goal_sub;
   ros::Subscriber obstacle_sub;
   ros::Subscriber map_number_sub;
+  ros::Subscriber task_sub;
 
   /** Publishers **/
   ros::Publisher path_pred_pub;
@@ -62,6 +66,8 @@ private:
 
   ros::Publisher map_number_pub;
   ros::Publisher junction_points_pub;
+  ros::Publisher station_points_pub;
+  ros::Publisher vehicle_model_pub; 
 
   /** ROS Components **/
   tf::TransformListener listener_map_to_base;
@@ -85,6 +91,8 @@ private:
   bool isManualControl_;
   bool isLocationUpdate_;
   bool isJunSave_;
+  bool isReachCurrentGoal_;
+  bool isTaskFinished_;
 
   /** Variables **/
   Tools MyTools_;
@@ -104,8 +112,13 @@ private:
   sensor_msgs::PointCloud obstacle_in_base_;
   sensor_msgs::PointCloud junction_list_;
 
+  sensor_msgs::PointCloud task_list_;
+  sensor_msgs::PointCloud current_task_;
+  sensor_msgs::PointCloud task_log_;
+
   int map_number_;
 
+  int task_index_;
   /* 
   uninit   -1
   wait     0
@@ -134,6 +147,8 @@ private:
   bool ReadConfig();
   bool UpdateVehicleLocation();
 
+  bool ReadTaskList();
+  void UpdateTask();
   
 
   /** Inline Function **/ 
@@ -176,7 +191,42 @@ private:
       joy_cmd_.angular.z = axis_y * max_rotation_velocity_;      
     }
 
-    if(isManualControl_ && Input->buttons[BUTTON_BACK]) global_path_pointcloud_.points.clear();
+    if(isManualControl_ && Input->buttons[BUTTON_BACK]) {
+      global_path_pointcloud_.points.clear();
+      current_task_.points.clear();
+      task_index_ = 1;
+    }
+    if(isManualControl_ && Input->buttons[BUTTON_A]) {
+      if(isReachCurrentGoal_) {
+        if(current_task_.points.size() < 1) {
+          cout << "Finished All Tasks" << endl;
+          global_path_pointcloud_.points.clear();
+          current_task_.points.clear();
+          task_log_.points.clear();
+          task_index_ = 1;
+        } else {
+          current_task_.points.erase (current_task_.points.begin());
+          global_path_pointcloud_.points.clear();
+          goal_in_map_ = current_task_.points.front();
+          cout << "Station Confirm move to next Station " << current_task_.points.front().z << endl;
+          ComputeGlobalPlan(goal_in_map_);
+        }
+      } else {
+        if(current_task_.points.size() > 0){
+          goal_in_map_ = current_task_.points.front();
+          ComputeGlobalPlan(goal_in_map_);
+        }
+      }
+    }
+
+    if(Input->axes[AXIS_CROSS_UP_DOWN] > 0) {
+      cout << "Current Task Show" << endl;
+      for (int i = 0; i < task_log_.points.size(); ++i) {
+        cout << "Task Index : " << task_log_.points[i].x 
+        << " | Station ID : " << task_log_.points[i].y << endl;
+      }
+    }
+
   }
 
   void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& input) {
@@ -194,6 +244,8 @@ private:
   void MapNumberCallback(const std_msgs::Int32::ConstPtr& input) {
     map_number_ = input->data;
   }
+
+  void TaskNumberCallback(const std_msgs::Int32MultiArray::ConstPtr& input);
   
 };
 #endif

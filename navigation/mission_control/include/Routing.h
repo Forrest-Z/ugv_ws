@@ -24,11 +24,13 @@ using std::string;
 struct PositionPiexl {
   int x;
   int y;
+  int z;
 };
 
 struct Position {
   double x;
   double y;
+  double z;
 };
 
 struct MapGraph {

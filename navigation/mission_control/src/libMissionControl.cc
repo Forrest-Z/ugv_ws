@@ -5,6 +5,7 @@ MissionControl::MissionControl(){
   goal_sub = n.subscribe("/goal",1, &MissionControl::GoalCallback,this);
   obstacle_sub = n.subscribe("/map_obs_points",1, &MissionControl::ObstacleCallback,this); 
   map_number_sub = n.subscribe("/map_number",1, &MissionControl::MapNumberCallback,this);
+  task_sub = n.subscribe("/task_number",1, &MissionControl::TaskNumberCallback,this);
 
   path_pred_pub = n.advertise<sensor_msgs::PointCloud>("/pred_path",1);
   cmd_vel_pub = n.advertise<geometry_msgs::Twist> ("/husky_velocity_controller/cmd_vel", 1);
@@ -19,8 +20,11 @@ MissionControl::MissionControl(){
   local_costmap_pub = n.advertise<nav_msgs::OccupancyGrid>("/local_costmap",1);
 
   junction_points_pub = n.advertise<sensor_msgs::PointCloud>("/junction_points",1);
+  station_points_pub = n.advertise<sensor_msgs::PointCloud>("/station_points",1);
+
 
   global_path_pub = n.advertise<sensor_msgs::PointCloud>("/global_path",1);
+  vehicle_model_pub = n.advertise<visualization_msgs::Marker>( "vehicle_model",1);
 }
 MissionControl::~MissionControl(){
 }
@@ -57,21 +61,25 @@ bool MissionControl::Initialization() {
 
   isManualControl_  = false;
   isLocationUpdate_ = false;
+  isReachCurrentGoal_ = false;
   isJunSave_ = false;
   map_number_ = 1;
   planner_state_ = 1;
+  task_index_ = 1;
 
   MyController_.set_speed_scale(controller_linear_scale_);
   MyController_.set_rotation_scale(controller_rotation_scale_);
 
-  return(LoadJunctionFile());
+  ReadTaskList();
+
+  // return(LoadJunctionFile());
+  return(true);
 }
 
 void MissionControl::Execute() {
   if(!Initialization()) return;
   PrintConfig();
-
-
+  
   ros::Rate loop_rate(ROS_RATE_HZ);
 
   ros::Time planner_timer = ros::Time::now();
@@ -148,6 +156,13 @@ void MissionControl::ApplyAutoControl(ros::Time& Timer,double& Duration_Limit) {
     double lookahead_global_meter = 3;
     int global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter);
     global_goal = global_path_pointcloud_.points[global_goal_index];
+    if(global_goal.z > 0) {
+
+      // cout << "Corner Points" << endl;
+      lookahead_global_meter = 1.2;
+      global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter);
+      global_goal = global_path_pointcloud_.points[global_goal_index];
+    }
     destination = global_path_pointcloud_.points.back();
 
     ConvertPoint(global_goal,global_goal_in_local,map_to_base_);
@@ -213,11 +228,12 @@ void MissionControl::ApplyJoyControl() {
 }
 
 void MissionControl::CheckNavigationState(geometry_msgs::Point32 Goal,geometry_msgs::Twist& Cmd_vel) {
-  double reach_goal_distance = 3;
+  double reach_goal_distance = 1;
   geometry_msgs::Point32 goal_local;
   ConvertPoint(Goal,goal_local,map_to_base_);
 
   if(hypot(goal_local.x,goal_local.y) < reach_goal_distance) {
+    isReachCurrentGoal_ = true;
     ZeroCommand(Cmd_vel);
     global_path_pointcloud_.points.clear();
     cout << "Goal Reached" << endl;
@@ -296,6 +312,7 @@ void MissionControl::CheckMapNumber() {
 
 void MissionControl::ComputeGlobalPlan(geometry_msgs::Point32& Goal) {
   if(!isLocationUpdate_) return;
+  isReachCurrentGoal_ = false;
   string map_folder = workspace_folder_ + "config/map/";
   MyRouter_.RoutingAnalyze(Goal,vehicle_in_map_,map_folder,map_number_);
   global_path_pointcloud_ = MyRouter_.path_pointcloud();
@@ -481,12 +498,13 @@ void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel) {
 }
 
 bool MissionControl::LoadJunctionFile() {
-  string filename = workspace_folder_ + "config/map/junction.txt";
+  string filename = workspace_folder_ + "config/cfg/junction.txt";
 
   std::ifstream my_file;
   my_file.open(filename);
   if (!my_file) {
-    cout << "Unabel to Locate Junction File from " << filename << endl;
+    cout<<"Could not find Task File"<<endl;
+    cout<<"File Not Exist At: "<<filename<<endl;
     return false;
   }
   geometry_msgs::Point32 point;
@@ -496,6 +514,7 @@ bool MissionControl::LoadJunctionFile() {
     junction_list_.points.push_back(point);
     line_num++;
   }
+  my_file.close();
   (line_num == 0) ? isJunSave_ = false : isJunSave_ = true;
   return true;
 }
@@ -601,6 +620,29 @@ bool MissionControl::ReadConfig() {
   }
 }
 
+bool MissionControl::ReadTaskList() {
+  std::ifstream task_file;
+  string file_name_node = workspace_folder_+ "/config/cfg/task.txt";
+  task_file.open(file_name_node);
+
+  if(!task_file.is_open()) {
+    cout<<"Could not find Task File"<<endl;
+    cout<<"File Not Exist At: "<<file_name_node<<endl;
+    return false;
+  }
+
+  geometry_msgs::Point32 point;
+  task_list_.points.clear();
+  int line_num = 0;
+  while (task_file >> point.z >> point.x >> point.y) {
+    task_list_.points.push_back(point);
+    line_num++;
+  }
+  task_file.close();
+  cout << "Read " << line_num << " optional tasks from file" << endl;
+  return true;
+}
+
 bool MissionControl::UpdateVehicleLocation() {
   static tf::StampedTransform stampedtransform;
   try {
@@ -633,5 +675,67 @@ bool MissionControl::UpdateVehicleLocation() {
   transformMsgToTF(temp_trans.transform,base_to_map_);
   map_to_base_ = base_to_map_.inverse();
 
+  geometry_msgs::Point32 shift_local;
+  geometry_msgs::Point32 shift_baseline;
+  ConvertPoint(shift_local,shift_baseline,base_to_map_);
+  geometry_msgs::Point32 shift_map;
+  shift_local.x = -0.5;
+  shift_local.y = -0.3;
+  ConvertPoint(shift_local,shift_map,base_to_map_);
+
+  visualization_msgs::Marker marker;
+  marker.header.frame_id = "map";
+  marker.header.stamp = ros::Time();
+  marker.id = 0;
+  marker.type = visualization_msgs::Marker::MESH_RESOURCE;
+  marker.action = visualization_msgs::Marker::ADD;
+  marker.pose.position.x = stampedtransform.getOrigin().x() + shift_map.x - shift_baseline.x;
+  marker.pose.position.y = stampedtransform.getOrigin().y() + shift_map.y - shift_baseline.y;
+  marker.pose.position.z = stampedtransform.getOrigin().z() + shift_map.z - shift_baseline.z;
+  marker.pose.orientation.x = stampedtransform.getRotation().x();
+  marker.pose.orientation.y = stampedtransform.getRotation().y();
+  marker.pose.orientation.z = stampedtransform.getRotation().z();
+  marker.pose.orientation.w = stampedtransform.getRotation().w();
+  marker.color.a = 1.0; // Don't forget to set the alpha!
+  marker.color.r = 1;
+  marker.color.g = 0.5;
+  marker.color.b = 0.5;
+  marker.scale.x = 0.5;
+  marker.scale.y = 0.5;
+  marker.scale.z = 0.5;
+  marker.mesh_resource = "package://config/cfg/model.dae";
+  vehicle_model_pub.publish(marker);
+
   return true;
+}
+
+void MissionControl::UpdateTask() {
+  std::vector<int> schedule;
+  int my_task[] = {1,6,4};
+  schedule.assign (my_task,my_task+3);
+
+  for (int i = 0; i < schedule.size(); ++i) {
+    int index = schedule[i] - 1;
+    geometry_msgs::Point32 station_point = task_list_.points[index];
+    current_task_.points.push_back(station_point);
+  }
+}
+
+void MissionControl::TaskNumberCallback(const std_msgs::Int32MultiArray::ConstPtr& input) {
+  std::vector<int> schedule;
+  for(std::vector<int>::const_iterator int_data = input->data.begin(); int_data != input->data.end(); ++int_data) {
+    schedule.push_back(*int_data);
+  }
+  cout << "Received New Task, index : " << task_index_ << " size : " << schedule.size() << endl; 
+  for (int i = 0; i < schedule.size(); ++i) {
+    int index = schedule[i] - 1;
+    geometry_msgs::Point32 station_point = task_list_.points[index];
+    current_task_.points.push_back(station_point);
+
+    station_point.x = task_index_;
+    station_point.y = schedule[i];
+    task_log_.points.push_back(station_point);
+  }
+  task_index_++;
+
 }
