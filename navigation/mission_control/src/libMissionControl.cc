@@ -37,7 +37,11 @@ bool MissionControl::Initialization() {
     string dir_temp_2 = dir_temp.substr(string_count,6);
     if(dir_temp_2 == "ugv_ws") break;
   }
-  if(string_count >= dir_temp.size() - 5) return false;
+  if(string_count >= dir_temp.size() - 5) {
+    cout << "Navi Folder Error" << endl;
+    cout << dir_temp << endl;
+    return false;
+  }
 
   string dir_source = dir_temp.substr(0,string_count+6);
   workspace_folder_ = dir_source + "/src/ugv_ws/";
@@ -86,20 +90,23 @@ void MissionControl::Execute() {
 
   double planner_duration = 0.1;
 
+  cout << "Navigation Node Started" << endl;
+
   while (ros::ok()) {
     loop_rate.sleep();
     ros::spinOnce();
-    if(!UpdateVehicleLocation()) continue;
-    if(!MyPlanner_.UpdateCostmap(obstacle_in_base_)) continue;
     if(isManualControl_) {
       ApplyJoyControl();
-    } 
-    else if(global_path_pointcloud_.points.size() > 0) {
+    }
+    if(!UpdateVehicleLocation()) continue;
+    if(!MyPlanner_.UpdateCostmap(obstacle_in_base_)) continue;
+    if(!isManualControl_ && global_path_pointcloud_.points.size() > 0) {
       ApplyAutoControl(planner_timer,planner_duration);
     }
     CheckMapNumber();
     local_costmap_pub.publish(MyPlanner_.costmap_local());
-  }  
+  }
+  cout << "ROS Closed " << endl;  
 
 }
 
@@ -159,7 +166,7 @@ void MissionControl::ApplyAutoControl(ros::Time& Timer,double& Duration_Limit) {
     if(global_goal.z > 0) {
 
       // cout << "Corner Points" << endl;
-      lookahead_global_meter = 1.2;
+      lookahead_global_meter = 2;
       global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter);
       global_goal = global_path_pointcloud_.points[global_goal_index];
     }
@@ -228,7 +235,7 @@ void MissionControl::ApplyJoyControl() {
 }
 
 void MissionControl::CheckNavigationState(geometry_msgs::Point32 Goal,geometry_msgs::Twist& Cmd_vel) {
-  double reach_goal_distance = 1;
+  double reach_goal_distance = 2;
   geometry_msgs::Point32 goal_local;
   ConvertPoint(Goal,goal_local,map_to_base_);
 
@@ -644,7 +651,7 @@ bool MissionControl::ReadTaskList() {
 }
 
 bool MissionControl::UpdateVehicleLocation() {
-  static tf::StampedTransform stampedtransform;
+  // static tf::StampedTransform stampedtransform;
   try {
     listener_map_to_base.lookupTransform("/map", "/base_link",  
                              ros::Time(0), stampedtransform);
@@ -685,7 +692,7 @@ bool MissionControl::UpdateVehicleLocation() {
 
   visualization_msgs::Marker marker;
   marker.header.frame_id = "map";
-  marker.header.stamp = ros::Time();
+  marker.header.stamp = ros::Time::now();
   marker.id = 0;
   marker.type = visualization_msgs::Marker::MESH_RESOURCE;
   marker.action = visualization_msgs::Marker::ADD;

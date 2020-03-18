@@ -19,7 +19,7 @@ public:
   void Execute();
 
 private:
-  const int ROS_RATE_HZ = 50;
+  const int ROS_RATE_HZ = 10;
   const double PI = 3.14159265359;
 
   const int BUTTON_LB             = 4;
@@ -119,6 +119,8 @@ private:
   int map_number_;
 
   int task_index_;
+
+  tf::StampedTransform stampedtransform;
   /* 
   uninit   -1
   wait     0

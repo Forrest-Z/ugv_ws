@@ -4,8 +4,11 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
+        - /TF1
+        - /TF1/Frames1
         - /Map1/Position1
         - /Odometry1/Shape1
+        - /Map_Obstacle1/Status1
         - /Marker1
       Splitter Ratio: 0.472222209
     Tree Height: 815
@@ -40,9 +43,13 @@ Visualization Manager:
         All Enabled: false
         base_link:
           Value: true
+        laser_link_bot:
+          Value: false
+        laser_link_top:
+          Value: false
         map:
           Value: false
-        odom:
+        rslidar:
           Value: false
       Marker Scale: 3
       Name: TF
@@ -51,8 +58,12 @@ Visualization Manager:
       Show Names: true
       Tree:
         map:
-          odom:
-            base_link:
+          base_link:
+            laser_link_bot:
+              {}
+            laser_link_top:
+              {}
+            rslidar:
               {}
       Update Interval: 0
       Value: true
@@ -309,7 +320,7 @@ Visualization Manager:
       Axis: Z
       Channel Name: intensity
       Class: rviz/PointCloud
-      Color: 0; 0; 0
+      Color: 255; 255; 255
       Color Transformer: FlatColor
       Decay Time: 0
       Enabled: true
@@ -324,7 +335,7 @@ Visualization Manager:
       Selectable: true
       Size (Pixels): 3
       Size (m): 0.100000001
-      Style: Flat Squares
+      Style: Points
       Topic: /map_obs_points
       Unreliable: false
       Use Fixed Frame: true
@@ -372,7 +383,7 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Scale: 46.8485107
+      Scale: 52.8406181
       Target Frame: base_link
       Value: TopDownOrtho (rviz)
       X: 0.0777171552
@@ -394,5 +405,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 934
-  X: 986
+  X: 53
   Y: 24

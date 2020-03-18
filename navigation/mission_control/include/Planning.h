@@ -33,14 +33,14 @@ class Planning
 {
 public:
 	Planning(){
-		path_window_radius_    = 3;
-		path_swap_range_       = 2; // 1.2
+		path_window_radius_    = 5;
+		path_swap_range_       = 1.5; // 1.2
 		path_vertical_step_    = 0.2;
 
 		splines_joints_num_    = 3;
 
-		costmap_resolution_    = 0.1;
-	 	safe_path_search_grid_ = 7;
+		costmap_resolution_    = 0.3;
+	 	safe_path_search_grid_ = 5;
 
 	 	path_window_radius_standard_ = path_window_radius_;
 	}

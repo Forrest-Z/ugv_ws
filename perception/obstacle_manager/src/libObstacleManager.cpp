@@ -3,11 +3,12 @@
 ObstacleManager::ObstacleManager():pn("~")
 { 
   map_sub = n.subscribe("/map",1, &ObstacleManager::map_callback,this);
-  scan_sub = n.subscribe("/scan",1, &ObstacleManager::scan_callback,this);
+  scan_1_sub = n.subscribe("/scan_1",1, &ObstacleManager::scan_1_callback,this);
+  scan_2_sub = n.subscribe("/scan_22",1, &ObstacleManager::scan_2_callback,this);
   pointcloud_sub = n.subscribe("/rslidar_points",1, &ObstacleManager::pointcloud_callback,this);
   scan_points_sub = n.subscribe("/scan_points1",1, &ObstacleManager::scanpoints_callback,this);
 
-  odom_sub = n.subscribe("/odom",10, &ObstacleManager::OdomCallback,this);
+  odom_sub = n.subscribe("/odom_1123",10, &ObstacleManager::OdomCallback,this);
 
   rviz_click_sub = n.subscribe("/clicked_point",1, &ObstacleManager::clickpoint_callback,this);
 
@@ -55,7 +56,6 @@ bool ObstacleManager::updateVehicleInMap() {
     cout << "Waiting For TF OBS" << endl;
     return false;
   }
-
   robot_in_map_.x = stampedtransform.getOrigin().x();
   robot_in_map_.y = stampedtransform.getOrigin().y();
   robot_in_map_.z = tf::getYaw(stampedtransform.getRotation());
@@ -158,13 +158,14 @@ void ObstacleManager::publishMapObstacle() {
 
 
 void ObstacleManager::publishScanObstacle() {
-  if(pointcloud_scan_.points.size()==0) return;
-  for (int i = 0; i < pointcloud_scan_.points.size(); ++i) {
-    double range = hypot(pointcloud_scan_.points[i].x,pointcloud_scan_.points[i].y);
-    pointcloud_scan_.points[i].z = 1;
-    for (int j = 0; j < 16; ++j) {
-      pointcloud_base_.points.push_back(pointcloud_scan_.points[i]);
-    }
+  if(pointcloud_scan_1_.points.size()==0) return;
+  for (int i = 0; i < pointcloud_scan_1_.points.size(); ++i) {
+    pointcloud_scan_1_.points[i].z = 1;
+    // pointcloud_scan_2_.points[i].z = 1;
+    // pointcloud_scan_1_.points[i].x -= 0.5;
+    // pointcloud_scan_2_.points[i].x -= 0.5;
+    pointcloud_base_.points.push_back(pointcloud_scan_1_.points[i]);
+    // pointcloud_base_.points.push_back(pointcloud_scan_2_.points[i]);
   }
 }
 
@@ -231,8 +232,37 @@ void ObstacleManager::map_callback(const nav_msgs::OccupancyGrid::ConstPtr& inpu
   }
 
   
-  void ObstacleManager::scan_callback(const sensor_msgs::LaserScan::ConstPtr& input) {
-    projector.projectLaser(*input, pointcloud_scan_);
+  void ObstacleManager::scan_1_callback(const sensor_msgs::LaserScan::ConstPtr& input) {
+    // projector.projectLaser(*input, pointcloud_scan_1_);
+    double angle_increment = input -> angle_increment;
+    double angle_current = 0;
+    pointcloud_scan_1_.points.clear();
+    geometry_msgs::Point32 point;
+    point.z = 1;
+    for (int i = 0; i < input->ranges.size(); ++i) {
+      point.x = input->ranges[i] * cos(angle_current) + 0.5;
+      point.y = input->ranges[i] * sin(angle_current);
+      angle_current += angle_increment;
+      if(input->ranges[i] < 0.1 || point.x < 0.5) continue;
+      pointcloud_scan_1_.points.push_back(point);
+    }
+  }
+
+  void ObstacleManager::scan_2_callback(const sensor_msgs::LaserScan::ConstPtr& input) {
+    // projector.projectLaser(*input, pointcloud_scan_2_);
+
+
+    // double angle_increment = input -> angle_increment;
+    // double angle_current = 0;
+    // pointcloud_scan_2_.points.clear();
+    // geometry_msgs::Point32 point;
+    // point.z = 1;
+    // for (int i = 0; i < input->ranges.size(); ++i) {
+    //   point.x = input->ranges[i] * cos(angle_current);
+    //   point.y = input->ranges[i] * sin(angle_current);
+    //   angle_current += angle_increment;
+    //   pointcloud_scan_2_.points.push_back(point);
+    // }
   }
 
   void ObstacleManager::scanpoints_callback(const sensor_msgs::PointCloud::ConstPtr& input) {
@@ -265,11 +295,12 @@ void ObstacleManager::map_callback(const nav_msgs::OccupancyGrid::ConstPtr& inpu
       double height = point.z;
       double width = point.y;
       
-      if(height < -0.5) continue;
-      if(height > 0.5) continue;
+      if(height < -0.8) continue;
+      if(height > 0) continue;
       if(range < 0.1) continue;
       if(range > 10) continue;
       if(fabs(width) > 5) continue;
+      if(point.x < 0 && fabs(point.y) < 0.3 && range < 1) continue;
       point.z = 1;
       pointcloud_lidar_.points.push_back(point);
     }

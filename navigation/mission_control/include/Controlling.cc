@@ -3,7 +3,7 @@
 void Controlling::ComputePurePursuitCommand(geometry_msgs::Point32 Goal_Route, geometry_msgs::Point32 Goal_Plan,geometry_msgs::Twist& Pp_command) {
   double u_turn_speed = 0; 
   double u_turn_rotation = 1.2;
-  double rotation_threshold = PI/2;
+  double rotation_threshold = PI;
 
   double faceing_angle = atan2(Goal_Route.y,Goal_Route.x);
   if(fabs(faceing_angle) > 1 ) {

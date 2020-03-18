@@ -60,7 +60,8 @@ private:
 
   /** Subscribers **/
   ros::Subscriber map_sub;
-  ros::Subscriber scan_sub;
+  ros::Subscriber scan_1_sub;
+  ros::Subscriber scan_2_sub;
   ros::Subscriber pointcloud_sub;
   ros::Subscriber scan_points_sub;
   ros::Subscriber rviz_click_sub;
@@ -78,7 +79,8 @@ private:
   nav_msgs::MapMetaData static_map_info_;
   geometry_msgs::Point32 robot_in_map_;
   sensor_msgs::PointCloud pointcloud_base_;
-  sensor_msgs::PointCloud pointcloud_scan_;
+  sensor_msgs::PointCloud pointcloud_scan_1_;
+  sensor_msgs::PointCloud pointcloud_scan_2_;
   sensor_msgs::PointCloud pointcloud_lidar_;
   sensor_msgs::PointCloud pointcloud_rviz_;
 
@@ -93,7 +95,8 @@ private:
   void publishRvizObstacle();
 
   void map_callback(const nav_msgs::OccupancyGrid::ConstPtr& input);
-  void scan_callback(const sensor_msgs::LaserScan::ConstPtr& input);
+  void scan_1_callback(const sensor_msgs::LaserScan::ConstPtr& input);
+  void scan_2_callback(const sensor_msgs::LaserScan::ConstPtr& input);
   void scanpoints_callback(const sensor_msgs::PointCloud::ConstPtr& input);
   void pointcloud_callback(const sensor_msgs::PointCloud2::ConstPtr& input);
   void clickpoint_callback(const geometry_msgs::PointStamped::ConstPtr& input);
