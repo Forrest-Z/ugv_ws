@@ -39,7 +39,7 @@ public:
 
 		splines_joints_num_    = 3;
 
-		costmap_resolution_    = 0.3;
+		costmap_resolution_    = 0.4;
 	 	safe_path_search_grid_ = 5;
 
 	 	path_window_radius_standard_ = path_window_radius_;

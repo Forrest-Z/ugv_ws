@@ -8,7 +8,6 @@ Panels:
         - /TF1/Frames1
         - /Map1/Position1
         - /Odometry1/Shape1
-        - /Map_Obstacle1/Status1
         - /Marker1
       Splitter Ratio: 0.472222209
     Tree Height: 815
@@ -43,14 +42,10 @@ Visualization Manager:
         All Enabled: false
         base_link:
           Value: true
-        laser_link_bot:
-          Value: false
-        laser_link_top:
-          Value: false
         map:
           Value: false
-        rslidar:
-          Value: false
+        odom:
+          Value: true
       Marker Scale: 3
       Name: TF
       Show Arrows: false
@@ -58,12 +53,8 @@ Visualization Manager:
       Show Names: true
       Tree:
         map:
-          base_link:
-            laser_link_bot:
-              {}
-            laser_link_top:
-              {}
-            rslidar:
+          odom:
+            base_link:
               {}
       Update Interval: 0
       Value: true
@@ -349,6 +340,16 @@ Visualization Manager:
         "": true
       Queue Size: 100
       Value: true
+    - Alpha: 0.699999988
+      Class: rviz/Map
+      Color Scheme: map
+      Draw Behind: false
+      Enabled: true
+      Name: Map
+      Topic: /map_show
+      Unreliable: false
+      Use Timestamp: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -383,7 +384,7 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Scale: 52.8406181
+      Scale: 57.7671928
       Target Frame: base_link
       Value: TopDownOrtho (rviz)
       X: 0.0777171552

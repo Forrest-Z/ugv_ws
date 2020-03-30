@@ -6,6 +6,9 @@ MissionControl::MissionControl(){
   obstacle_sub = n.subscribe("/map_obs_points",1, &MissionControl::ObstacleCallback,this); 
   map_number_sub = n.subscribe("/map_number",1, &MissionControl::MapNumberCallback,this);
   task_sub = n.subscribe("/task_number",1, &MissionControl::TaskNumberCallback,this);
+  step_sub = n.subscribe("/button",1, &MissionControl::StepNumberCallback,this);
+  cmd_sub = n.subscribe("/virtual_joystick/cmd_vel",1, &MissionControl::CmdCallback,this);
+
 
   path_pred_pub = n.advertise<sensor_msgs::PointCloud>("/pred_path",1);
   cmd_vel_pub = n.advertise<geometry_msgs::Twist> ("/husky_velocity_controller/cmd_vel", 1);
@@ -70,11 +73,16 @@ bool MissionControl::Initialization() {
   map_number_ = 1;
   planner_state_ = 1;
   task_index_ = 1;
+  step_index_ = 0;
+
+  face_id_ = "";
+  isNewCommand_ = false;
 
   MyController_.set_speed_scale(controller_linear_scale_);
   MyController_.set_rotation_scale(controller_rotation_scale_);
 
   ReadTaskList();
+  // UpdateTask();
 
   // return(LoadJunctionFile());
   return(true);
@@ -104,6 +112,7 @@ void MissionControl::Execute() {
       ApplyAutoControl(planner_timer,planner_duration);
     }
     CheckMapNumber();
+    RunStepCase(step_index_);
     local_costmap_pub.publish(MyPlanner_.costmap_local());
   }
   cout << "ROS Closed " << endl;  
@@ -160,13 +169,13 @@ void MissionControl::ApplyAutoControl(ros::Time& Timer,double& Duration_Limit) {
   if(planner_state_ == 1) {
     MyPlanner_.set_safe_path_search_grid(search_grid);
 
-    double lookahead_global_meter = 3;
+    double lookahead_global_meter = 4;
     int global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter);
     global_goal = global_path_pointcloud_.points[global_goal_index];
     if(global_goal.z > 0) {
 
       // cout << "Corner Points" << endl;
-      lookahead_global_meter = 2;
+      lookahead_global_meter = 1;
       global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter);
       global_goal = global_path_pointcloud_.points[global_goal_index];
     }
@@ -235,7 +244,7 @@ void MissionControl::ApplyJoyControl() {
 }
 
 void MissionControl::CheckNavigationState(geometry_msgs::Point32 Goal,geometry_msgs::Twist& Cmd_vel) {
-  double reach_goal_distance = 2;
+  double reach_goal_distance = 3;
   geometry_msgs::Point32 goal_local;
   ConvertPoint(Goal,goal_local,map_to_base_);
 
@@ -657,7 +666,7 @@ bool MissionControl::UpdateVehicleLocation() {
                              ros::Time(0), stampedtransform);
   }
   catch (tf::TransformException ex) {
-    cout << "Waiting For Transform in MissionControl Node" << endl;
+    // cout << "Waiting For Transform in MissionControl Node" << endl;
     return false;
   }
 
@@ -718,7 +727,7 @@ bool MissionControl::UpdateVehicleLocation() {
 
 void MissionControl::UpdateTask() {
   std::vector<int> schedule;
-  int my_task[] = {1,6,4};
+  int my_task[] = {1,2};
   schedule.assign (my_task,my_task+3);
 
   for (int i = 0; i < schedule.size(); ++i) {
@@ -744,5 +753,167 @@ void MissionControl::TaskNumberCallback(const std_msgs::Int32MultiArray::ConstPt
     task_log_.points.push_back(station_point);
   }
   task_index_++;
+
+}
+
+void MissionControl::RunStepCase(int Input) {
+  int current_step = step_index_;
+  bool current_state = isReachCurrentGoal_;
+  static ros::Time wait_timer;
+
+  int cab_no = 13;
+  int command_times = 20;
+
+  // cout << "Case State" << endl;
+  // cout << "Step Number : " << Input << endl;
+  // cout << "true " << true << " | false " << false << endl;
+  // cout << "State       : " << current_state << endl;
+  // cout << "Update      : " << isNewCommand_ << endl;
+
+  if(!isNewCommand_) return;
+
+  if(Input == 1 && current_step == Input) {
+    goal_in_map_ = task_list_.points[0];
+    ComputeGlobalPlan(goal_in_map_);
+    cout << "Step 1 Finished" << endl;
+    isNewCommand_ = false;
+    return;
+  }
+
+  if(current_step != Input || current_state != true) return;
+
+
+  if(Input == 2) {
+    cout << "OPEN CAB" << endl;
+    for (int i = 0; i < command_times; ++i) {
+      geometry_msgs::Twist open_cab;
+      open_cab.linear.x = 0;
+      open_cab.angular.x = cab_no;
+      open_cab.angular.z = 0;
+      cmd_vel_pub.publish(open_cab);
+      ros::Rate loop_rate(ROS_RATE_HZ);
+      loop_rate.sleep();
+    }
+
+    cout << "Step 2 Finished" << endl;
+    isNewCommand_ = false;
+    return;
+  }
+
+  if(Input == 3) {
+    goal_in_map_ = task_list_.points[1];
+    ComputeGlobalPlan(goal_in_map_);
+    cout << "Step 3 Finished" << endl;
+    step_index_ = 4;
+    return;
+  }
+
+  if(Input == 4) {
+    while(!test_camera());
+    cout << "OPEN CAB" << endl;
+    for (int i = 0; i < command_times; ++i) {
+      geometry_msgs::Twist open_cab;
+      open_cab.linear.x = 0;
+      open_cab.angular.x = cab_no;
+      open_cab.angular.z = 0;
+      cmd_vel_pub.publish(open_cab);
+      ros::Rate loop_rate(ROS_RATE_HZ);
+      loop_rate.sleep();
+    }
+    
+    wait_timer = ros::Time::now();
+    cout << "Step 4 Finished" << endl;
+    step_index_ = 5;
+    return;
+  }
+
+  if(Input == 5 && (ros::Time::now() - wait_timer).toSec() > 5) {
+    cout << "All Steps Finished" << endl;
+    isNewCommand_ = false;
+    return;
+  }
+}
+
+
+bool MissionControl::test_camera() {
+  static ros::Time start_cam = ros::Time::now();
+  if((ros::Time::now()-start_cam).toSec() > 10) return true;
+  MxNetMtcnn mtcnn;
+  mtcnn.LoadModule("/home/ha/Workspace/ugv_ws/src/ugv_ws/navigation/mission_control/mtcnn_model");
+  Mxnet_extract extract;
+  extract.LoadExtractModule("/home/ha/Workspace/ugv_ws/src/ugv_ws/navigation/mission_control/feature_model/model-0000.params", "/home/ha/Workspace/ugv_ws/src/ugv_ws/navigation/mission_control/feature_model/model-symbol.json", 1, 3, 112, 112);
+  //loading features
+  cv::FileStorage fs("/home/ha/Workspace/ugv_ws/src/ugv_ws/navigation/mission_control/features.xml", cv::FileStorage::READ);
+  cv::Mat features;
+  fs["features"] >> features;
+  //loading labels
+  std::ifstream file("/home/ha/Workspace/ugv_ws/src/ugv_ws/navigation/mission_control/labels.txt");
+  std::string t;
+  while (std::getline(file, t)) {}
+  std::vector<std::string> labels;
+  SplitString(t, labels, " ");
+
+  static int video_id = 0;
+  
+  (video_id > 3) ? video_id = 1 : video_id ++;
+
+  //=====================
+  //  Realsense
+  //=====================
+  // rs2::pipeline pipe;
+  // pipe.start(); 
+  // while(true){
+  //   rs2::frameset data = pipe.wait_for_frames();
+  //   rs2::frame color = data.get_color_frame(); 
+  //   int width = color.as<rs2::video_frame>().get_width();
+  //   int height = color.as<rs2::video_frame>().get_height();
+  //   Mat frame = Mat(height,width,CV_8UC3,const_cast<void*>(color.get_data()));
+  //   cvtColor(frame, frame, CV_BGR2RGB);
+  //   cv::Mat m = frame.clone();
+
+  //   double start = static_cast<double>(cv::getTickCount());
+       
+  //   recognition(mtcnn, extract, m, features, labels, face_id_);
+  //   double time = ((double)cv::getTickCount() - start) / cv::getTickFrequency();
+
+  //   if(face_id_ != "") break;
+
+  //   cv::imshow("frame", frame);
+  //   cv::waitKey(1);
+  // }
+
+
+  //=====================
+  //  USB Camera
+  //=====================
+  cv::VideoCapture cap;
+  cap.open(video_id); 
+  if (!cap.isOpened()) {
+    cout << "video id : " << video_id << endl;
+    return false; 
+  }
+       
+  cap.set(CV_CAP_PROP_FRAME_WIDTH, 1280);  
+  cap.set(CV_CAP_PROP_FRAME_HEIGHT, 1080);  
+  cv::Mat frame;
+  while(true) {
+    ros::Rate loop_rate(ROS_RATE_HZ*10);
+    cap >> frame;
+    double start = static_cast<double>(cv::getTickCount());
+
+    recognition(mtcnn, extract, frame, features, labels, face_id_);
+    double time = ((double)cv::getTickCount() - start) / cv::getTickFrequency();
+
+    if(face_id_ != "") break;
+    cout << "Waiting User Confirm" << endl;
+    // cv::imshow("frame", frame);
+    // cv::waitKey(1);
+  }
+  cap.release();
+
+  if(face_id_ != "") return true;
+
+  return false;
+
 
 }

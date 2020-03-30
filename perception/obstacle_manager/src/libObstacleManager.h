@@ -57,6 +57,7 @@ private:
   /** Publishers **/
   ros::Publisher map_obs_pub;
   ros::Publisher odom_pub;
+  ros::Publisher scan_pub;
 
   /** Subscribers **/
   ros::Subscriber map_sub;
@@ -101,6 +102,8 @@ private:
   void pointcloud_callback(const sensor_msgs::PointCloud2::ConstPtr& input);
   void clickpoint_callback(const geometry_msgs::PointStamped::ConstPtr& input);
   void OdomCallback(const nav_msgs::Odometry::ConstPtr& input);
+
+  sensor_msgs::LaserScan convetPC2Sacn(sensor_msgs::PointCloud Input);
 
   
 };

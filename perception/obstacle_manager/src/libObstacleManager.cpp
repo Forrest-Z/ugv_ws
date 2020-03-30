@@ -13,6 +13,7 @@ ObstacleManager::ObstacleManager():pn("~")
   rviz_click_sub = n.subscribe("/clicked_point",1, &ObstacleManager::clickpoint_callback,this);
 
   map_obs_pub = n.advertise<sensor_msgs::PointCloud> ("/map_obs_points", 1);
+  scan_pub = n.advertise<sensor_msgs::LaserScan>("/scan", 1);
   odom_pub = n.advertise<nav_msgs::Odometry>("/tf_odom", 50);
 
   isMapSave_ = false;
@@ -173,6 +174,7 @@ void ObstacleManager::publishLidarObstacle() {
   if(pointcloud_lidar_.points.size()==0) return;
   for (int i = 0; i < pointcloud_lidar_.points.size(); ++i) {
     if(isnan(pointcloud_lidar_.points[i].x) || isnan(pointcloud_lidar_.points[i].y) ) continue;
+    if(pointcloud_lidar_.points[i].x < 0) continue;
     pointcloud_lidar_.points[i].z = 1;
     pointcloud_base_.points.push_back(pointcloud_lidar_.points[i]);
   }
@@ -246,6 +248,7 @@ void ObstacleManager::map_callback(const nav_msgs::OccupancyGrid::ConstPtr& inpu
       if(input->ranges[i] < 0.1 || point.x < 0.5) continue;
       pointcloud_scan_1_.points.push_back(point);
     }
+    scan_pub.publish(input);
   }
 
   void ObstacleManager::scan_2_callback(const sensor_msgs::LaserScan::ConstPtr& input) {
@@ -402,3 +405,12 @@ void ObstacleManager::map_callback(const nav_msgs::OccupancyGrid::ConstPtr& inpu
     //publish the message
     odom_pub.publish(odom);
   }
+
+
+sensor_msgs::LaserScan ObstacleManager::convetPC2Sacn(sensor_msgs::PointCloud Input) {
+  sensor_msgs::LaserScan output;
+  output.header = Input.header;
+  for (int i = 0; i < Input.points.size(); ++i) {
+    /* code */
+  }
+}

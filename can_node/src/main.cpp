@@ -83,8 +83,9 @@ int convertBin2Int(int input)
     return output; 
 }
 
+
 char *generateData(int speed,int steering) {
-  char *can_id="301#";
+  const char *can_id="301#";
   char *output;
   char *data_stream;
   int temp_int;

@@ -92,7 +92,7 @@ void Routing::CleanAllState() {
 
 void Routing::SetPathtoPointcloud() {
 	int node_size = path_.size();
-  double points_gap = 3;
+  double points_gap = 5;
   geometry_msgs::Point32 last_point;
 
 	sensor_msgs::PointCloud pointcloud;

@@ -7,8 +7,43 @@
 #include <Tools.h>
 
 #include <std_msgs/Int32.h>
+#include <std_msgs/String.h>
 #include <std_msgs/Int32MultiArray.h>
 #include <visualization_msgs/Marker.h>
+
+
+
+#include <iostream>
+#include <time.h>
+
+
+#include<unistd.h>
+#include<sys/types.h>
+#include<sys/wait.h>
+#include <stdio.h>
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <opencv2/opencv.hpp>
+#include <mxnet/c_predict_api.h>
+#include <math.h>
+#include <librealsense2/rs.hpp>
+#include "face_align.hpp"
+#include "mxnet_mtcnn.hpp"
+#include "feature_extract.hpp"
+#include "make_label.hpp"
+#include "comm_lib.hpp"
+
+using cv::Mat;
+using cv::namedWindow;
+using cv::imshow;
+using cv::imread;
+using cv::waitKey;
+using cv::resize;
+using cv::Size;
+using cv::cvtColor;
+
 
 class MissionControl
 {
@@ -19,7 +54,7 @@ public:
   void Execute();
 
 private:
-  const int ROS_RATE_HZ = 10;
+  const int ROS_RATE_HZ = 20;
   const double PI = 3.14159265359;
 
   const int BUTTON_LB             = 4;
@@ -50,6 +85,8 @@ private:
   ros::Subscriber obstacle_sub;
   ros::Subscriber map_number_sub;
   ros::Subscriber task_sub;
+  ros::Subscriber step_sub;
+  ros::Subscriber cmd_sub;
 
   /** Publishers **/
   ros::Publisher path_pred_pub;
@@ -93,6 +130,11 @@ private:
   bool isJunSave_;
   bool isReachCurrentGoal_;
   bool isTaskFinished_;
+  bool isNewCommand_;
+
+  string face_id_;
+  bool face_flag_;
+
 
   /** Variables **/
   Tools MyTools_;
@@ -119,6 +161,7 @@ private:
   int map_number_;
 
   int task_index_;
+  int step_index_;
 
   tf::StampedTransform stampedtransform;
   /* 
@@ -152,6 +195,11 @@ private:
   bool ReadTaskList();
   void UpdateTask();
   
+  void RunStepCase(int Input);
+
+  bool test_camera();
+
+
 
   /** Inline Function **/ 
   inline void ZeroCommand(geometry_msgs::Twist& Cmd_vel) {
@@ -195,40 +243,44 @@ private:
 
     if(isManualControl_ && Input->buttons[BUTTON_BACK]) {
       global_path_pointcloud_.points.clear();
-      current_task_.points.clear();
-      task_index_ = 1;
     }
+
     if(isManualControl_ && Input->buttons[BUTTON_A]) {
-      if(isReachCurrentGoal_) {
-        if(current_task_.points.size() < 1) {
-          cout << "Finished All Tasks" << endl;
-          global_path_pointcloud_.points.clear();
-          current_task_.points.clear();
-          task_log_.points.clear();
-          task_index_ = 1;
-        } else {
-          current_task_.points.erase (current_task_.points.begin());
-          global_path_pointcloud_.points.clear();
-          goal_in_map_ = current_task_.points.front();
-          cout << "Station Confirm move to next Station " << current_task_.points.front().z << endl;
-          ComputeGlobalPlan(goal_in_map_);
-        }
-      } else {
-        if(current_task_.points.size() > 0){
-          goal_in_map_ = current_task_.points.front();
-          ComputeGlobalPlan(goal_in_map_);
-        }
+      if(step_index_ < 5) {
+        global_path_pointcloud_.points.clear();
+        step_index_++;
+        isReachCurrentGoal_ = true;
+        isNewCommand_ = true;
+        cout << "Jump to State :" << step_index_ << endl;
+        RunStepCase(step_index_);
       }
     }
 
-    if(Input->axes[AXIS_CROSS_UP_DOWN] > 0) {
-      cout << "Current Task Show" << endl;
-      for (int i = 0; i < task_log_.points.size(); ++i) {
-        cout << "Task Index : " << task_log_.points[i].x 
-        << " | Station ID : " << task_log_.points[i].y << endl;
+    if(isManualControl_ && Input->buttons[BUTTON_B]) {
+      if(step_index_ > 1) {
+        global_path_pointcloud_.points.clear();
+        step_index_--;
+        isReachCurrentGoal_ = true;
+        isNewCommand_ = true;
+        cout << "Back to State :" << step_index_ << endl;
+        RunStepCase(step_index_);
       }
     }
+  }
 
+  void CmdCallback(const geometry_msgs::Twist::ConstPtr& Input) {
+    // isManualControl_ = true;
+    geometry_msgs::Twist android_cmd;
+    android_cmd.linear.x = Input->linear.x;
+    android_cmd.angular.z = Input->angular.z;
+    android_cmd.angular.z *= 1.5;
+    for (int i = 0; i < 2; ++i) {
+      cmd_vel_pub.publish(android_cmd);
+      ros::Rate loop_rate(ROS_RATE_HZ);
+      loop_rate.sleep();
+    }
+    
+    // isManualControl_ = false;
   }
 
   void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& input) {
@@ -243,11 +295,35 @@ private:
     obstacle_in_base_ = *Input;
   }
 
-  void MapNumberCallback(const std_msgs::Int32::ConstPtr& input) {
-    map_number_ = input->data;
+  void MapNumberCallback(const std_msgs::Int32::ConstPtr& Input) {
+    map_number_ = Input->data;
   }
 
   void TaskNumberCallback(const std_msgs::Int32MultiArray::ConstPtr& input);
+
+  void StepNumberCallback(const std_msgs::String::ConstPtr& Input) {
+    int input_int = stoi(Input->data);
+    cout << "Button Input :" << input_int << endl;
+    if(input_int == 4) {
+      cout << "OPEN CAB" << endl;
+      for (int i = 0; i < 20; ++i) {
+        geometry_msgs::Twist open_cab;
+        open_cab.linear.x = 0;
+        open_cab.angular.x = 13;
+        open_cab.angular.z = 0;
+        cmd_vel_pub.publish(open_cab);
+        ros::Rate loop_rate(ROS_RATE_HZ);
+        loop_rate.sleep();
+      }
+    } else {
+      if(step_index_ != input_int) {
+        step_index_ = input_int;
+        isNewCommand_ = true;
+      }
+      
+    }
+
+  } 
   
 };
 #endif

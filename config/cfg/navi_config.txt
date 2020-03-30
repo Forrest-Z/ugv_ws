@@ -1,4 +1,4 @@
-max_linear_velocity 1
+max_linear_velocity 1.2
 max_rotation_velocity 1.5
 
 max_linear_acceleration 0.1

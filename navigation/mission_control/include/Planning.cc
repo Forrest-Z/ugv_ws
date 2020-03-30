@@ -19,10 +19,10 @@ bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::Po
   path_result = CheckIdealPath(Goal);
 
   while(!(path_result || attend_ct > attend_limit)) {
-    // if(attend_ct > 1){
-    //   cout << "Timer  : " << attend_ct << endl;
-    //   cout << "Radius : " << path_window_radius_ << endl << endl;
-    // }
+    if(attend_ct > 1){
+      cout << "Timer  : " << attend_ct << endl;
+      cout << "Radius : " << path_window_radius_ << endl << endl;
+    }
     GenerateSplinesJoints(joints_set);
     GenerateSplinesPath(path_set,joints_set,path_set_2d);
 
