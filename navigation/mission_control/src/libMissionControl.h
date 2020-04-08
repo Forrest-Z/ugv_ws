@@ -12,39 +12,6 @@
 #include <visualization_msgs/Marker.h>
 
 
-
-#include <iostream>
-#include <time.h>
-
-
-#include<unistd.h>
-#include<sys/types.h>
-#include<sys/wait.h>
-#include <stdio.h>
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <vector>
-#include <opencv2/opencv.hpp>
-#include <mxnet/c_predict_api.h>
-#include <math.h>
-#include <librealsense2/rs.hpp>
-#include "face_align.hpp"
-#include "mxnet_mtcnn.hpp"
-#include "feature_extract.hpp"
-#include "make_label.hpp"
-#include "comm_lib.hpp"
-
-using cv::Mat;
-using cv::namedWindow;
-using cv::imshow;
-using cv::imread;
-using cv::waitKey;
-using cv::resize;
-using cv::Size;
-using cv::cvtColor;
-
-
 class MissionControl
 {
 public:
@@ -87,6 +54,8 @@ private:
   ros::Subscriber task_sub;
   ros::Subscriber step_sub;
   ros::Subscriber cmd_sub;
+  ros::Subscriber face_sub;
+
 
   /** Publishers **/
   ros::Publisher path_pred_pub;
@@ -105,6 +74,8 @@ private:
   ros::Publisher junction_points_pub;
   ros::Publisher station_points_pub;
   ros::Publisher vehicle_model_pub; 
+
+  ros::Publisher action_pub;
 
   /** ROS Components **/
   tf::TransformListener listener_map_to_base;
@@ -132,8 +103,7 @@ private:
   bool isTaskFinished_;
   bool isNewCommand_;
 
-  string face_id_;
-  bool face_flag_;
+  bool isGetFaceID_;
 
 
   /** Variables **/
@@ -196,9 +166,6 @@ private:
   void UpdateTask();
   
   void RunStepCase(int Input);
-
-  bool test_camera();
-
 
 
   /** Inline Function **/ 
@@ -322,8 +289,15 @@ private:
       }
       
     }
-
   } 
+
+  void FaceCallback(const std_msgs::String::ConstPtr& Input){
+    if(Input->data == "") return;
+    isGetFaceID_ = true;
+    int input_int = stoi(Input->data);
+    cout << "face id :" << input_int << endl;
+
+  }
   
 };
 #endif
