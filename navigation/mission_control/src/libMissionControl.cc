@@ -4,16 +4,13 @@ MissionControl::MissionControl(){
   joy_sub = n.subscribe("/joy",1, &MissionControl::JoyCallback,this);
   goal_sub = n.subscribe("/goal",1, &MissionControl::GoalCallback,this);
   obstacle_sub = n.subscribe("/map_obs_points",1, &MissionControl::ObstacleCallback,this); 
-  map_number_sub = n.subscribe("/map_number",1, &MissionControl::MapNumberCallback,this);
-  task_sub = n.subscribe("/task_number",1, &MissionControl::TaskNumberCallback,this);
   step_sub = n.subscribe("/button",1, &MissionControl::StepNumberCallback,this);
   cmd_sub = n.subscribe("/virtual_joystick/cmd_vel",1, &MissionControl::CmdCallback,this);
-  face_sub = n.subscribe("/face_id",1, &MissionControl::FaceCallback,this);
+  station_sub = n.subscribe("/station_id",1, &MissionControl::StationCallback,this);
 
 
-  path_pred_pub = n.advertise<sensor_msgs::PointCloud>("/pred_path",1);
   cmd_vel_pub = n.advertise<geometry_msgs::Twist> ("/husky_velocity_controller/cmd_vel", 1);
-  map_number_pub = n.advertise<std_msgs::Int32>("/map_number",1);
+  path_pred_pub = n.advertise<sensor_msgs::PointCloud>("/pred_path",1);
 
   local_goal_pub = n.advertise<sensor_msgs::PointCloud> ("/local_goal", 1);
   global_goal_pub = n.advertise<sensor_msgs::PointCloud> ("/global_goal", 1);
@@ -23,14 +20,11 @@ MissionControl::MissionControl(){
   local_best_pub = n.advertise<sensor_msgs::PointCloud>("/local_best",1);
   local_costmap_pub = n.advertise<nav_msgs::OccupancyGrid>("/local_costmap",1);
 
-  junction_points_pub = n.advertise<sensor_msgs::PointCloud>("/junction_points",1);
   station_points_pub = n.advertise<sensor_msgs::PointCloud>("/station_points",1);
-
-
   global_path_pub = n.advertise<sensor_msgs::PointCloud>("/global_path",1);
   vehicle_model_pub = n.advertise<visualization_msgs::Marker>( "vehicle_model",1);
 
-  action_pub = n.advertise<std_msgs::Int32>("/action_number",1);
+  status_pub = n.advertise<std_msgs::Int32>("/vehicle_status",1);
 }
 MissionControl::~MissionControl(){
 }
@@ -70,24 +64,18 @@ bool MissionControl::Initialization() {
   }
 
   isManualControl_  = false;
+  isJoyControl_ = true;
   isLocationUpdate_ = false;
   isReachCurrentGoal_ = false;
-  isJunSave_ = false;
+
   map_number_ = 1;
   planner_state_ = 1;
-  task_index_ = 1;
-  step_index_ = 0;
-
-  isGetFaceID_ = false;
-  isNewCommand_ = false;
 
   MyController_.set_speed_scale(controller_linear_scale_);
   MyController_.set_rotation_scale(controller_rotation_scale_);
 
-  ReadTaskList();
-  // UpdateTask();
+  ReadStationList();
 
-  // return(LoadJunctionFile());
   return(true);
 }
 
@@ -98,7 +86,6 @@ void MissionControl::Execute() {
   ros::Rate loop_rate(ROS_RATE_HZ);
 
   ros::Time planner_timer = ros::Time::now();
-
   double planner_duration = 0.1;
 
   cout << "Navigation Node Started" << endl;
@@ -114,15 +101,12 @@ void MissionControl::Execute() {
     if(!isManualControl_ && global_path_pointcloud_.points.size() > 0) {
       ApplyAutoControl(planner_timer,planner_duration);
     }
-    CheckMapNumber();
-    RunStepCase(step_index_);
+    UpdateVehicleStatus();
     local_costmap_pub.publish(MyPlanner_.costmap_local());
   }
   cout << "ROS Closed " << endl;  
 
 }
-
-
 
 
 // ABCD EFGH IJKL MNOP QRST UVWX YZ
@@ -240,6 +224,15 @@ void MissionControl::ApplyAutoControl(ros::Time& Timer,double& Duration_Limit) {
 }
 
 void MissionControl::ApplyJoyControl() {
+  static geometry_msgs::Twist last_cmd;
+  if(isJoyControl_) last_timer_ = ros::Time::now();
+
+  if((ros::Time::now()- last_timer_ ).toSec() > 0.1) {
+    isManualControl_ = false;
+    cout << "Controller Time out" << endl;  
+    return;
+  }
+  last_cmd = joy_cmd_;
   geometry_msgs::Twist temp_cmd = joy_cmd_;
   LimitCommand(temp_cmd);
   MyTools_.BuildPredictPath(temp_cmd);
@@ -261,108 +254,12 @@ void MissionControl::CheckNavigationState(geometry_msgs::Point32 Goal,geometry_m
 }
 
 
-void MissionControl::CheckMapNumber() {
-  static std_msgs::Int32 map_number;
-  int robot_region = map_number_;
-  static bool first_enter = false;
-  static bool change_map = false;
-  static geometry_msgs::Point32 vehicle_enter;
-  static double min_distance;
-  static double max_angle;
-  static ros::Time last_plan = ros::Time::now();
-
-  junction_list_.header.frame_id = "/map";
-  junction_points_pub.publish(junction_list_);
-
-  int robot_in_junction = ComputeJunctionDistance(vehicle_in_map_);
-  if(robot_in_junction == -1) {
-    map_number.data = robot_region;
-    first_enter = true;
-    return;
-  } else {
-    if(first_enter) {
-      vehicle_enter = vehicle_in_map_;
-      change_map = false;
-      first_enter = false;
-      min_distance = 100;
-      max_angle = 0;
-      cout << "Enter Junction Zone" << endl;
-    }
-    double distance_vehicle_to_points_enter = 
-        hypot((junction_list_.points[robot_in_junction].x - vehicle_enter.x),
-          (junction_list_.points[robot_in_junction].y - vehicle_enter.y));
-    double distance_vehicle_to_points_now = 
-        hypot((junction_list_.points[robot_in_junction].x - vehicle_in_map_.x),
-          (junction_list_.points[robot_in_junction].y - vehicle_in_map_.y));
-    double distance_vehicle_moved = 
-        hypot((vehicle_enter.x - vehicle_in_map_.x),
-          (vehicle_enter.y - vehicle_in_map_.y));
-
-    double moving_angle = acos( 
-      (pow(distance_vehicle_to_points_enter,2) + pow(distance_vehicle_to_points_now,2) - pow(distance_vehicle_moved,2)) 
-      / (2 * distance_vehicle_to_points_enter * distance_vehicle_to_points_now) 
-      );
-
-    if(distance_vehicle_to_points_now < min_distance) min_distance = distance_vehicle_to_points_now;
-    if(moving_angle > max_angle) max_angle = moving_angle;
-    int map_1 = int(junction_list_.points[robot_in_junction].z)/10;
-    int map_2 = int(junction_list_.points[robot_in_junction].z)%10;
-    int next_map;
-
-    if (max_angle > 1.4 && min_distance < 5 && change_map == false) {
-      (robot_region == map_1) ? next_map = map_2 : next_map = map_1;
-      robot_region = next_map;
-      map_number.data = next_map;
-      // first_enter = true;
-      change_map = true;
-      map_number_ = next_map;
-      map_number_pub.publish(map_number);
-      if(goal_in_map_.x != 0 && goal_in_map_.y != 0) ComputeGlobalPlan(goal_in_map_);
-      cout << "Change Map" << endl;
-    }
-
-    if((ros::Time::now()-last_plan).toSec() > 1){
-      if(goal_in_map_.x != 0 && goal_in_map_.y != 0) ComputeGlobalPlan(goal_in_map_);
-      last_plan = ros::Time::now();
-    }
-
-  }
-
-}
-
 void MissionControl::ComputeGlobalPlan(geometry_msgs::Point32& Goal) {
   if(!isLocationUpdate_) return;
   isReachCurrentGoal_ = false;
   string map_folder = workspace_folder_ + "config/map/";
   MyRouter_.RoutingAnalyze(Goal,vehicle_in_map_,map_folder,map_number_);
   global_path_pointcloud_ = MyRouter_.path_pointcloud();
-}
-
-int MissionControl::ComputeJunctionDistance(geometry_msgs::Point32 Input) {
-  int output = -1;
-  if (!isJunSave_) return output;
-
-  double junction_range = 10;
-  double min_distance = 999;
-
-  int min_index = -1;
-  for (int i = 0; i < junction_list_.points.size(); i++) {
-    double junction_distance = 
-      hypot((junction_list_.points[i].x - Input.x),
-            (junction_list_.points[i].y - Input.y));
-    if (junction_distance < min_distance ) {
-      min_distance = junction_distance;
-      min_index = i;
-    }
-  }
-
-  double min_junction_distance = 
-      hypot((junction_list_.points[min_index].x - Input.x),
-            (junction_list_.points[min_index].y - Input.y));
-
-  if(min_junction_distance < junction_range) output = min_index;
-  
-  return output;
 }
 
 double MissionControl::ComputeMinDistance() {
@@ -517,28 +414,6 @@ void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel) {
   last_cmd_vel = Cmd_vel;
 }
 
-bool MissionControl::LoadJunctionFile() {
-  string filename = workspace_folder_ + "config/cfg/junction.txt";
-
-  std::ifstream my_file;
-  my_file.open(filename);
-  if (!my_file) {
-    cout<<"Could not find Task File"<<endl;
-    cout<<"File Not Exist At: "<<filename<<endl;
-    return false;
-  }
-  geometry_msgs::Point32 point;
-  junction_list_.points.clear();
-  int line_num = 0;
-  while (my_file >> point.z >> point.x >> point.y) {
-    junction_list_.points.push_back(point);
-    line_num++;
-  }
-  my_file.close();
-  (line_num == 0) ? isJunSave_ = false : isJunSave_ = true;
-  return true;
-}
-
 
 void MissionControl::PrintConfig() {
   cout << "==================================" << endl;
@@ -640,25 +515,25 @@ bool MissionControl::ReadConfig() {
   }
 }
 
-bool MissionControl::ReadTaskList() {
-  std::ifstream task_file;
-  string file_name_node = workspace_folder_+ "/config/cfg/task.txt";
-  task_file.open(file_name_node);
+bool MissionControl::ReadStationList() {
+  std::ifstream station_file;
+  string file_name_node = workspace_folder_+ "/config/cfg/station.txt";
+  station_file.open(file_name_node);
 
-  if(!task_file.is_open()) {
-    cout<<"Could not find Task File"<<endl;
+  if(!station_file.is_open()) {
+    cout<<"Could not find Station File"<<endl;
     cout<<"File Not Exist At: "<<file_name_node<<endl;
     return false;
   }
 
   geometry_msgs::Point32 point;
-  task_list_.points.clear();
+  station_list_.points.clear();
   int line_num = 0;
-  while (task_file >> point.z >> point.x >> point.y) {
-    task_list_.points.push_back(point);
+  while (station_file >> point.z >> point.x >> point.y) {
+    station_list_.points.push_back(point);
     line_num++;
   }
-  task_file.close();
+  station_file.close();
   cout << "Read " << line_num << " optional tasks from file" << endl;
   return true;
 }
@@ -729,116 +604,10 @@ bool MissionControl::UpdateVehicleLocation() {
   return true;
 }
 
-void MissionControl::UpdateTask() {
-  std::vector<int> schedule;
-  int my_task[] = {1,2};
-  schedule.assign (my_task,my_task+3);
-
-  for (int i = 0; i < schedule.size(); ++i) {
-    int index = schedule[i] - 1;
-    geometry_msgs::Point32 station_point = task_list_.points[index];
-    current_task_.points.push_back(station_point);
-  }
-}
-
-void MissionControl::TaskNumberCallback(const std_msgs::Int32MultiArray::ConstPtr& input) {
-  std::vector<int> schedule;
-  for(std::vector<int>::const_iterator int_data = input->data.begin(); int_data != input->data.end(); ++int_data) {
-    schedule.push_back(*int_data);
-  }
-  cout << "Received New Task, index : " << task_index_ << " size : " << schedule.size() << endl; 
-  for (int i = 0; i < schedule.size(); ++i) {
-    int index = schedule[i] - 1;
-    geometry_msgs::Point32 station_point = task_list_.points[index];
-    current_task_.points.push_back(station_point);
-
-    station_point.x = task_index_;
-    station_point.y = schedule[i];
-    task_log_.points.push_back(station_point);
-  }
-  task_index_++;
-
-}
-
-void MissionControl::RunStepCase(int Input) {
-  int current_step = step_index_;
-  bool current_state = isReachCurrentGoal_;
-  static ros::Time wait_timer;
-
-  std_msgs::Int32 action_number;
-  action_number.data = 1;
-  int cab_no = 13;
-  int command_times = 20;
-
-  // cout << "Case State" << endl;
-  // cout << "Step Number : " << Input << endl;
-  // cout << "true " << true << " | false " << false << endl;
-  // cout << "State       : " << current_state << endl;
-  // cout << "Update      : " << isNewCommand_ << endl;
-
-  if(!isNewCommand_) return;
-
-  if(Input == 1 && current_step == Input) {
-    goal_in_map_ = task_list_.points[0];
-    ComputeGlobalPlan(goal_in_map_);
-    cout << "Step 1 Finished" << endl;
-    isNewCommand_ = false;
-    return;
-  }
-
-  if(current_step != Input || current_state != true) return;
-
-
-  if(Input == 2) {
-    cout << "OPEN CAB" << endl;
-    for (int i = 0; i < command_times; ++i) {
-      geometry_msgs::Twist open_cab;
-      open_cab.linear.x = 0;
-      open_cab.angular.x = cab_no;
-      open_cab.angular.z = 0;
-      cmd_vel_pub.publish(open_cab);
-      ros::Rate loop_rate(ROS_RATE_HZ);
-      loop_rate.sleep();
-    }
-
-    cout << "Step 2 Finished" << endl;
-    isNewCommand_ = false;
-    return;
-  }
-
-  if(Input == 3) {
-    goal_in_map_ = task_list_.points[1];
-    ComputeGlobalPlan(goal_in_map_);
-    cout << "Step 3 Finished" << endl;
-    step_index_ = 4;
-    return;
-  }
-
-  if(Input == 4) {
-    cout << "Face Detection Actived" << endl;
-    action_pub.publish(action_number);
-    if(isGetFaceID_) {
-      cout << "OPEN CAB" << endl;
-      for (int i = 0; i < command_times; ++i) {
-        geometry_msgs::Twist open_cab;
-        open_cab.linear.x = 0;
-        open_cab.angular.x = cab_no;
-        open_cab.angular.z = 0;
-        cmd_vel_pub.publish(open_cab);
-        ros::Rate loop_rate(ROS_RATE_HZ);
-        loop_rate.sleep();
-      }
-      
-      wait_timer = ros::Time::now();
-      cout << "Step 4 Finished" << endl;
-      step_index_ = 5;
-    }
-    return;
-  }
-
-  if(Input == 5) {
-    cout << "All Steps Finished" << endl;
-    isNewCommand_ = false;
-    return;
-  }
+void MissionControl::UpdateVehicleStatus() {
+  std_msgs::Int32 status;
+  int status_data;
+  (!isReachCurrentGoal_) ? status_data = 0 : status_data = 1;
+  status.data = status_data;
+  status_pub.publish(status);
 }
