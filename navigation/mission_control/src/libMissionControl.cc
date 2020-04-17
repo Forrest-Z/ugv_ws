@@ -1,30 +1,39 @@
 #include "libMissionControl.h"
 
-MissionControl::MissionControl(){
-  joy_sub = n.subscribe("/joy",1, &MissionControl::JoyCallback,this);
-  goal_sub = n.subscribe("/goal",1, &MissionControl::GoalCallback,this);
-  obstacle_sub = n.subscribe("/map_obs_points",1, &MissionControl::ObstacleCallback,this); 
-  step_sub = n.subscribe("/button",1, &MissionControl::StepNumberCallback,this);
-  cmd_sub = n.subscribe("/virtual_joystick/cmd_vel",1, &MissionControl::CmdCallback,this);
-  station_sub = n.subscribe("/station_id",1, &MissionControl::StationCallback,this);
+MissionControl::MissionControl():pn("~"){
+  pn.param<string>("robot_id", robot_id_, "");
+
+  joy_sub = n.subscribe(robot_id_ + "/joy",1, &MissionControl::JoyCallback,this);
+  goal_sub = n.subscribe(robot_id_ + "/goal",1, &MissionControl::GoalCallback,this);
+  obstacle_sub = n.subscribe(robot_id_ + "/map_obs_points",1, &MissionControl::ObstacleCallback,this); 
+  step_sub = n.subscribe(robot_id_ + "/button",1, &MissionControl::StepNumberCallback,this);
+  cmd_sub = n.subscribe(robot_id_ + "/virtual_joystick/cmd_vel",1, &MissionControl::CmdCallback,this);
+
+  station_sub = n.subscribe(robot_id_ + "/station_id",1, &MissionControl::StationCallback,this);
+  seq_sub = n.subscribe(robot_id_ + "/task_sequence",1, &MissionControl::SequenceCallback,this);
+  action_sub = n.subscribe(robot_id_ + "/action_command",1, &MissionControl::ActionCallback,this);
+  index_sub = n.subscribe(robot_id_ + "/action_index",1, &MissionControl::IndexCallback,this);
 
 
-  cmd_vel_pub = n.advertise<geometry_msgs::Twist> ("/husky_velocity_controller/cmd_vel", 1);
-  path_pred_pub = n.advertise<sensor_msgs::PointCloud>("/pred_path",1);
+  cmd_vel_pub = n.advertise<geometry_msgs::Twist> (robot_id_ + "/husky_velocity_controller/cmd_vel", 1);
+  path_pred_pub = n.advertise<sensor_msgs::PointCloud>(robot_id_ + "/pred_path",1);
 
-  local_goal_pub = n.advertise<sensor_msgs::PointCloud> ("/local_goal", 1);
-  global_goal_pub = n.advertise<sensor_msgs::PointCloud> ("/global_goal", 1);
+  local_goal_pub = n.advertise<sensor_msgs::PointCloud> (robot_id_ + "/local_goal", 1);
+  global_goal_pub = n.advertise<sensor_msgs::PointCloud> (robot_id_ + "/global_goal", 1);
 
-  local_all_pub = n.advertise<sensor_msgs::PointCloud>("/local_all",1);
-  local_safe_pub = n.advertise<sensor_msgs::PointCloud>("/local_safe",1);
-  local_best_pub = n.advertise<sensor_msgs::PointCloud>("/local_best",1);
-  local_costmap_pub = n.advertise<nav_msgs::OccupancyGrid>("/local_costmap",1);
+  local_all_pub = n.advertise<sensor_msgs::PointCloud>(robot_id_ + "/local_all",1);
+  local_safe_pub = n.advertise<sensor_msgs::PointCloud>(robot_id_ + "/local_safe",1);
+  local_best_pub = n.advertise<sensor_msgs::PointCloud>(robot_id_ + "/local_best",1);
+  local_costmap_pub = n.advertise<nav_msgs::OccupancyGrid>(robot_id_ + "/local_costmap",1);
 
-  station_points_pub = n.advertise<sensor_msgs::PointCloud>("/station_points",1);
-  global_path_pub = n.advertise<sensor_msgs::PointCloud>("/global_path",1);
-  vehicle_model_pub = n.advertise<visualization_msgs::Marker>( "vehicle_model",1);
+  station_points_pub = n.advertise<sensor_msgs::PointCloud>(robot_id_ + "/station_points",1);
+  global_path_pub = n.advertise<sensor_msgs::PointCloud>(robot_id_ + "/global_path",1);
+  vehicle_model_pub = n.advertise<visualization_msgs::Marker>(robot_id_ + "/vehicle_model",1);
 
-  status_pub = n.advertise<std_msgs::Int32>("/vehicle_status",1);
+  status_pub = n.advertise<std_msgs::Int32>(robot_id_ + "/vehicle_status",1);
+  seq_pub = n.advertise<std_msgs::String>(robot_id_ + "/robot_sequence",1);
+  action_pub = n.advertise<std_msgs::String>(robot_id_ + "/task_action",1);
+
 }
 MissionControl::~MissionControl(){
 }
@@ -67,12 +76,18 @@ bool MissionControl::Initialization() {
   isJoyControl_ = true;
   isLocationUpdate_ = false;
   isReachCurrentGoal_ = false;
+  isPauseAction_ = false;
+  isMovingBox_ = false;
+  isWaitingStop_ = false;
 
   map_number_ = 1;
   planner_state_ = 1;
+  task_status_last_ = -1;
 
   MyController_.set_speed_scale(controller_linear_scale_);
   MyController_.set_rotation_scale(controller_rotation_scale_);
+  MyPlanner_.set_robot_id(robot_id_);
+  MyTools_.set_robot_id(robot_id_);
 
   ReadStationList();
 
@@ -88,7 +103,7 @@ void MissionControl::Execute() {
   ros::Time planner_timer = ros::Time::now();
   double planner_duration = 0.1;
 
-  cout << "Navigation Node Started" << endl;
+  cout << "Navigation Node For " << robot_id_ << " Started" << endl;
 
   while (ros::ok()) {
     loop_rate.sleep();
@@ -98,13 +113,42 @@ void MissionControl::Execute() {
     }
     if(!UpdateVehicleLocation()) continue;
     if(!MyPlanner_.UpdateCostmap(obstacle_in_base_)) continue;
-    if(!isManualControl_ && global_path_pointcloud_.points.size() > 0) {
-      ApplyAutoControl(planner_timer,planner_duration);
+
+    if(isMovingBox_) {
+      if((ros::Time::now() - moving_box_timer_).toSec() > 5){
+        std_msgs::Int32 status;
+        int status_data = 2;
+        task_status_last_ = status_data;
+        status.data = status_data;
+        status_pub.publish(status);
+        isMovingBox_ = false;
+      } else {
+        // cout << "Transporting Items..." << endl;
+      }
     }
-    UpdateVehicleStatus();
+
+    if(isWaitingStop_) {
+      if((ros::Time::now() - waiting_stop_timer_).toSec() > 3){
+        std_msgs::Int32 status;
+        int status_data = 2;
+        task_status_last_ = status_data;
+        status.data = status_data;
+        status_pub.publish(status);
+        isWaitingStop_ = false;
+      } else {
+        // cout << "Stopping The Robot..." << endl;
+      }
+    }
+
+
+    if(!isManualControl_ && !isPauseAction_ && global_path_pointcloud_.points.size() > 0) {
+      ApplyAutoControl(planner_timer,planner_duration);
+      UpdateVehicleStatus();
+    }
+
     local_costmap_pub.publish(MyPlanner_.costmap_local());
   }
-  cout << "ROS Closed " << endl;  
+  cout << "Navigation Node For " << robot_id_ << " Closed" << endl;
 
 }
 
@@ -120,20 +164,26 @@ void MissionControl::ApplyAutoControl(ros::Time& Timer,double& Duration_Limit) {
 
   double min_distance = ComputeMinDistance();
 
-  int search_grid = 3;
-  if(min_distance > 3) search_grid = 5;
+  int search_grid = 5;
+  double grid_res = 0.4;
+  // if(min_distance > 3) search_grid = 5;
 
+
+  std::size_t pos = robot_id_.find("_");
+  string string_temp = robot_id_.substr(pos+1);
+  int id_index = stoi(string_temp);
+  int wait_time_unit = 3;
   if(wait_obstacle_) {
     static ros::Time detecting_timer;
     static ros::Time waiting_timer;
-    if((ros::Time::now() - waiting_timer).toSec() < 3) {
+    if((ros::Time::now() - waiting_timer).toSec() < wait_time_unit * id_index) {
       planner_state_ = 0;
       detecting_timer = ros::Time::now();
     } 
     else if((ros::Time::now() - detecting_timer).toSec() > 6) {
       for (int i = 0; i < obstacle_in_base_.points.size(); ++i) {
         if(obstacle_in_base_.points[i].z > 5) continue;
-        double window_size = 5;
+        double window_size = MyPlanner_.path_window_radius_standard() + 2;
         double obstacle_distance = hypot(obstacle_in_base_.points[i].x,obstacle_in_base_.points[i].y);
         double obstacle_edge = hypot(obstacle_in_base_.points[i].x,(obstacle_in_base_.points[i].y - window_size) );
         if(obstacle_in_base_.points[i].x > 0 && obstacle_distance < window_size) {
@@ -155,8 +205,9 @@ void MissionControl::ApplyAutoControl(ros::Time& Timer,double& Duration_Limit) {
 
   if(planner_state_ == 1) {
     MyPlanner_.set_safe_path_search_grid(search_grid);
+    MyPlanner_.set_costmap_resolution(grid_res);
 
-    double lookahead_global_meter = 4;
+    double lookahead_global_meter = 5;
     int global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter);
     global_goal = global_path_pointcloud_.points[global_goal_index];
     if(global_goal.z > 0) {
@@ -250,6 +301,7 @@ void MissionControl::CheckNavigationState(geometry_msgs::Point32 Goal,geometry_m
     ZeroCommand(Cmd_vel);
     global_path_pointcloud_.points.clear();
     cout << "Goal Reached" << endl;
+    UpdateVehicleStatus();
   }
 }
 
@@ -526,11 +578,12 @@ bool MissionControl::ReadStationList() {
     return false;
   }
 
-  geometry_msgs::Point32 point;
-  station_list_.points.clear();
+  StationInfo station_temp;
+  station_list_.clear();
   int line_num = 0;
-  while (station_file >> point.z >> point.x >> point.y) {
-    station_list_.points.push_back(point);
+  while (station_file >> station_temp.id >> station_temp.x >> station_temp.y) {
+    // cout << "station id read :" << station_temp.id << endl;
+    station_list_.push_back(station_temp);
     line_num++;
   }
   station_file.close();
@@ -541,7 +594,7 @@ bool MissionControl::ReadStationList() {
 bool MissionControl::UpdateVehicleLocation() {
   // static tf::StampedTransform stampedtransform;
   try {
-    listener_map_to_base.lookupTransform("/map", "/base_link",  
+    listener_map_to_base.lookupTransform("/map", robot_id_ + "/base_link",  
                              ros::Time(0), stampedtransform);
   }
   catch (tf::TransformException ex) {
@@ -558,7 +611,7 @@ bool MissionControl::UpdateVehicleLocation() {
   geometry_msgs::TransformStamped temp_trans;
   temp_trans.header.stamp = ros::Time::now();
   temp_trans.header.frame_id = "/map";
-  temp_trans.child_frame_id = "/base_link";
+  temp_trans.child_frame_id = robot_id_ + "/base_link";
 
   temp_trans.transform.translation.x = stampedtransform.getOrigin().x();
   temp_trans.transform.translation.y = stampedtransform.getOrigin().y();
@@ -607,7 +660,9 @@ bool MissionControl::UpdateVehicleLocation() {
 void MissionControl::UpdateVehicleStatus() {
   std_msgs::Int32 status;
   int status_data;
-  (!isReachCurrentGoal_) ? status_data = 0 : status_data = 1;
+  (isReachCurrentGoal_) ? status_data = 2 : status_data = 1;
+  if(task_status_last_ == status_data) return;
+  task_status_last_ = status_data;
   status.data = status_data;
   status_pub.publish(status);
 }

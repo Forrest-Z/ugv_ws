@@ -11,6 +11,11 @@
 #include <std_msgs/Int32MultiArray.h>
 #include <visualization_msgs/Marker.h>
 
+struct StationInfo {
+  string id;
+  double x;
+  double y;
+};
 
 class MissionControl
 {
@@ -45,14 +50,18 @@ private:
 
   /** Node Handle **/
   ros::NodeHandle n;
-
+  ros::NodeHandle pn;
   /** Subscribers **/
   ros::Subscriber joy_sub;
   ros::Subscriber goal_sub;
   ros::Subscriber obstacle_sub;
   ros::Subscriber step_sub;
   ros::Subscriber cmd_sub;
+
   ros::Subscriber station_sub;
+  ros::Subscriber seq_sub;
+  ros::Subscriber action_sub;
+  ros::Subscriber index_sub;
 
 
   /** Publishers **/
@@ -73,11 +82,15 @@ private:
   ros::Publisher vehicle_model_pub; 
 
   ros::Publisher status_pub;
+  ros::Publisher seq_pub;
+  ros::Publisher action_pub;
 
   /** ROS Components **/
   tf::TransformListener listener_map_to_base;
 
   /** Parameters **/
+  string robot_id_;
+
   double max_linear_velocity_;
   double max_rotation_velocity_;
   double max_linear_acceleration_;
@@ -97,6 +110,7 @@ private:
   bool isJoyControl_;
   bool isLocationUpdate_;
   bool isReachCurrentGoal_;
+  bool isPauseAction_;
 
 
   /** Variables **/
@@ -116,7 +130,10 @@ private:
   sensor_msgs::PointCloud global_path_pointcloud_;
   sensor_msgs::PointCloud obstacle_in_base_;
 
-  sensor_msgs::PointCloud station_list_;
+  vector<StationInfo> station_list_;
+
+  int task_status_last_;
+  
 
   int map_number_;
 
@@ -129,6 +146,11 @@ private:
   */
   int planner_state_;
   ros::Time last_timer_;
+
+  bool isMovingBox_;
+  bool isWaitingStop_;
+  ros::Time moving_box_timer_;
+  ros::Time waiting_stop_timer_;;
 
   string workspace_folder_;
   tf::StampedTransform stampedtransform;
@@ -218,13 +240,72 @@ private:
     // cout << goal_in_map_.x << "," << goal_in_map_.y << endl << endl;
   }
 
-  void StationCallback(const std_msgs::Int32::ConstPtr& Input) {
-    int require_id = Input->data;
-    if(station_list_.points.size() < require_id) return;
+  void StationCallback(const std_msgs::String::ConstPtr& Input) {
+    string require_id = Input->data;
 
-    goal_in_map_ = station_list_.points[require_id-1];
-    ComputeGlobalPlan(goal_in_map_);
+    for (int i = 0; i < station_list_.size(); ++i) {
+      if(station_list_[i].id == require_id) {
+        goal_in_map_.x = station_list_[i].x;
+        goal_in_map_.y = station_list_[i].y;
+        ComputeGlobalPlan(goal_in_map_);
+        std_msgs::Int32 status;
+        int status_data = 1;
+        task_status_last_ = status_data;
+        status.data = status_data;
+        status_pub.publish(status);
+        return;
+      }
+    }
+    cout << "Called Station ID : " << require_id << " Not Exist" << endl;
   }
+
+
+  void SequenceCallback(const std_msgs::String::ConstPtr& Input) {
+    string temp_data = Input->data;
+    static string last_data; 
+    if(temp_data == last_data) return;
+    last_data = temp_data; 
+    std_msgs::String temp_topic;
+    temp_topic.data = temp_data;
+    seq_pub.publish(temp_topic);
+    // cout << robot_id_ << " Sequence Update To " << temp_data << endl;
+  }
+
+  void ActionCallback(const std_msgs::String::ConstPtr& Input) {
+    string temp_data = Input->data;
+    static string last_data; 
+    if(temp_data == last_data) return;
+    last_data = temp_data;
+    std_msgs::String temp_topic;
+    temp_topic.data = temp_data;
+    action_pub.publish(temp_topic);
+    // cout << robot_id_ << " Current Mission Index " << temp_data << endl;
+  }
+
+  void IndexCallback(const std_msgs::Int32::ConstPtr& Input) {
+    int temp_data = Input->data;
+    std_msgs::Int32 status;
+    int status_data = 1;
+    status.data = status_data;
+
+    if(temp_data == 1) {
+       isPauseAction_ = false;
+    } 
+    else if(temp_data == 3) {
+      isMovingBox_ = true;
+      moving_box_timer_ = ros::Time::now();
+      status_pub.publish(status);
+      task_status_last_ = -1;
+    } else {
+      isWaitingStop_ = true;
+      isPauseAction_ = true;
+      waiting_stop_timer_ = ros::Time::now();
+      status_pub.publish(status);
+      task_status_last_ = -1;
+    } 
+  }
+
+
 
 
   void ObstacleCallback(const sensor_msgs::PointCloud::ConstPtr& Input) {

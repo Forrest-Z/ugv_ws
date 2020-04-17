@@ -56,33 +56,25 @@ private:
 
   /** Publishers **/
   ros::Publisher map_obs_pub;
-  ros::Publisher odom_pub;
-  ros::Publisher scan_pub;
 
   /** Subscribers **/
   ros::Subscriber map_sub;
-  ros::Subscriber scan_1_sub;
-  ros::Subscriber scan_2_sub;
-  ros::Subscriber pointcloud_sub;
-  ros::Subscriber scan_points_sub;
+  ros::Subscriber scan_sub;
   ros::Subscriber rviz_click_sub;
-  ros::Subscriber odom_sub;
 
   /** Parameters **/
   tf::TransformListener map_base_listener;
+  string robot_id_;
 
   /** Flags **/
   bool isMapSave_;
-  bool isUseSim_;
   /** Variables **/
   laser_geometry::LaserProjection projector;
   nav_msgs::OccupancyGrid static_map_;
   nav_msgs::MapMetaData static_map_info_;
   geometry_msgs::Point32 robot_in_map_;
   sensor_msgs::PointCloud pointcloud_base_;
-  sensor_msgs::PointCloud pointcloud_scan_1_;
-  sensor_msgs::PointCloud pointcloud_scan_2_;
-  sensor_msgs::PointCloud pointcloud_lidar_;
+  sensor_msgs::PointCloud pointcloud_scan_;
   sensor_msgs::PointCloud pointcloud_rviz_;
 
   tf::Transform map_to_base_;
@@ -92,18 +84,11 @@ private:
   bool updateVehicleInMap();
   void publishMapObstacle();
   void publishScanObstacle();
-  void publishLidarObstacle();
   void publishRvizObstacle();
 
-  void map_callback(const nav_msgs::OccupancyGrid::ConstPtr& input);
-  void scan_1_callback(const sensor_msgs::LaserScan::ConstPtr& input);
-  void scan_2_callback(const sensor_msgs::LaserScan::ConstPtr& input);
-  void scanpoints_callback(const sensor_msgs::PointCloud::ConstPtr& input);
-  void pointcloud_callback(const sensor_msgs::PointCloud2::ConstPtr& input);
-  void clickpoint_callback(const geometry_msgs::PointStamped::ConstPtr& input);
-  void OdomCallback(const nav_msgs::Odometry::ConstPtr& input);
-
-  sensor_msgs::LaserScan convetPC2Sacn(sensor_msgs::PointCloud Input);
+  void MapCallback(const nav_msgs::OccupancyGrid::ConstPtr& input);
+  void SacnCallback(const sensor_msgs::LaserScan::ConstPtr& input);
+  void ClickpointCallback(const geometry_msgs::PointStamped::ConstPtr& input);
 
   
 };

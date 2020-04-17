@@ -33,9 +33,9 @@ class Planning
 {
 public:
 	Planning(){
-		path_window_radius_    = 5;
+		path_window_radius_    = 8;
 		path_swap_range_       = 1.5; // 1.2
-		path_vertical_step_    = 0.2;
+		path_vertical_step_    = 0.3;
 
 		splines_joints_num_    = 3;
 
@@ -55,8 +55,10 @@ public:
 	vector<sensor_msgs::PointCloud> path_debug_set() {return path_debug_set_;};
 	sensor_msgs::PointCloud path_best() {return path_best_;};
 	nav_msgs::OccupancyGrid costmap_local() {return costmap_local_;};
+	double path_window_radius_standard() {return path_window_radius_standard_;};
 	void set_path_window_radius_standard(double Input) {path_window_radius_standard_ = Input;};
 	void set_costmap_resolution(double Input) {costmap_resolution_ = Input;};
+	void set_robot_id(string Input) {robot_id_ = Input;};
 	void set_safe_path_search_grid(double Input) {
 		mtx_radius_.lock();
 		safe_path_search_grid_ = Input;
@@ -77,6 +79,7 @@ private:
 
 	double costmap_resolution_;
 	int safe_path_search_grid_;
+	string robot_id_;
 
 	std::mutex mtx_radius_;
 

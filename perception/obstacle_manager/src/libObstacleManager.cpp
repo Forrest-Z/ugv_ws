@@ -2,19 +2,13 @@
 
 ObstacleManager::ObstacleManager():pn("~")
 { 
-  map_sub = n.subscribe("/map",1, &ObstacleManager::map_callback,this);
-  scan_1_sub = n.subscribe("/scan_1",1, &ObstacleManager::scan_1_callback,this);
-  scan_2_sub = n.subscribe("/scan_22",1, &ObstacleManager::scan_2_callback,this);
-  pointcloud_sub = n.subscribe("/rslidar_points",1, &ObstacleManager::pointcloud_callback,this);
-  scan_points_sub = n.subscribe("/scan_points1",1, &ObstacleManager::scanpoints_callback,this);
+  pn.param<string>("robot_id", robot_id_, "");
 
-  odom_sub = n.subscribe("/odom_1123",10, &ObstacleManager::OdomCallback,this);
+  map_sub = n.subscribe("/map",1, &ObstacleManager::MapCallback,this);
+  scan_sub = n.subscribe(robot_id_ + "/scan",1, &ObstacleManager::SacnCallback,this);
+  rviz_click_sub = n.subscribe("/clicked_point",1, &ObstacleManager::ClickpointCallback,this);
 
-  rviz_click_sub = n.subscribe("/clicked_point",1, &ObstacleManager::clickpoint_callback,this);
-
-  map_obs_pub = n.advertise<sensor_msgs::PointCloud> ("/map_obs_points", 1);
-  scan_pub = n.advertise<sensor_msgs::LaserScan>("/scan", 1);
-  odom_pub = n.advertise<nav_msgs::Odometry>("/tf_odom", 50);
+  map_obs_pub = n.advertise<sensor_msgs::PointCloud> (robot_id_ + "/map_obs_points", 1);
 
   isMapSave_ = false;
 
@@ -38,10 +32,9 @@ void ObstacleManager::Manager() {
 void ObstacleManager::Mission() {
   publishMapObstacle();
   publishScanObstacle();
-  publishLidarObstacle();
   publishRvizObstacle();
 
-  pointcloud_base_.header.frame_id = "/base_link";
+  pointcloud_base_.header.frame_id = robot_id_ + "/base_link";
   map_obs_pub.publish(pointcloud_base_);
   pointcloud_base_.points.clear();
 }
@@ -50,7 +43,7 @@ void ObstacleManager::Mission() {
 bool ObstacleManager::updateVehicleInMap() {
   tf::StampedTransform stampedtransform;
   try {
-    map_base_listener.lookupTransform("/map", "/base_link",  
+    map_base_listener.lookupTransform("/map", robot_id_ + "/base_link",  
                              ros::Time(0), stampedtransform);
   }
   catch (tf::TransformException ex) {
@@ -64,7 +57,7 @@ bool ObstacleManager::updateVehicleInMap() {
   geometry_msgs::TransformStamped temp_trans;
   temp_trans.header.stamp = ros::Time::now();
   temp_trans.header.frame_id = "/map";
-  temp_trans.child_frame_id = "/base_link";
+  temp_trans.child_frame_id = robot_id_ + "/base_link";
 
   temp_trans.transform.translation.x = stampedtransform.getOrigin().x();
   temp_trans.transform.translation.y = stampedtransform.getOrigin().y();
@@ -159,24 +152,14 @@ void ObstacleManager::publishMapObstacle() {
 
 
 void ObstacleManager::publishScanObstacle() {
-  if(pointcloud_scan_1_.points.size()==0) return;
-  for (int i = 0; i < pointcloud_scan_1_.points.size(); ++i) {
-    pointcloud_scan_1_.points[i].z = 1;
+  if(pointcloud_scan_.points.size()==0) return;
+  for (int i = 0; i < pointcloud_scan_.points.size(); ++i) {
+    pointcloud_scan_.points[i].z = 1;
     // pointcloud_scan_2_.points[i].z = 1;
     // pointcloud_scan_1_.points[i].x -= 0.5;
     // pointcloud_scan_2_.points[i].x -= 0.5;
-    pointcloud_base_.points.push_back(pointcloud_scan_1_.points[i]);
+    pointcloud_base_.points.push_back(pointcloud_scan_.points[i]);
     // pointcloud_base_.points.push_back(pointcloud_scan_2_.points[i]);
-  }
-}
-
-void ObstacleManager::publishLidarObstacle() {
-  if(pointcloud_lidar_.points.size()==0) return;
-  for (int i = 0; i < pointcloud_lidar_.points.size(); ++i) {
-    if(isnan(pointcloud_lidar_.points[i].x) || isnan(pointcloud_lidar_.points[i].y) ) continue;
-    if(pointcloud_lidar_.points[i].x < 0) continue;
-    pointcloud_lidar_.points[i].z = 1;
-    pointcloud_base_.points.push_back(pointcloud_lidar_.points[i]);
   }
 }
 
@@ -226,7 +209,7 @@ void ObstacleManager::publishRvizObstacle() {
 }
 
 
-void ObstacleManager::map_callback(const nav_msgs::OccupancyGrid::ConstPtr& input) {
+void ObstacleManager::MapCallback(const nav_msgs::OccupancyGrid::ConstPtr& input) {
     cout << "Map Received, size " << input->info.width << "x" << input->info.height << endl;
 
     static_map_ = *input;
@@ -234,96 +217,25 @@ void ObstacleManager::map_callback(const nav_msgs::OccupancyGrid::ConstPtr& inpu
   }
 
   
-  void ObstacleManager::scan_1_callback(const sensor_msgs::LaserScan::ConstPtr& input) {
-    // projector.projectLaser(*input, pointcloud_scan_1_);
-    double angle_increment = input -> angle_increment;
-    double angle_current = 0;
-    pointcloud_scan_1_.points.clear();
-    geometry_msgs::Point32 point;
-    point.z = 1;
-    for (int i = 0; i < input->ranges.size(); ++i) {
-      point.x = input->ranges[i] * cos(angle_current) + 0.5;
-      point.y = input->ranges[i] * sin(angle_current);
-      angle_current += angle_increment;
-      if(input->ranges[i] < 0.1 || point.x < 0.5) continue;
-      pointcloud_scan_1_.points.push_back(point);
-    }
-    scan_pub.publish(input);
-  }
-
-  void ObstacleManager::scan_2_callback(const sensor_msgs::LaserScan::ConstPtr& input) {
-    // projector.projectLaser(*input, pointcloud_scan_2_);
-
-
+  void ObstacleManager::SacnCallback(const sensor_msgs::LaserScan::ConstPtr& input) {
+    projector.projectLaser(*input, pointcloud_scan_);
     // double angle_increment = input -> angle_increment;
     // double angle_current = 0;
-    // pointcloud_scan_2_.points.clear();
+    // pointcloud_scan_1_.points.clear();
     // geometry_msgs::Point32 point;
     // point.z = 1;
     // for (int i = 0; i < input->ranges.size(); ++i) {
-    //   point.x = input->ranges[i] * cos(angle_current);
+    //   point.x = input->ranges[i] * cos(angle_current) + 0.5;
     //   point.y = input->ranges[i] * sin(angle_current);
     //   angle_current += angle_increment;
-    //   pointcloud_scan_2_.points.push_back(point);
+    //   if(input->ranges[i] < 0.1 || point.x < 0.5) continue;
+    //   pointcloud_scan_1_.points.push_back(point);
     // }
-  }
-
-  void ObstacleManager::scanpoints_callback(const sensor_msgs::PointCloud::ConstPtr& input) {
-    pointcloud_lidar_ = *input;
+    // scan_pub.publish(input);
   }
 
 
-  void ObstacleManager::pointcloud_callback(const sensor_msgs::PointCloud2::ConstPtr& input) {
-    pointcloud_lidar_.points.clear();
-    double x_fix = 0.08;
-    double z_fix = 0;//0.64;
-
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ> ());
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZ> ());
-
-    pcl::fromROSMsg(*input, *cloud);
-
-    pcl::ApproximateVoxelGrid<pcl::PointXYZ> approximate_voxel_filter;
-    approximate_voxel_filter.setInputCloud (cloud);
-    approximate_voxel_filter.setLeafSize (0.1f, 0.1f, 0.1f);
-    approximate_voxel_filter.filter (*cloud_filtered);
-
-    for (int i = 0; i < cloud_filtered->points.size(); ++i) {
-      geometry_msgs::Point32 point;
-      point.x = cloud_filtered->points[i].x - x_fix;
-      point.y = cloud_filtered->points[i].y;
-      point.z = cloud_filtered->points[i].z - z_fix;
-
-      double range = hypot(point.x, point.y);
-      double height = point.z;
-      double width = point.y;
-      
-      if(height < -0.8) continue;
-      if(height > 0) continue;
-      if(range < 0.1) continue;
-      if(range > 10) continue;
-      if(fabs(width) > 5) continue;
-      if(point.x < 0 && fabs(point.y) < 0.3 && range < 1) continue;
-      point.z = 1;
-      pointcloud_lidar_.points.push_back(point);
-    }
-
-
-    sensor_msgs::PointCloud2 output;
-    sensor_msgs::convertPointCloudToPointCloud2(pointcloud_lidar_,output);
-
-    pcl::fromROSMsg(output, *cloud);
-
-    approximate_voxel_filter.setInputCloud (cloud);
-    approximate_voxel_filter.setLeafSize (0.1f, 0.1f, 0.1f);
-    approximate_voxel_filter.filter (*cloud_filtered);
-
-    pcl::toROSMsg(*cloud_filtered, output);
-    sensor_msgs::convertPointCloud2ToPointCloud(output,pointcloud_lidar_);
-
-  }
-
-  void ObstacleManager::clickpoint_callback(const geometry_msgs::PointStamped::ConstPtr& input) {
+  void ObstacleManager::ClickpointCallback(const geometry_msgs::PointStamped::ConstPtr& input) {
     geometry_msgs::Point32 point;
     cout << "Click Point Received , current total " << pointcloud_rviz_.points.size()/32 << endl;
     if(pointcloud_rviz_.points.size() > 320) {
@@ -337,80 +249,3 @@ void ObstacleManager::map_callback(const nav_msgs::OccupancyGrid::ConstPtr& inpu
     }
 
   }
-
-  void ObstacleManager::OdomCallback(const nav_msgs::Odometry::ConstPtr& input) {
-    geometry_msgs::TransformStamped odom_trans;
-
-    tf::Transform map_to_odom;
-    tf::Transform odom_to_base;
-    tf::Transform base_to_map;
-
-    if(true){
-      odom_trans.header.stamp = ros::Time::now();
-      odom_trans.header.frame_id = "/odom";
-      odom_trans.child_frame_id = "/base_link";
-
-      odom_trans.transform.translation.x = input->pose.pose.position.x;
-      odom_trans.transform.translation.y = input->pose.pose.position.y;
-      odom_trans.transform.translation.z = input->pose.pose.position.z;
-      odom_trans.transform.rotation = input->pose.pose.orientation;
-      transformMsgToTF(odom_trans.transform,odom_to_base);
-
-      odom_trans.header.stamp = ros::Time::now();
-      odom_trans.header.frame_id = "/map";
-      odom_trans.child_frame_id = "/odom";
-
-      odom_trans.transform.translation.x = 0;
-      odom_trans.transform.translation.y = 0;
-      odom_trans.transform.translation.z = 0;
-      odom_trans.transform.rotation = tf::createQuaternionMsgFromRollPitchYaw(0,0,1.57);
-      transformMsgToTF(odom_trans.transform,map_to_odom);
-    } else {
-      odom_trans.header.stamp = ros::Time::now();
-      odom_trans.header.frame_id = "/odom";
-      odom_trans.child_frame_id = "/base_link";
-
-      odom_trans.transform.translation.x = 0;
-      odom_trans.transform.translation.y = 0;
-      odom_trans.transform.translation.z = 0;
-      odom_trans.transform.rotation = tf::createQuaternionMsgFromRollPitchYaw(0,0,0);
-      transformMsgToTF(odom_trans.transform,odom_to_base);
-
-      odom_trans.header.stamp = ros::Time::now();
-      odom_trans.header.frame_id = "/map";
-      odom_trans.child_frame_id = "/odom";
-
-      odom_trans.transform.translation.x = input->pose.pose.position.x;
-      odom_trans.transform.translation.y = input->pose.pose.position.y;
-      odom_trans.transform.translation.z = input->pose.pose.position.z;
-      odom_trans.transform.rotation = input->pose.pose.orientation;
-      transformMsgToTF(odom_trans.transform,map_to_odom);      
-    }
-
-    base_to_map = map_to_odom * odom_to_base;
-
-
-    nav_msgs::Odometry odom;
-    odom.header.stamp = ros::Time::now();;
-    odom.header.frame_id = "/map";
-
-    //set the position
-    odom.pose.pose.position.x = base_to_map.getOrigin().x();
-    odom.pose.pose.position.y = base_to_map.getOrigin().y();
-    odom.pose.pose.position.z = base_to_map.getOrigin().z();
-    odom.pose.pose.orientation.x = base_to_map.getRotation().x();
-    odom.pose.pose.orientation.y = base_to_map.getRotation().y();
-    odom.pose.pose.orientation.z = base_to_map.getRotation().z();
-    odom.pose.pose.orientation.w = base_to_map.getRotation().w();
-    //publish the message
-    odom_pub.publish(odom);
-  }
-
-
-sensor_msgs::LaserScan ObstacleManager::convetPC2Sacn(sensor_msgs::PointCloud Input) {
-  sensor_msgs::LaserScan output;
-  output.header = Input.header;
-  for (int i = 0; i < Input.points.size(); ++i) {
-    /* code */
-  }
-}
