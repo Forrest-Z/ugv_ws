@@ -79,7 +79,8 @@ private:
 
   ros::Publisher station_points_pub;
   ros::Publisher global_path_pub;
-  ros::Publisher vehicle_model_pub; 
+  ros::Publisher vehicle_model_pub;
+  ros::Publisher vehicle_info_pub; 
 
   ros::Publisher status_pub;
   ros::Publisher seq_pub;
@@ -133,6 +134,7 @@ private:
   vector<StationInfo> station_list_;
 
   int task_status_last_;
+  string mission_info_;
   
 
   int map_number_;
@@ -280,6 +282,7 @@ private:
     temp_topic.data = temp_data;
     action_pub.publish(temp_topic);
     // cout << robot_id_ << " Current Mission Index " << temp_data << endl;
+    mission_info_ = MyTools_.ConvertMissionType2English(temp_data);
   }
 
   void IndexCallback(const std_msgs::Int32::ConstPtr& Input) {

@@ -45,6 +45,21 @@ public:
   void set_robot_id(string Input) {robot_id_ = Input;};
   sensor_msgs::PointCloud path_predict() { return (path_predict_); }
   geometry_msgs::Twist cmd_vel() { return (cmd_vel_); }
+
+  string ConvertMissionType2English(string Input) {
+    string Output;
+    if(Input == "00") Output = "Delivery";
+    else if(Input == "01") Output = "Pickup Item";
+    else if(Input == "02") Output = "Pickup Box";
+    else if(Input == "03") Output = "Droping Box";
+    else if(Input == "04") Output = "Loading Item";
+    else if(Input == "05") Output = "Loading Box";
+    else if(Input == "06") Output = "Standby";
+    else if(Input == "07") Output = "Freeze";
+    else if(Input == "08") Output = "Going Home";
+    else Output = "Unkonwn Mission";
+    return Output;
+  }
 private: 
 	const double PI = 3.14159265359;
 	
@@ -66,6 +81,8 @@ private:
 	void DrawCircle(double Step,double Radius,sensor_msgs::PointCloud& Output);
 	void DrawCircle(double Begin,double End,double Step,double Radius,sensor_msgs::PointCloud& Output);
   void DrawCircle(double Begin,double End,double Step,double Radius,geometry_msgs::Point32 Origin,sensor_msgs::PointCloud& Output);
+
+
 };
 
 

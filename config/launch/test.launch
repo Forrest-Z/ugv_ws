@@ -8,7 +8,7 @@
   <node pkg="obstacle_manager" type="obstacle_manager_node" name="obstacle_manager_node_1" output="screen"  cwd="node">
   	<param name="robot_id" type="string" value="robot_1" />
   </node>
-  <node pkg="isolation_manager" type="isolation_manager_node" name="isolation_manager_node_1" output="screen">
+  <node pkg="message_manager" type="message_manager_node" name="message_manager_node_1" output="screen">
     <param name="robot_id" type="string" value="robot_1" />
   </node>
 
@@ -18,7 +18,7 @@
   <node pkg="obstacle_manager" type="obstacle_manager_node" name="obstacle_manager_node_2" output="screen"  cwd="node">
     <param name="robot_id" type="string" value="robot_2" />
   </node>
-  <node pkg="isolation_manager" type="isolation_manager_node" name="isolation_manager_node_2" output="screen">
+  <node pkg="message_manager" type="message_manager_node" name="message_manager_node_2" output="screen">
     <param name="robot_id" type="string" value="robot_2" />
   </node>
 
@@ -28,7 +28,7 @@
   <node pkg="obstacle_manager" type="obstacle_manager_node" name="obstacle_manager_node_3" output="screen"  cwd="node">
     <param name="robot_id" type="string" value="robot_3" />
   </node>
-  <node pkg="isolation_manager" type="isolation_manager_node" name="isolation_manager_node_3" output="screen">
+  <node pkg="message_manager" type="message_manager_node" name="message_manager_node_3" output="screen">
     <param name="robot_id" type="string" value="robot_3" />
   </node>
 
@@ -38,17 +38,17 @@
   <node pkg="obstacle_manager" type="obstacle_manager_node" name="obstacle_manager_node_4" output="screen"  cwd="node">
     <param name="robot_id" type="string" value="robot_4" />
   </node>
-  <node pkg="isolation_manager" type="isolation_manager_node" name="isolation_manager_node_4" output="screen">
+  <node pkg="message_manager" type="message_manager_node" name="message_manager_node_4" output="screen">
     <param name="robot_id" type="string" value="robot_4" />
   </node>
 
   <node pkg="mission_control" type="mission_control_node" name="mission_control_node_5" output="screen"  cwd="node">
     <param name="robot_id" type="string" value="robot_5" />
   </node>
-  <node pkg="obstacle_manager" type="obstacle_manager_node" name="obstacle_manager_node_5" output="screen"  cwd="node">
+  <node pkg="message_manager" type="obstacle_manager_node" name="obstacle_manager_node_5" output="screen"  cwd="node">
     <param name="robot_id" type="string" value="robot_5" />
   </node>
-  <node pkg="isolation_manager" type="isolation_manager_node" name="isolation_manager_node_5" output="screen">
+  <node pkg="message_manager" type="message_manager_node" name="message_manager_node_5" output="screen">
     <param name="robot_id" type="string" value="robot_5" />
   </node>
  -->

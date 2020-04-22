@@ -1,28 +1,27 @@
-#include "libIsolationManager.h"
+#include "libMessageManager.h"
 
-IsolationManager::IsolationManager():pn("~"){
-  pn.param<string>("robot_id", robot_id_, "");
+MessageManager::MessageManager():pn("~") {
+  n.param<string>("robot_id", robot_id_, "");
+  cmd_sub = n.subscribe("husky_velocity_controller/cmd_vel",1, &MessageManager::CommandCallback,this);
+  seq_sub = n.subscribe("robot_sequence",1, &MessageManager::SequenceCallback,this);
+  status_sub = n.subscribe("vehicle_status",1, &MessageManager::StatusCallback,this);
+  action_sub = n.subscribe("task_action",1, &MessageManager::ActionCallback,this);
 
-  cmd_sub = n.subscribe(robot_id_ + "/husky_velocity_controller/cmd_vel",1, &IsolationManager::CommandCallback,this);
-  seq_sub = n.subscribe(robot_id_ + "/robot_sequence",1, &IsolationManager::SequenceCallback,this);
-  status_sub = n.subscribe(robot_id_ + "/vehicle_status",1, &IsolationManager::StatusCallback,this);
-  action_sub = n.subscribe(robot_id_ + "/task_action",1, &IsolationManager::ActionCallback,this);
-
-	station_pub = n.advertise<std_msgs::String>(robot_id_ + "/station_id",1);
-	action_pub = n.advertise<std_msgs::Int32>(robot_id_ + "/action_index",1);
-	sequence_pub = n.advertise<std_msgs::String>(robot_id_ + "/task_sequence",1);
-	command_pub = n.advertise<std_msgs::String>(robot_id_ + "/action_command",1);
+	station_pub = n.advertise<std_msgs::String>("station_id",1);
+	action_pub = n.advertise<std_msgs::Int32>("action_index",1);
+	sequence_pub = n.advertise<std_msgs::String>("task_sequence",1);
+	command_pub = n.advertise<std_msgs::String>("action_command",1);
 
 
-  station_sub = n.subscribe("/to_robot_task",1, &IsolationManager::StationCallback,this);
+  station_sub = n.subscribe("/to_robot_task",1, &MessageManager::StationCallback,this);
 	center_pub = n.advertise<std_msgs::String>("/robot_backend_task",1);
 }
 
 
-IsolationManager::~IsolationManager() {
+MessageManager::~MessageManager() {
 }
 
-void IsolationManager::Initialization() {
+void MessageManager::Initialization() {
 	robot_seq_ = "XXXX";
 	robot_act_ = "XX";
 	robot_speed_ = 0;
@@ -36,27 +35,28 @@ void IsolationManager::Initialization() {
 	id_number_ = stoi(string_temp);
 }
 
-void IsolationManager::Execute() {
+void MessageManager::Execute() {
 	Initialization();
   ros::Rate loop_rate(ROS_RATE_HZ);
-  cout << "Isolation Node For " << robot_id_ << " Started" << endl;
+  cout << "Message Node For " << robot_id_ << " Started" << endl;
   while (ros::ok()) {
   	ros::spinOnce();
     loop_rate.sleep();
-    UpdateRealtimeInfo();
+    // UpdateRealtimeInfo();
     // cout << "Callback Flag " << robot_update_ << endl;
     if(robot_update_[3] || (robot_update_[0]&&robot_update_[1]&&robot_update_[2])){
+    	// cout << "UpdateTaskInfo" << endl;
     	UpdateTaskInfo();
     }
     
   }
 
-  cout << "Isolation Node For " << robot_id_ << " Closed" << endl;
+  cout << "Message Node For " << robot_id_ << " Closed" << endl;
 
 }
 
-void IsolationManager::UpdateTaskInfo() {
-	robot_update_ = {false,false,false,false};
+void MessageManager::UpdateTaskInfo() {
+	// robot_update_ = {false,false,false,false};
 
 	int size_head          = 6;
 	int size_length        = 2;
@@ -105,19 +105,18 @@ void IsolationManager::UpdateTaskInfo() {
 	center_pub.publish(topic_data);
 
 
-	// cout << endl << endl;
 	cout << "================================================" << endl;
 	cout << "SS             Task Status Update               " << endl;
-	cout << "================================================" << endl;
 	cout << "Overall  : " << output_overall << endl;
-	cout << "Run Time : " << ((ros::Time::now() - run_timer_).toSec()) << endl;
-	cout << "Robot ID : " << id_number_ << endl;
-	cout << "Sequence : " << data_sequence << endl;
-	cout << "Mission  : " << ConvertMissionType2English(data_mission_type) << endl;
-	cout << "Status   : " << ConvertMissionStatus2English(data_status) << endl;
+	cout << "================================================" << endl;
+	// cout << "Run Time : " << ((ros::Time::now() - run_timer_).toSec()) << endl;
+	// cout << "Robot ID : " << id_number_ << endl;
+	// cout << "Sequence : " << data_sequence << endl;
+	// cout << "Mission  : " << ConvertMissionType2English(data_mission_type) << endl;
+	// cout << "Status   : " << ConvertMissionStatus2English(data_status) << endl;
 }
 
-void IsolationManager::UpdateRealtimeInfo() {
+void MessageManager::UpdateRealtimeInfo() {
 	int size_coordinate = 8;
 	int size_yaw = 4;
 
@@ -215,14 +214,12 @@ void IsolationManager::UpdateRealtimeInfo() {
 
 
 
-void IsolationManager::StationCallback(const std_msgs::String::ConstPtr& Input) {
+void MessageManager::StationCallback(const std_msgs::String::ConstPtr& Input) {
 	static string last_input;
 	static string last_sequence;
 	string input = Input->data;
 	if(input == last_input) return;
 	last_input = input;
-	// cout << endl << endl;
-	// cout << "Command Received " << endl;
 
 	int size_head          = 6;
 	int size_length        = 2;
@@ -234,6 +231,20 @@ void IsolationManager::StationCallback(const std_msgs::String::ConstPtr& Input) 
 	int size_mission       = 8;
 	int size_reserve       = 6;
 	int size_end           = 2;
+
+
+	int check_dig = size_head + size_length + size_source;
+	string check_id = input.substr(check_dig,size_robot_id);
+	if(check_id.at(0) == '0' ){
+		check_id = check_id.substr(1.1);
+	}
+	if(check_id != to_string(id_number_)) return;
+
+	// cout << endl;
+	cout << "================================================" << endl;
+	cout << "RR              Command Received                " << endl;
+	cout << "Overall  : " << input << endl;
+	cout << "================================================" << endl;
 
 	string data_head = "GPMAPD";
 	string data_source = "01";
@@ -268,8 +279,6 @@ void IsolationManager::StationCallback(const std_msgs::String::ConstPtr& Input) 
 	if(robot_id.at(0) == '0' ){
 		robot_id = robot_id.substr(1.1);
 	}
-	if(robot_id != to_string(id_number_)) return;
-
 	tracking_index += size_robot_id;
 
 
@@ -300,30 +309,27 @@ void IsolationManager::StationCallback(const std_msgs::String::ConstPtr& Input) 
 		cout << "END Not Match" << endl;
 		return;
 	}
-	// cout << endl << endl;
-	cout << "================================================" << endl;
-	cout << "RR              Command Received                " << endl;
-	cout << "================================================" << endl;
-	cout << "Overall  : " << input << endl;
-	cout << "Run Time : " << ((ros::Time::now() - run_timer_).toSec()) << endl;
-	cout << "Robot ID : " << id_number_ << endl;
-	cout << "Sequence : " << task_sequence << endl;
-	cout << "Mission  : " << ConvertMissionType2English(misstion_type) << endl;
+	robot_update_ = {false,false,false};
+
+	// cout << "Run Time : " << ((ros::Time::now() - run_timer_).toSec()) << endl;
+	// cout << "Robot ID : " << id_number_ << endl;
+	// cout << "Sequence : " << task_sequence << endl;
+	// cout << "Mission  : " << ConvertMissionType2English(misstion_type) << endl;
 	if(!ProcessMission(mission_command,misstion_type,task_sequence)) return;
 }
 
 
-int IsolationManager::FindMissionType(string Input) {
+int MessageManager::FindMissionType(string Input) {
 	if(Input == "00" || Input == "01" || Input == "02" || Input == "08" ) return 1;
 	if(Input == "06" || Input == "07") return 0;
 	if(Input == "03" || Input == "04" || Input == "05") return 3;
 	return -1;
 }
 
-bool IsolationManager::ProcessMission(string Command,string Type,string Seq) {
+bool MessageManager::ProcessMission(string Command,string Type,string Seq) {
 	int Action = FindMissionType(Type);
 	if(Action < 0) {
-		cout << "Action Unknown" << endl;
+		// cout << "Action Unknown" << endl;
 		return false;
 	} 
 
@@ -359,8 +365,8 @@ bool IsolationManager::ProcessMission(string Command,string Type,string Seq) {
 
 
 
-	if(Action == 1) cout << "Command  : " << topic_data << endl;
-	if(Action == 0) cout << "Command  : Waiting" << endl;
-	if(Action == 3) cout << "Command  : Action" << endl;
+	// if(Action == 1) cout << "Command  : " << topic_data << endl;
+	// if(Action == 0) cout << "Command  : Waiting" << endl;
+	// if(Action == 3) cout << "Command  : Action" << endl;
 
 }

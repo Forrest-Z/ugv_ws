@@ -1,5 +1,5 @@
-#ifndef LIB_ISOLATIONMANAGER_H
-#define LIB_ISOLATIONMANAGER_H
+#ifndef LIB_MESSAGEMANAGER_H
+#define LIB_MESSAGEMANAGER_H
 
 #include <ros/ros.h>
 #include <iostream>
@@ -28,16 +28,16 @@ using std::to_string;
 
 const double PI = 3.14159265359;
 
-class IsolationManager
+class MessageManager
 {
 public:
-  IsolationManager();
-  ~IsolationManager();
+  MessageManager();
+  ~MessageManager();
   void Initialization();
   void Execute();
 
 private:
-  const int ROS_RATE_HZ = 1;
+  const int ROS_RATE_HZ = 10;
   const int robot_number = 2;
 
   /** ROS Components **/

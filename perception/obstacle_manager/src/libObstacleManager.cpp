@@ -1,14 +1,13 @@
 #include "libObstacleManager.h"
 
-ObstacleManager::ObstacleManager():pn("~")
-{ 
-  pn.param<string>("robot_id", robot_id_, "");
+ObstacleManager::ObstacleManager():pn("~") { 
+  n.param<string>("robot_id", robot_id_, "");
 
-  map_sub = n.subscribe("/map",1, &ObstacleManager::MapCallback,this);
-  scan_sub = n.subscribe(robot_id_ + "/scan",1, &ObstacleManager::SacnCallback,this);
+  map_sub = n.subscribe("/map_drop",1, &ObstacleManager::MapCallback,this);
+  scan_sub = n.subscribe("scan",1, &ObstacleManager::SacnCallback,this);
   rviz_click_sub = n.subscribe("/clicked_point",1, &ObstacleManager::ClickpointCallback,this);
 
-  map_obs_pub = n.advertise<sensor_msgs::PointCloud> (robot_id_ + "/map_obs_points", 1);
+  map_obs_pub = n.advertise<sensor_msgs::PointCloud> ("map_obs_points", 1);
 
   isMapSave_ = false;
 

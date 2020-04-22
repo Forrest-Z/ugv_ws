@@ -1,14 +1,14 @@
-max_linear_velocity 3
-max_rotation_velocity 2
+max_linear_velocity 30
+max_rotation_velocity 10
 
-max_linear_acceleration 0.05
-max_rotation_acceleration 0.4
+max_linear_acceleration 6
+max_rotation_acceleration 2
 
-max_translational_velocity 4
+max_translational_velocity 40
 min_translational_velocity 0.1
 
-controller_linear_scale 2
-controller_rotation_scale 2
+controller_linear_scale 20
+controller_rotation_scale 20
 
 vehicle_radius 0.3
 wait_obstacle true

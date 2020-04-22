@@ -34,8 +34,8 @@ class Planning
 public:
 	Planning(){
 		path_window_radius_    = 8;
-		path_swap_range_       = 1.5; // 1.2
-		path_vertical_step_    = 0.3;
+		path_swap_range_       = 1.2; // 1.2
+		path_vertical_step_    = 0.2;
 
 		splines_joints_num_    = 3;
 

@@ -298,7 +298,7 @@ void Planning::SetLocalCostmap(nav_msgs::OccupancyGrid& Costmap,sensor_msgs::Poi
 
   for (int i = 0; i < Obstacle.points.size(); ++i) {
     if(fabs(Obstacle.points[i].x) > path_window_radius_ || fabs(Obstacle.points[i].y) > path_window_radius_) continue;
-    if(hypot(Obstacle.points[i].x,Obstacle.points[i].y) < 0.3) continue;
+    if(hypot(Obstacle.points[i].x,Obstacle.points[i].y) < 0.5) continue;
     int obstacle_in_map = ConvertCartesianToLocalOccupany(Costmap,Obstacle.points[i]);
     if (obstacle_in_map < 0) continue;
     Costmap.data[obstacle_in_map] = obstacle_occupancy;

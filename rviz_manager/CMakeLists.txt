@@ -1,21 +1,21 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(isolation_manager)
+project(rviz_manager)
 
 find_package(catkin REQUIRED COMPONENTS
-    roscpp
-    tf
-    pcl_ros
+  roscpp
+  tf
+  pcl_ros
+  std_msgs
 ) 
 
 find_package(PCL 1.7 REQUIRED)
 
-generate_messages(
- DEPENDENCIES
-)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
+
 catkin_package(
+CATKIN_DEPENDS
 )
 
 include_directories(
@@ -23,6 +23,12 @@ include_directories(
   ${PCL_INCLUDE_DIR} 
 )
 
-add_executable(isolation_manager_node src/IsolationManager.cc src/libIsolationManager.cc)
+add_executable(rviz_manager_node src/RvizManager.cc src/libRvizManager.cc)
 
-target_link_libraries(isolation_manager_node ${catkin_LIBRARIES})
+
+target_link_libraries(rviz_manager_node 
+	${catkin_LIBRARIES}
+	${PCL_LIBRARIES} 
+)
+
+
