@@ -58,7 +58,6 @@ public:
 	double path_window_radius_standard() {return path_window_radius_standard_;};
 	void set_path_window_radius_standard(double Input) {path_window_radius_standard_ = Input;};
 	void set_costmap_resolution(double Input) {costmap_resolution_ = Input;};
-	void set_robot_id(string Input) {robot_id_ = Input;};
 	void set_safe_path_search_grid(double Input) {
 		mtx_radius_.lock();
 		safe_path_search_grid_ = Input;
@@ -79,7 +78,6 @@ private:
 
 	double costmap_resolution_;
 	int safe_path_search_grid_;
-	string robot_id_;
 
 	std::mutex mtx_radius_;
 

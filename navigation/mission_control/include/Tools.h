@@ -42,7 +42,6 @@ public:
   void BuildPredictPath(geometry_msgs::Twist Cmd_vel);
 
   sensor_msgs::PointCloud ConvertVectortoPointcloud(vector<sensor_msgs::PointCloud> Input);
-  void set_robot_id(string Input) {robot_id_ = Input;};
   sensor_msgs::PointCloud path_predict() { return (path_predict_); }
   geometry_msgs::Twist cmd_vel() { return (cmd_vel_); }
 
@@ -72,7 +71,6 @@ private:
 	sensor_msgs::PointCloud path_predict_;
 	string moving_state_;
 	geometry_msgs::Twist cmd_vel_;
-	string robot_id_;
 
 	/** Functions **/
 	void GetMovingState(geometry_msgs::Twist Cmd_Vel);

@@ -1,19 +1,14 @@
 #include "libMissionControl.h"
 
 MissionControl::MissionControl():pn("~") {
-  n.param<string>("robot_id", robot_id_, "");
+  n.param<string>("config_folder", config_folder_, "");
 
   joy_sub = n.subscribe("joy",1, &MissionControl::JoyCallback,this);
   goal_sub = n.subscribe("goal",1, &MissionControl::GoalCallback,this);
   obstacle_sub = n.subscribe("map_obs_points",1, &MissionControl::ObstacleCallback,this); 
   step_sub = n.subscribe("button",1, &MissionControl::StepNumberCallback,this);
   cmd_sub = n.subscribe("virtual_joystick/cmd_vel",1, &MissionControl::CmdCallback,this);
-
-  station_sub = n.subscribe("station_id",1, &MissionControl::StationCallback,this);
-  seq_sub = n.subscribe("task_sequence",1, &MissionControl::SequenceCallback,this);
-  action_sub = n.subscribe("action_command",1, &MissionControl::ActionCallback,this);
-  index_sub = n.subscribe("action_index",1, &MissionControl::IndexCallback,this);
-
+  map_number_sub = n.subscribe("/map_number",1, &MissionControl::MapNumberCallback,this);
 
   cmd_vel_pub = n.advertise<geometry_msgs::Twist> ("husky_velocity_controller/cmd_vel", 1);
   path_pred_pub = n.advertise<sensor_msgs::PointCloud>("pred_path",1);
@@ -30,32 +25,12 @@ MissionControl::MissionControl():pn("~") {
   global_path_pub = n.advertise<sensor_msgs::PointCloud>("global_path",1);
   vehicle_model_pub = n.advertise<visualization_msgs::Marker>("vehicle_model",1);
   vehicle_info_pub = n.advertise<visualization_msgs::Marker>("vehicle_info",1);
-
-  status_pub = n.advertise<std_msgs::Int32>("vehicle_status",1);
-  seq_pub = n.advertise<std_msgs::String>("robot_sequence",1);
-  action_pub = n.advertise<std_msgs::String>("task_action",1);
-
 }
 MissionControl::~MissionControl(){
 }
 
 
 bool MissionControl::Initialization() {
-  string dir_temp = GetCurrentWorkingDir();
-  int string_count = 0;
-  for (string_count; string_count < dir_temp.size() - 5;string_count++) {
-    string dir_temp_2 = dir_temp.substr(string_count,6);
-    if(dir_temp_2 == "ugv_ws") break;
-  }
-  if(string_count >= dir_temp.size() - 5) {
-    cout << "Navi Folder Error" << endl;
-    cout << dir_temp << endl;
-    return false;
-  }
-
-  string dir_source = dir_temp.substr(0,string_count+6);
-  workspace_folder_ = dir_source + "/src/ugv_ws/";
-
   if(!ReadConfig()) {
     max_linear_velocity_ = 1.5;
     max_rotation_velocity_ = 1.5;
@@ -77,21 +52,12 @@ bool MissionControl::Initialization() {
   isJoyControl_ = true;
   isLocationUpdate_ = false;
   isReachCurrentGoal_ = false;
-  isPauseAction_ = false;
-  isMovingBox_ = false;
-  isWaitingStop_ = false;
 
   map_number_ = 1;
   planner_state_ = 1;
-  task_status_last_ = -1;
 
-  mission_info_ = "None";
   MyController_.set_speed_scale(controller_linear_scale_);
   MyController_.set_rotation_scale(controller_rotation_scale_);
-  MyPlanner_.set_robot_id(robot_id_);
-  MyTools_.set_robot_id(robot_id_);
-
-  ReadStationList();
 
   return(true);
 }
@@ -105,7 +71,7 @@ void MissionControl::Execute() {
   ros::Time planner_timer = ros::Time::now();
   double planner_duration = 0.1;
 
-  cout << "Navigation Node For " << robot_id_ << " Started" << endl;
+  cout << "Navigation Node Started" << endl;
 
   while (ros::ok()) {
     loop_rate.sleep();
@@ -116,41 +82,13 @@ void MissionControl::Execute() {
     if(!UpdateVehicleLocation()) continue;
     if(!MyPlanner_.UpdateCostmap(obstacle_in_base_)) continue;
 
-    if(isMovingBox_) {
-      if((ros::Time::now() - moving_box_timer_).toSec() > 1) {
-        std_msgs::Int32 status;
-        int status_data = 2;
-        task_status_last_ = status_data;
-        status.data = status_data;
-        status_pub.publish(status);
-        isMovingBox_ = false;
-      } else {
-        // cout << "Transporting Items..." << endl;
-      }
-    }
-
-    if(isWaitingStop_) {
-      if((ros::Time::now() - waiting_stop_timer_).toSec() > 1) {
-        std_msgs::Int32 status;
-        int status_data = 2;
-        task_status_last_ = status_data;
-        status.data = status_data;
-        status_pub.publish(status);
-        isWaitingStop_ = false;
-      } else {
-        // cout << "Stopping The Robot..." << endl;
-      }
-    }
-
-
-    if(!isManualControl_ && !isPauseAction_ && global_path_pointcloud_.points.size() > 0) {
+    if(!isManualControl_ && global_path_pointcloud_.points.size() > 0) {
       ApplyAutoControl(planner_timer,planner_duration);
-      UpdateVehicleStatus();
     }
 
     local_costmap_pub.publish(MyPlanner_.costmap_local());
   }
-  cout << "Navigation Node For " << robot_id_ << " Closed" << endl;
+  cout << "Navigation Node For Closed" << endl;
 
 }
 
@@ -171,14 +109,12 @@ void MissionControl::ApplyAutoControl(ros::Time& Timer,double& Duration_Limit) {
   // if(min_distance > 3) search_grid = 5;
 
 
-  std::size_t pos = robot_id_.find("_");
-  string string_temp = robot_id_.substr(pos+1);
-  int id_index = stoi(string_temp);
+
   int wait_time_unit = 3;
   if(wait_obstacle_) {
     static ros::Time detecting_timer;
     static ros::Time waiting_timer;
-    if((ros::Time::now() - waiting_timer).toSec() < wait_time_unit * id_index) {
+    if((ros::Time::now() - waiting_timer).toSec() < wait_time_unit) {
       planner_state_ = 0;
       detecting_timer = ros::Time::now();
     } 
@@ -303,7 +239,6 @@ void MissionControl::CheckNavigationState(geometry_msgs::Point32 Goal,geometry_m
     ZeroCommand(Cmd_vel);
     global_path_pointcloud_.points.clear();
     // cout << "Goal Reached" << endl;
-    UpdateVehicleStatus();
   }
 }
 
@@ -311,62 +246,12 @@ void MissionControl::CheckNavigationState(geometry_msgs::Point32 Goal,geometry_m
 void MissionControl::ComputeGlobalPlan(geometry_msgs::Point32& Goal) {
   if(!isLocationUpdate_) return;
   isReachCurrentGoal_ = false;
-  string map_folder = workspace_folder_ + "config/map/";
+  string map_folder = config_folder_ + "/map/";
   MyRouter_.RoutingAnalyze(Goal,vehicle_in_map_,map_folder,map_number_);
   global_path_pointcloud_ = MyRouter_.path_pointcloud();
 }
 
-double MissionControl::ComputeMinDistance() {
-  double restrict_range = 0.3;
-  double obstacle_distance = DBL_MAX;
-  double min_distance = DBL_MAX;
 
-  for (int i = 0; i < obstacle_in_base_.points.size(); ++i) {
-    obstacle_distance = hypot(obstacle_in_base_.points[i].x,obstacle_in_base_.points[i].y);
-    if(obstacle_distance < min_distance) min_distance = obstacle_distance;
-  }
-
-  return min_distance;
-}
-
-void MissionControl::ConvertPointcloud(sensor_msgs::PointCloud Input,sensor_msgs::PointCloud& Output,tf::Transform Transform) {
-  double transform_m[4][4];
-  double mv[12];
-  Transform.getBasis().getOpenGLSubMatrix(mv);
-  tf::Vector3 origin = Transform.getOrigin();
-
-  transform_m[0][0] = mv[0];
-  transform_m[0][1] = mv[4];
-  transform_m[0][2] = mv[8];
-  transform_m[1][0] = mv[1];
-  transform_m[1][1] = mv[5];
-  transform_m[1][2] = mv[9];
-  transform_m[2][0] = mv[2];
-  transform_m[2][1] = mv[6];
-  transform_m[2][2] = mv[10];
-
-  transform_m[3][0] = transform_m[3][1] = transform_m[3][2] = 0;
-  transform_m[0][3] = origin.x();
-  transform_m[1][3] = origin.y();
-  transform_m[2][3] = origin.z();
-  transform_m[3][3] = 1;
-
-  Output = Input;
-  for (int i = 0; i < Input.points.size(); ++i) {
-    Output.points[i].x 
-      = Input.points[i].x * transform_m[0][0] 
-      + Input.points[i].y * transform_m[0][1]
-      + Input.points[i].z * transform_m[0][2] 
-      + transform_m[0][3];
-    Output.points[i].y 
-      = Input.points[i].x * transform_m[1][0] 
-      + Input.points[i].y * transform_m[1][1] 
-      + Input.points[i].z * transform_m[1][2] 
-      + transform_m[1][3];   
-    Output.points[i].z = Input.points[i].z;
-  }
-
-}
 void MissionControl::ConvertPoint(geometry_msgs::Point32 Input,geometry_msgs::Point32& Output,tf::Transform Transform) {
   double transform_m[4][4];
   double mv[12];
@@ -407,7 +292,6 @@ int MissionControl::FindCurrentGoalRoute(sensor_msgs::PointCloud Path,geometry_m
   double min_index_i = -1;
   double min_index_j = -1;
   // cout << "=== DEBUG ===" << endl;
-
 
   for (int i = 0; i < Path.points.size()-1; ++i) {
     double distance_i 
@@ -496,7 +380,7 @@ void MissionControl::PrintConfig() {
 
 bool MissionControl::ReadConfig() {
   std::ifstream yaml_file;
-  std::string file_name_node = workspace_folder_+ "/config/cfg/navi_config.txt";
+  std::string file_name_node = config_folder_+ "/cfg/navi_config.txt";
   yaml_file.open(file_name_node);
   if(!yaml_file.is_open()) {
     cout<<"Could not find Config File"<<endl;
@@ -547,56 +431,16 @@ bool MissionControl::ReadConfig() {
       ss >> vehicle_radius_;
       info_linenum++;
     }
-    else if(yaml_info == "wait_obstacle") {
-      string reading_data;
-      ss >> reading_data;
-      if(reading_data == "true") wait_obstacle_ = true;
-      else if(reading_data == "false") wait_obstacle_ = false;
-      else info_linenum--;
-      info_linenum++;
-    }
-
   }
 
   yaml_file.close(); 
-
-  if(info_linenum == 10) {
-    return true;
-  } else {
-    cout << "Config File Incomplete, Using Default Value" << endl;
-    cout << info_linenum << endl;
-    return false;
-  }
-}
-
-bool MissionControl::ReadStationList() {
-  std::ifstream station_file;
-  string file_name_node = workspace_folder_+ "/config/cfg/station.txt";
-  station_file.open(file_name_node);
-
-  if(!station_file.is_open()) {
-    cout<<"Could not find Station File"<<endl;
-    cout<<"File Not Exist At: "<<file_name_node<<endl;
-    return false;
-  }
-
-  StationInfo station_temp;
-  station_list_.clear();
-  int line_num = 0;
-  while (station_file >> station_temp.id >> station_temp.x >> station_temp.y) {
-    // cout << "station id read :" << station_temp.id << endl;
-    station_list_.push_back(station_temp);
-    line_num++;
-  }
-  station_file.close();
-  cout << "Read " << line_num << " optional tasks from file" << endl;
   return true;
 }
 
 bool MissionControl::UpdateVehicleLocation() {
   // static tf::StampedTransform stampedtransform;
   try {
-    listener_map_to_base.lookupTransform("/map", robot_id_ + "/base_link",  
+    listener_map_to_base.lookupTransform("/map", "/base_link",  
                              ros::Time(0), stampedtransform);
   }
   catch (tf::TransformException ex) {
@@ -613,7 +457,7 @@ bool MissionControl::UpdateVehicleLocation() {
   geometry_msgs::TransformStamped temp_trans;
   temp_trans.header.stamp = ros::Time::now();
   temp_trans.header.frame_id = "/map";
-  temp_trans.child_frame_id = robot_id_ + "/base_link";
+  temp_trans.child_frame_id = "/base_link";
 
   temp_trans.transform.translation.x = stampedtransform.getOrigin().x();
   temp_trans.transform.translation.y = stampedtransform.getOrigin().y();
@@ -658,7 +502,7 @@ bool MissionControl::UpdateVehicleLocation() {
   marker.mesh_resource = "package://config/cfg/model.dae";
 
 
-  infoer.header.frame_id = robot_id_ + "/base_link";
+  infoer.header.frame_id = "/base_link";
   infoer.header.stamp = ros::Time::now();
   infoer.id = 0;
   infoer.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
@@ -669,21 +513,54 @@ bool MissionControl::UpdateVehicleLocation() {
   infoer.color.g = 1;
   infoer.color.b = 1;
   infoer.scale.z = 7;
-  infoer.text = "ID : " + robot_id_ + "\n" + "Task: " + mission_info_;
+  infoer.text = "INFO";
 
 
   vehicle_model_pub.publish(marker);
-  vehicle_info_pub.publish(infoer);
+  // vehicle_info_pub.publish(infoer);
 
   return true;
 }
 
-void MissionControl::UpdateVehicleStatus() {
-  std_msgs::Int32 status;
-  int status_data;
-  (isReachCurrentGoal_) ? status_data = 2 : status_data = 1;
-  if(task_status_last_ == status_data) return;
-  task_status_last_ = status_data;
-  status.data = status_data;
-  status_pub.publish(status);
+
+
+/** Callbacks **/
+void MissionControl::JoyCallback(const sensor_msgs::Joy::ConstPtr& Input) {
+  last_timer_ = ros::Time::now();
+  static bool isLock = false;
+  double axis_deadzone = 0.1;
+
+  (Input->buttons[BUTTON_LB]) ? isManualControl_ = true : isManualControl_ = false;
+  (Input->buttons[BUTTON_LB]) ? isJoyControl_ = true : isJoyControl_ = false;
+
+  if (Input->buttons[BUTTON_LB] && Input->buttons[BUTTON_X]) isLock = true;
+  if (Input->buttons[BUTTON_LB] && Input->buttons[BUTTON_Y]) isLock = false;
+
+  double axis_x = Input->axes[AXIS_LEFT_UP_DOWN];
+  double axis_y = Input->axes[AXIS_RIGHT_LEFT_RIGHT];
+  if(fabs(axis_x) < axis_deadzone) axis_x = 0;
+  if(fabs(axis_y) < axis_deadzone) axis_y = 0;
+
+  if(isLock) {
+    isManualControl_ = true;
+    ZeroCommand(joy_cmd_);
+  } else {
+    joy_cmd_.linear.x  = axis_x * max_linear_velocity_;
+    joy_cmd_.angular.z = axis_y * max_rotation_velocity_;      
+  }
+
+  if(isManualControl_ && Input->buttons[BUTTON_BACK]) {
+    global_path_pointcloud_.points.clear();
+  }
+}
+
+void MissionControl::CmdCallback(const geometry_msgs::Twist::ConstPtr& Input) {
+  last_timer_ = ros::Time::now();
+  isManualControl_ = true;
+  last_timer_ = ros::Time::now();
+  geometry_msgs::Twist android_cmd;
+  android_cmd.linear.x = Input->linear.x;
+  android_cmd.angular.z = Input->angular.z;
+  android_cmd.angular.z *= 1.5;
+  joy_cmd_ = android_cmd;
 }

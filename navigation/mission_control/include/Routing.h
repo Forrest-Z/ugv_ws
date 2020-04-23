@@ -59,7 +59,6 @@ struct NodeCompare {
     if (na.cost == nb.cost) return (na.id <= nb.id);
     return(na.cost<= nb.cost);
   }
-
 };
 
 

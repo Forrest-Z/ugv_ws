@@ -55,7 +55,7 @@ bool Planning::CheckIdealPath(geometry_msgs::Point32& Goal) {
   geometry_msgs::Point32 point_2;
 
   sensor_msgs::PointCloud path_temp;
-  path_temp.header.frame_id = robot_id_ + "/base_link";
+  path_temp.header.frame_id = "/base_link";
   path_temp.header.stamp = ros::Time::now();
 
   double goal_distance = hypot(Goal.x,Goal.y);
@@ -159,7 +159,7 @@ void Planning::GenerateSplinesPath(vector<sensor_msgs::PointCloud>& Path_set,vec
 
   vector<vector<sensor_msgs::PointCloud>> temp_vector_2d(Joints.size());
   sensor_msgs::PointCloud path_temp;
-  path_temp.header.frame_id = robot_id_ + "/base_link";
+  path_temp.header.frame_id = "/base_link";
   path_temp.header.stamp = ros::Time::now();
   
   for (int i = 0; i < Joints.size(); ++i) {
@@ -207,7 +207,7 @@ void Planning::GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output) {
   }
 
   sensor_msgs::PointCloud temp_level;
-  temp_level.header.frame_id = robot_id_ + "/base_link";
+  temp_level.header.frame_id = "/base_link";
   temp_level.header.stamp = ros::Time::now();
   geometry_msgs::Point32 temp_joint;
 
@@ -309,7 +309,7 @@ void Planning::InitLocalCostmap(nav_msgs::OccupancyGrid& Costmap) {
   vector<signed char> map_data;
   geometry_msgs::Pose map_origin;
 
-  Costmap.header.frame_id = robot_id_ + "/base_link";
+  Costmap.header.frame_id =  "/base_link";
   Costmap.header.stamp = ros::Time::now();
   Costmap.info.resolution = costmap_resolution_;
 

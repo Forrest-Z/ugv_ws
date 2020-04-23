@@ -1,4 +1,7 @@
+<?xml version="1.0"?>
 <launch>
+	<param name="config_folder" type="string" value="$(find config)" />
+
   <node pkg="joy" type="joy_node" name="joystick"/> 
 
   <node pkg="jc_base" type="jc_base_node" name="jc_base_node" output="screen" />

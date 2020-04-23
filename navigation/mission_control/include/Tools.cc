@@ -2,7 +2,7 @@
 
 void Tools::BuildPredictPath(geometry_msgs::Twist Cmd_vel) {
   path_predict_.points.clear();
-  path_predict_.header.frame_id = robot_id_ + "/base_link";
+  path_predict_.header.frame_id = "/base_link";
   path_predict_.header.stamp = ros::Time::now();
   geometry_msgs::Point32 origin;
   double point_step = 0.01;
