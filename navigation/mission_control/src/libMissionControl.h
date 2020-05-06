@@ -17,6 +17,17 @@ struct StationInfo {
   double y;
 };
 
+enum class AutoState
+{
+  JOY = 0,
+  LTE,
+  WIFI,
+  AUTO,
+  SLOW,
+  STOP,
+  BACK,
+};
+
 class MissionControl
 {
 public:
@@ -57,6 +68,7 @@ private:
   ros::Subscriber obstacle_sub;
   ros::Subscriber step_sub;
   ros::Subscriber cmd_sub;
+  ros::Subscriber tcp_sub;  
   ros::Subscriber map_number_sub;
 
 
@@ -99,8 +111,10 @@ private:
   double controller_rotation_scale_;
 
   /** Flag **/
-  bool isManualControl_;
+  bool isWIFIControl_;
   bool isJoyControl_;
+  bool isLTEControl_;
+
   bool isLocationUpdate_;
   bool isReachCurrentGoal_;
 
@@ -115,12 +129,20 @@ private:
   geometry_msgs::Point32 goal_in_map_;
 
   geometry_msgs::Twist joy_cmd_;
+  geometry_msgs::Twist wifi_cmd_;
+  geometry_msgs::Twist lte_cmd_;
 
   tf::Transform map_to_base_;
   tf::Transform base_to_map_;
 
   sensor_msgs::PointCloud global_path_pointcloud_;
   sensor_msgs::PointCloud obstacle_in_base_;
+
+  geometry_msgs::Point32 local_sub_goal_;
+  geometry_msgs::Point32 global_sub_goal_;
+  
+  double lookahead_global_meter_;
+  double lookahead_local_scale_;
 
 
   int map_number_;
@@ -140,8 +162,8 @@ private:
 
   /** Functions **/
   void ApplyAutoControl(ros::Time& Timer,double& Duration_Limit);
-  void ApplyJoyControl();
-  void CheckNavigationState(geometry_msgs::Point32 Goal,geometry_msgs::Twist& Cmd_vel);
+
+  bool CheckNavigationState();
   void ComputeGlobalPlan(geometry_msgs::Point32& Goal);
   void ConvertPoint(geometry_msgs::Point32 Input,geometry_msgs::Point32& Output,tf::Transform Transform);
   int FindCurrentGoalRoute(sensor_msgs::PointCloud Path,geometry_msgs::Point32 Robot,double Lookahead);
@@ -149,6 +171,104 @@ private:
   void PrintConfig();
   bool ReadConfig();
   bool UpdateVehicleLocation();
+
+  void ApplyJoyControl();
+  void ApplyWIFIControl();
+  void ApplyLTEControl();
+  void ApplyStopControl();
+  void ApplyBackwardControl();
+
+  void ApplyAutoControl();
+  void ApplySlowControl();
+
+
+  int DecisionMaker();
+
+  geometry_msgs::Twist getJoyCommand() {
+    return joy_cmd_;
+  }
+  geometry_msgs::Twist getWIFICommand() {
+    return wifi_cmd_;
+  }
+  geometry_msgs::Twist getLTECommand() {
+    return lte_cmd_;
+  }
+
+  bool setAutoCoefficient(double index) {
+    int search_grid = 3;
+    double grid_res = 0.4;
+    MyPlanner_.set_safe_path_search_grid(search_grid);
+    MyPlanner_.set_costmap_resolution(grid_res);
+
+    MyController_.set_speed_scale(index * controller_linear_scale_);
+    MyController_.set_rotation_scale(index * controller_rotation_scale_);
+
+    lookahead_global_meter_ = 5;
+    lookahead_local_scale_ = 2;
+
+    return true;
+  }
+
+
+  geometry_msgs::Twist getAutoCommand();
+
+
+
+  void checkCommandSafety(geometry_msgs::Twist raw,geometry_msgs::Twist& safe) {
+    safe = raw;
+    LimitCommand(safe);
+  }
+  void createCommandInfo(geometry_msgs::Twist input) {
+    MyTools_.BuildPredictPath(input);
+  }
+  void publishCommand() {
+    cmd_vel_pub.publish(MyTools_.cmd_vel());
+    path_pred_pub.publish(MyTools_.path_predict());
+  }
+
+  void publishInfo() {
+    geometry_msgs::Point32 local_goal_map;
+    ConvertPoint(local_sub_goal_,local_goal_map,base_to_map_);
+
+    sensor_msgs::PointCloud temp_point;
+    temp_point.header.frame_id = "/map";
+    temp_point.header.stamp = ros::Time::now();
+    local_goal_map.z = 10;
+    temp_point.points.push_back(local_goal_map);
+    local_goal_pub.publish(temp_point);
+
+    temp_point.points.clear();
+    global_sub_goal_.z = 10;
+    temp_point.points.push_back(global_sub_goal_);
+    global_goal_pub.publish(temp_point);
+
+    // if(MyPlanner_.path_all_set().size() > 0) local_all_pub.publish(MyTools_.ConvertVectortoPointcloud(MyPlanner_.path_all_set()));
+    if(MyPlanner_.path_safe_set().size() > 0) local_safe_pub.publish(MyTools_.ConvertVectortoPointcloud(MyPlanner_.path_safe_set()));
+    local_best_pub.publish(MyPlanner_.path_best());
+    global_path_pub.publish(global_path_pointcloud_);
+  }
+
+  bool checkMissionStage() {
+    if(global_path_pointcloud_.points.size() > 0) return true;
+    return false;
+  }
+
+  bool updateState() {
+    if(!UpdateVehicleLocation()) {
+      cout << "Update Vehicle Location Failed" << endl;
+      return false;
+    }
+    if(!MyPlanner_.UpdateCostmap(obstacle_in_base_)) {
+      cout << "Update Costmap" << endl;
+      return false;
+    }
+    local_costmap_pub.publish(MyPlanner_.costmap_local());
+    if(!CheckNavigationState()) {
+      return false;
+    }
+    return true;
+  }
+
 
 
   /** Inline Function **/ 
@@ -178,9 +298,7 @@ private:
   void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& Input) {
     goal_in_map_.x = Input->pose.position.x;
     goal_in_map_.y = Input->pose.position.y;
-    // cout << goal_in_map_.x << "," << goal_in_map_.y << endl;
     ComputeGlobalPlan(goal_in_map_);
-    // cout << goal_in_map_.x << "," << goal_in_map_.y << endl << endl;
   }
 
   void ObstacleCallback(const sensor_msgs::PointCloud::ConstPtr& Input) {
@@ -195,6 +313,7 @@ private:
     int input_int = stoi(Input->data);
   } 
 
+  void TcpCallback(const std_msgs::String::ConstPtr& Input); 
   
 };
 #endif

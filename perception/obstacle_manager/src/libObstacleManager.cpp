@@ -3,7 +3,7 @@
 ObstacleManager::ObstacleManager():pn("~") { 
   n.param<string>("robot_id", robot_id_, "");
 
-  map_sub = n.subscribe("/map_drop",1, &ObstacleManager::MapCallback,this);
+  map_sub = n.subscribe("/map",1, &ObstacleManager::MapCallback,this);
   scan_sub = n.subscribe("scan",1, &ObstacleManager::SacnCallback,this);
   rviz_click_sub = n.subscribe("/clicked_point",1, &ObstacleManager::ClickpointCallback,this);
 

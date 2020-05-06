@@ -1,32 +1,35 @@
 #include "libMissionControl.h"
 
 MissionControl::MissionControl():pn("~") {
-  n.param<string>("config_folder", config_folder_, "");
+  pn.param<string>("config_folder", config_folder_, "");
+  cout << "config_folder :" << config_folder_ << endl;
 
   joy_sub = n.subscribe("joy",1, &MissionControl::JoyCallback,this);
   goal_sub = n.subscribe("goal",1, &MissionControl::GoalCallback,this);
   obstacle_sub = n.subscribe("map_obs_points",1, &MissionControl::ObstacleCallback,this); 
   step_sub = n.subscribe("button",1, &MissionControl::StepNumberCallback,this);
   cmd_sub = n.subscribe("virtual_joystick/cmd_vel",1, &MissionControl::CmdCallback,this);
+  tcp_sub = n.subscribe("tcp_string",1, &MissionControl::TcpCallback,this);
   map_number_sub = n.subscribe("/map_number",1, &MissionControl::MapNumberCallback,this);
 
-  cmd_vel_pub = n.advertise<geometry_msgs::Twist> ("husky_velocity_controller/cmd_vel", 1);
-  path_pred_pub = n.advertise<sensor_msgs::PointCloud>("pred_path",1);
+  cmd_vel_pub = n.advertise<geometry_msgs::Twist> ("/husky_velocity_controller/cmd_vel", 1);
+  path_pred_pub = n.advertise<sensor_msgs::PointCloud>("/pred_path",1);
 
-  local_goal_pub = n.advertise<sensor_msgs::PointCloud> ("local_goal", 1);
-  global_goal_pub = n.advertise<sensor_msgs::PointCloud> ("global_goal", 1);
+  local_goal_pub = n.advertise<sensor_msgs::PointCloud> ("/local_goal", 1);
+  global_goal_pub = n.advertise<sensor_msgs::PointCloud> ("/global_goal", 1);
 
-  local_all_pub = n.advertise<sensor_msgs::PointCloud>("local_all",1);
-  local_safe_pub = n.advertise<sensor_msgs::PointCloud>("local_safe",1);
-  local_best_pub = n.advertise<sensor_msgs::PointCloud>("local_best",1);
-  local_costmap_pub = n.advertise<nav_msgs::OccupancyGrid>("local_costmap",1);
+  local_all_pub = n.advertise<sensor_msgs::PointCloud>("/local_all",1);
+  local_safe_pub = n.advertise<sensor_msgs::PointCloud>("/local_safe",1);
+  local_best_pub = n.advertise<sensor_msgs::PointCloud>("/local_best",1);
+  local_costmap_pub = n.advertise<nav_msgs::OccupancyGrid>("/local_costmap",1);
 
-  station_points_pub = n.advertise<sensor_msgs::PointCloud>("station_points",1);
-  global_path_pub = n.advertise<sensor_msgs::PointCloud>("global_path",1);
-  vehicle_model_pub = n.advertise<visualization_msgs::Marker>("vehicle_model",1);
-  vehicle_info_pub = n.advertise<visualization_msgs::Marker>("vehicle_info",1);
+  station_points_pub = n.advertise<sensor_msgs::PointCloud>("/station_points",1);
+  global_path_pub = n.advertise<sensor_msgs::PointCloud>("/global_path",1);
+  vehicle_model_pub = n.advertise<visualization_msgs::Marker>("/vehicle_model",1);
+  vehicle_info_pub = n.advertise<visualization_msgs::Marker>("/vehicle_info",1);
 }
 MissionControl::~MissionControl(){
+  cout << "Navigation Node For Closed ~~~" << endl;
 }
 
 
@@ -44,12 +47,13 @@ bool MissionControl::Initialization() {
     controller_rotation_scale_ = 1;
 
     vehicle_radius_ = 0.3;
-
-    wait_obstacle_ = true;
   }
 
-  isManualControl_  = false;
-  isJoyControl_ = true;
+  isWIFIControl_ = false;
+  isJoyControl_  = false;
+  isLTEControl_  = false;
+
+
   isLocationUpdate_ = false;
   isReachCurrentGoal_ = false;
 
@@ -76,17 +80,42 @@ void MissionControl::Execute() {
   while (ros::ok()) {
     loop_rate.sleep();
     ros::spinOnce();
-    if(isManualControl_) {
+
+    auto mission_state = DecisionMaker();
+
+    if(mission_state == static_cast<int>(AutoState::JOY)) {
+      // cout << "ApplyJoyControl" << endl;
       ApplyJoyControl();
+      continue;
     }
-    if(!UpdateVehicleLocation()) continue;
-    if(!MyPlanner_.UpdateCostmap(obstacle_in_base_)) continue;
-
-    if(!isManualControl_ && global_path_pointcloud_.points.size() > 0) {
-      ApplyAutoControl(planner_timer,planner_duration);
+    else if(mission_state == static_cast<int>(AutoState::LTE)) {
+      ApplyLTEControl();
+      continue;
     }
-
-    local_costmap_pub.publish(MyPlanner_.costmap_local());
+    else if(mission_state == static_cast<int>(AutoState::WIFI)) {
+      ApplyWIFIControl();
+      continue;      
+    }
+    else if(mission_state == static_cast<int>(AutoState::AUTO)) {
+      // cout << "ApplyAutoControl" << endl;
+      ApplyAutoControl();
+      continue;
+    }
+    else if(mission_state == static_cast<int>(AutoState::SLOW)) {
+      ApplyAutoControl();//ApplySlowControl();
+      continue; 
+    }
+    else if(mission_state == static_cast<int>(AutoState::STOP)) {
+      ApplyStopControl();
+      continue; 
+    }    
+    else if(mission_state == static_cast<int>(AutoState::BACK)) {
+      ApplyAutoControl(); //ApplyBackwardControl();
+      continue; 
+    } else {
+      cout << "Unknown Mission State" << endl;
+      continue;
+    }
   }
   cout << "Navigation Node For Closed" << endl;
 
@@ -94,152 +123,102 @@ void MissionControl::Execute() {
 
 
 // ABCD EFGH IJKL MNOP QRST UVWX YZ
-void MissionControl::ApplyAutoControl(ros::Time& Timer,double& Duration_Limit) {
-  geometry_msgs::Point32 global_goal;
-  geometry_msgs::Point32 global_goal_in_local;
-  geometry_msgs::Point32 local_goal;
-  geometry_msgs::Twist controller_cmd;
-  sensor_msgs::PointCloud trajectory_global;
-  geometry_msgs::Point32 destination;
+int MissionControl::DecisionMaker() {
+  if(isJoyControl_) return static_cast<int>(AutoState::JOY);
+  if(checkMissionStage()) return static_cast<int>(AutoState::AUTO);
 
-  double min_distance = ComputeMinDistance();
-
-  int search_grid = 3;
-  double grid_res = 0.4;
-  // if(min_distance > 3) search_grid = 5;
-
-
-
-  int wait_time_unit = 3;
-  if(wait_obstacle_) {
-    static ros::Time detecting_timer;
-    static ros::Time waiting_timer;
-    if((ros::Time::now() - waiting_timer).toSec() < wait_time_unit) {
-      planner_state_ = 0;
-      detecting_timer = ros::Time::now();
-    } 
-    else if((ros::Time::now() - detecting_timer).toSec() > 6) {
-      for (int i = 0; i < obstacle_in_base_.points.size(); ++i) {
-        if(obstacle_in_base_.points[i].z > 5) continue;
-        double window_size = MyPlanner_.path_window_radius_standard() + 2;
-        double obstacle_distance = hypot(obstacle_in_base_.points[i].x,obstacle_in_base_.points[i].y);
-        double obstacle_edge = hypot(obstacle_in_base_.points[i].x,(obstacle_in_base_.points[i].y - window_size) );
-        if(obstacle_in_base_.points[i].x > 0 && obstacle_distance < window_size) {
-          double obstacle_cosine = ( pow(window_size,2) + pow(obstacle_distance,2) - pow(obstacle_edge,2) ) / ( 2 * window_size * obstacle_distance );
-          double obstacle_angle = acos(obstacle_cosine);
-          int obstacle_zone = (obstacle_angle/PI) * 5;
-          if(obstacle_zone == 2) {
-            waiting_timer = ros::Time::now();
-            break;
-          }
-        }
-      }
-      planner_state_ = 1; 
-    } else {
-      planner_state_ = 1; 
-    }
-  }
- 
-
-  if(planner_state_ == 1) {
-    MyPlanner_.set_safe_path_search_grid(search_grid);
-    MyPlanner_.set_costmap_resolution(grid_res);
-
-    double lookahead_global_meter = 15;
-    int global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter);
-    global_goal = global_path_pointcloud_.points[global_goal_index];
-    if(global_goal.z > 0) {
-
-      // cout << "Corner Points" << endl;
-      lookahead_global_meter = 2;
-      global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter);
-      global_goal = global_path_pointcloud_.points[global_goal_index];
-    }
-    destination = global_path_pointcloud_.points.back();
-
-    ConvertPoint(global_goal,global_goal_in_local,map_to_base_);
-
-    double lookahead_local_scale = 2;
-    int path_lookahead_index;
-    if(!MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_)) {
-      path_lookahead_index = 0;
-    } else {
-      path_lookahead_index = MyPlanner_.path_best().points.size()/lookahead_local_scale;
-    }
-
-    
-    local_goal = MyPlanner_.path_best().points[path_lookahead_index];
-    MyController_.ComputePurePursuitCommand(global_goal_in_local,local_goal,controller_cmd);
-  } 
-  else if(planner_state_ == 3) {
-    controller_cmd.linear.x = -max_linear_velocity_/5;
-    controller_cmd.angular.z = 0;
-  }
-  else if(planner_state_ == 0) {
-    ZeroCommand(controller_cmd);
-  }
-
-  if(min_distance < 1) controller_cmd.linear.x *= pow(min_distance,2);
-
-
-  CheckNavigationState(destination,controller_cmd);
-  LimitCommand(controller_cmd);
-  MyTools_.BuildPredictPath(controller_cmd);
-
-
-  /** Debug **/
-  geometry_msgs::Point32 local_goal_map;
-  ConvertPoint(local_goal,local_goal_map,base_to_map_);
-
-  sensor_msgs::PointCloud current_goal;
-  current_goal.header.frame_id = "/map";
-  current_goal.header.stamp = ros::Time::now();
-  local_goal_map.z = 10;
-  current_goal.points.push_back(local_goal_map);
-  local_goal_pub.publish(current_goal);
-
-  current_goal.points.clear();
-  global_goal.z = 10;
-  current_goal.points.push_back(global_goal);
-  global_goal_pub.publish(current_goal);
-
-  // if(MyPlanner_.path_all_set().size() > 0) local_all_pub.publish(MyTools_.ConvertVectortoPointcloud(MyPlanner_.path_all_set()));
-  if(MyPlanner_.path_safe_set().size() > 0) local_safe_pub.publish(MyTools_.ConvertVectortoPointcloud(MyPlanner_.path_safe_set()));
-  local_best_pub.publish(MyPlanner_.path_best());
-  global_path_pub.publish(global_path_pointcloud_);
-
-  cmd_vel_pub.publish(MyTools_.cmd_vel());
-  path_pred_pub.publish(MyTools_.path_predict());  
+  return static_cast<int>(AutoState::STOP);
 }
 
 void MissionControl::ApplyJoyControl() {
-  static geometry_msgs::Twist last_cmd;
-  if(isJoyControl_) last_timer_ = ros::Time::now();
-
-  if((ros::Time::now()- last_timer_ ).toSec() > 0.1) {
-    isManualControl_ = false;
-    cout << "Controller Time out" << endl;  
-    return;
-  }
-  last_cmd = joy_cmd_;
-  geometry_msgs::Twist temp_cmd = joy_cmd_;
-  LimitCommand(temp_cmd);
-  MyTools_.BuildPredictPath(temp_cmd);
-  cmd_vel_pub.publish(MyTools_.cmd_vel());
-  path_pred_pub.publish(MyTools_.path_predict());
+  geometry_msgs::Twist safe_cmd;
+  geometry_msgs::Twist raw_cmd = getJoyCommand();
+  checkCommandSafety(raw_cmd,safe_cmd);
+  createCommandInfo(safe_cmd);
+  publishCommand();
+  if(!updateState()) return;
+  return;
 }
 
-void MissionControl::CheckNavigationState(geometry_msgs::Point32 Goal,geometry_msgs::Twist& Cmd_vel) {
+void MissionControl::ApplyLTEControl() {
+  geometry_msgs::Twist safe_cmd;
+  geometry_msgs::Twist raw_cmd = getLTECommand();
+  checkCommandSafety(raw_cmd,safe_cmd);
+  createCommandInfo(safe_cmd);
+  publishCommand();
+  if(!updateState()) return;
+  return;
+}
+
+void MissionControl::ApplyWIFIControl() {
+  geometry_msgs::Twist safe_cmd;
+  geometry_msgs::Twist raw_cmd = getWIFICommand();
+  checkCommandSafety(raw_cmd,safe_cmd);
+  createCommandInfo(safe_cmd);
+  publishCommand();
+  if(!updateState()) return;
+  return;
+}
+
+void MissionControl::ApplyStopControl() {
+  geometry_msgs::Twist safe_cmd;
+  geometry_msgs::Twist raw_cmd;
+  ZeroCommand(raw_cmd);
+  createCommandInfo(safe_cmd);
+  publishCommand();
+  if(!updateState()) return;
+  return;
+}
+
+void MissionControl::ApplyAutoControl() {
+  geometry_msgs::Twist safe_cmd;
+  if(!setAutoCoefficient(1)) return;
+  if(!updateState()) return;
+  geometry_msgs::Twist raw_cmd = getAutoCommand();
+  checkCommandSafety(raw_cmd,safe_cmd);
+  createCommandInfo(safe_cmd);
+  publishCommand();
+  publishInfo();
+}
+
+geometry_msgs::Twist MissionControl::getAutoCommand() {
+  int global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter_);
+  global_sub_goal_ = global_path_pointcloud_.points[global_goal_index];
+  geometry_msgs::Point32 destination = global_path_pointcloud_.points.back();
+
+  geometry_msgs::Point32 global_goal_in_local;
+  ConvertPoint(global_sub_goal_,global_goal_in_local,map_to_base_);
+
+  int path_lookahead_index;
+  if(!MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_)) {
+    path_lookahead_index = 0;
+  } else {
+    path_lookahead_index = MyPlanner_.path_best().points.size()/lookahead_local_scale_;
+  }
+
+  geometry_msgs::Twist controller_cmd;
+  local_sub_goal_ = MyPlanner_.path_best().points[path_lookahead_index];
+  MyController_.ComputePurePursuitCommand(global_goal_in_local,local_sub_goal_,controller_cmd);
+
+  return controller_cmd;
+}
+
+
+
+
+bool MissionControl::CheckNavigationState() {
   double reach_goal_distance = 3;
   geometry_msgs::Point32 goal_local;
-  ConvertPoint(Goal,goal_local,map_to_base_);
+  ConvertPoint(goal_in_map_,goal_local,map_to_base_);
 
   if(hypot(goal_local.x,goal_local.y) < reach_goal_distance) {
     isReachCurrentGoal_ = true;
-    ZeroCommand(Cmd_vel);
     global_path_pointcloud_.points.clear();
     // cout << "Goal Reached" << endl;
+    return false;
   }
+  // cout << "goal_distance : " << hypot(goal_local.x,goal_local.y) << endl;
+  return true;
 }
 
 
@@ -249,6 +228,8 @@ void MissionControl::ComputeGlobalPlan(geometry_msgs::Point32& Goal) {
   string map_folder = config_folder_ + "/map/";
   MyRouter_.RoutingAnalyze(Goal,vehicle_in_map_,map_folder,map_number_);
   global_path_pointcloud_ = MyRouter_.path_pointcloud();
+  goal_in_map_ = MyRouter_.path_pointcloud().points.back();
+  cout << "Path Planned" << endl;
 }
 
 
@@ -371,8 +352,6 @@ void MissionControl::PrintConfig() {
   cout << "Controller Rotation Scale  : " << controller_rotation_scale_ << endl;
 
   cout << "Vehicle Radius             : " << vehicle_radius_ << endl;
-  cout << "Wait Obstacle              : " << wait_obstacle_ << endl;
-  
 
   cout << "==================================" << endl;
 }
@@ -473,8 +452,8 @@ bool MissionControl::UpdateVehicleLocation() {
   geometry_msgs::Point32 shift_baseline;
   ConvertPoint(shift_local,shift_baseline,base_to_map_);
   geometry_msgs::Point32 shift_map;
-  shift_local.x = -3;
-  shift_local.y = -1.5;
+  shift_local.x = -0.5;
+  shift_local.y = -0.3;
   ConvertPoint(shift_local,shift_map,base_to_map_);
 
   visualization_msgs::Marker marker;
@@ -496,9 +475,9 @@ bool MissionControl::UpdateVehicleLocation() {
   marker.color.r = 1;
   marker.color.g = 0.5;
   marker.color.b = 0.5;
-  marker.scale.x = 3;
-  marker.scale.y = 3;
-  marker.scale.z = 3;
+  marker.scale.x = 0.5;
+  marker.scale.y = 0.5;
+  marker.scale.z = 0.5;
   marker.mesh_resource = "package://config/cfg/model.dae";
 
 
@@ -530,7 +509,6 @@ void MissionControl::JoyCallback(const sensor_msgs::Joy::ConstPtr& Input) {
   static bool isLock = false;
   double axis_deadzone = 0.1;
 
-  (Input->buttons[BUTTON_LB]) ? isManualControl_ = true : isManualControl_ = false;
   (Input->buttons[BUTTON_LB]) ? isJoyControl_ = true : isJoyControl_ = false;
 
   if (Input->buttons[BUTTON_LB] && Input->buttons[BUTTON_X]) isLock = true;
@@ -542,25 +520,82 @@ void MissionControl::JoyCallback(const sensor_msgs::Joy::ConstPtr& Input) {
   if(fabs(axis_y) < axis_deadzone) axis_y = 0;
 
   if(isLock) {
-    isManualControl_ = true;
+    isJoyControl_ = true;
     ZeroCommand(joy_cmd_);
   } else {
     joy_cmd_.linear.x  = axis_x * max_linear_velocity_;
     joy_cmd_.angular.z = axis_y * max_rotation_velocity_;      
   }
 
-  if(isManualControl_ && Input->buttons[BUTTON_BACK]) {
+  if(isJoyControl_ && Input->buttons[BUTTON_BACK]) {
     global_path_pointcloud_.points.clear();
   }
 }
 
 void MissionControl::CmdCallback(const geometry_msgs::Twist::ConstPtr& Input) {
   last_timer_ = ros::Time::now();
-  isManualControl_ = true;
-  last_timer_ = ros::Time::now();
+  isWIFIControl_ = true;
   geometry_msgs::Twist android_cmd;
   android_cmd.linear.x = Input->linear.x;
   android_cmd.angular.z = Input->angular.z;
   android_cmd.angular.z *= 1.5;
   joy_cmd_ = android_cmd;
+}
+
+void MissionControl::TcpCallback(const std_msgs::String::ConstPtr& Input) {
+  last_timer_ = ros::Time::now();
+  isLTEControl_ = true;
+  string command = Input->data;
+
+  double standard_linear = max_linear_velocity_ * 0.5;
+  double standard_angluar = max_rotation_velocity_ * 0.5;
+
+  double linear_index = 1;
+  double angular_index = 1;
+  /*
+    1 2 3
+    4 5 6
+    7 8 9     24 25
+  */
+  if(command == "button2") {
+    angular_index = 0;
+  }
+  else if(command == "button3") {
+    angular_index = -1;
+  }
+  else if(command == "button4") {
+    linear_index = 0;
+  }
+  else if(command == "button5") {
+    linear_index = 0;
+    angular_index = 0;
+  }
+  else if(command == "button6") {
+    linear_index = 0;
+    angular_index = -1;
+  }
+  else if(command == "button7") {
+    linear_index = -1;
+  }
+  else if(command == "button8") {
+    linear_index = -1;
+    angular_index = 0;
+  }
+  else if(command == "button9") {
+    linear_index = -1;
+    angular_index = -1;
+  }
+  else if(command == "button24") {
+    linear_index = 0;
+    angular_index = 0;
+  }
+  else if(command == "button25") {
+    linear_index = 0;
+    angular_index = 0;
+  }
+
+  geometry_msgs::Twist tcp_cmd;
+  tcp_cmd.linear.x = linear_index * standard_linear;
+  tcp_cmd.angular.z = angular_index * standard_angluar;
+  joy_cmd_ = tcp_cmd;
 }
