@@ -1,48 +1,79 @@
 #include <Planning.h>
 
-bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::PointCloud Obstacle) {
 
+/******************************************************************************************
+ ****                                Generate Safe Path                                ****
+ ******************************************************************************************
+ * Generate spline path set and choice the best drivable path                             *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     Goal        - goal position in local frame                                         *
+ *     Obstacle    - fusion obstacle include map and sensor data                          *
+ *     Path_Radius - generate candidate paths radius                                      *
+ * Output:                                                                                *
+ *     Return      - return false when no valid path                                      *
+ *     path_best_  - the best drivable path, call path_best() function to obtain path     *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *   Global:                                                                              *
+ *     vector<sensor_msgs::PointCloud> path_all_set_  - all candidate path set            *
+ *     vector<sensor_msgs::PointCloud> path_safe_set_ - all non collision path set        *
+ *     double map_window_radius_                      - radius of local costmap           *
+ ******************************************************************************************/
+bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::PointCloud Obstacle, double Path_Radius) {
+  
   bool path_result = false;
-  int attend_ct = 1;
-  int attend_limit = 10;
-
   vector<sensor_msgs::PointCloud> joints_set;
   vector<sensor_msgs::PointCloud> path_set;
-  vector<sensor_msgs::PointCloud> debug_safe_set;
   vector<vector<sensor_msgs::PointCloud>> path_set_2d;
   vector<vector<sensor_msgs::PointCloud>> safe_set_2d;
 
   mtx_radius_.lock();
-  path_window_radius_ = path_window_radius_standard_;
-  if(!UpdateCostmap(Obstacle)) return false;
+  path_window_radius_ = Path_Radius;
+  if(path_window_radius_ <= 0) return false;
+  if(path_window_radius_ > map_window_radius_) return false;
 
+  if(!UpdateCostmap(Obstacle)) return false;
   path_result = CheckIdealPath(Goal);
 
-  while(!(path_result || attend_ct > attend_limit)) {
-    // if(attend_ct > 1){
-    //   cout << "Timer  : " << attend_ct << endl;
-    //   cout << "Radius : " << path_window_radius_ << endl << endl;
-    // }
+  if(!path_result){
     GenerateSplinesJoints(joints_set);
     GenerateSplinesPath(path_set,joints_set,path_set_2d);
-
     ComputeSafePath(path_set_2d,safe_set_2d,path_safe_set_,costmap_local_);
-
     path_result = SelectBestPath(safe_set_2d,Goal);
-
-    attend_ct++;
-    path_window_radius_ *= 0.8;
   }
+  path_all_set_ = path_set;
   mtx_radius_.unlock();
-
+ 
   if(!path_result) {
-    cout << "Unable to Find Candidate Plan" <<endl;
+    sensor_msgs::PointCloud path_temp;
+    geometry_msgs::Point32 point_temp;
+    path_temp.header.frame_id = "/base_link";
+    path_temp.header.stamp = ros::Time::now();
+    path_temp.points.push_back(point_temp);
+    path_best_ = path_temp;
     return false;
   }
   
   return true;
 }
 
+
+/******************************************************************************************
+ ****                                  Update Costmap                                  ****
+ ******************************************************************************************
+ * Create and update costmap every called                                                 *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     Obstacle        - fusion obstacle include map and sensor data                      *
+ * Output:                                                                                *
+ *     Return          - return false when unable to update                               *
+ *                       costmap (current nonexistence)                                   *
+ *     costmap_local_  - the costmap in local frame, a global nav_msgs::OccupancyGrid     *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *   Global:                                                                              *
+ ******************************************************************************************/
 bool Planning::UpdateCostmap(sensor_msgs::PointCloud Obstacle) {
   InitLocalCostmap(costmap_local_);
   SetLocalCostmap(costmap_local_,Obstacle);
@@ -50,35 +81,65 @@ bool Planning::UpdateCostmap(sensor_msgs::PointCloud Obstacle) {
 }
 
 
+/******************************************************************************************
+ ****                                 Check Ideal Path                                 ****
+ ******************************************************************************************
+ * Generate an ideal path (straight line) and check if path drivable                      *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 * 
+ *     Goal        - Current goal position in local frame                                 *
+ * Output:                                                                                *
+ *     Return      - return false when ideal path not drivable                            *
+ *     path_best_  - the best drivable path, call path_best() function to obtain path     *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *     geometry_msgs::Point32 point_end       - ideal path end point relative to          *
+ *                                          path_window_radius_ and current goal position *
+ *     double goal_distance                   - distance from vehicle to current goal     *
+ *   Global:                                                                              *
+ *     double path_window_radius_             - candidate paths radius                    *
+ *     nav_msgs::OccupancyGrid costmap_local_ - the costmap in local frame                *
+ ******************************************************************************************/
 bool Planning::CheckIdealPath(geometry_msgs::Point32& Goal) {
-  geometry_msgs::Point32 point_1;
-  geometry_msgs::Point32 point_2;
-
+  geometry_msgs::Point32 point_end;
   sensor_msgs::PointCloud path_temp;
   path_temp.header.frame_id = "/base_link";
   path_temp.header.stamp = ros::Time::now();
 
   double goal_distance = hypot(Goal.x,Goal.y);
+  point_end.x = path_window_radius_ * Goal.x / goal_distance;
+  point_end.y = path_window_radius_ * Goal.y / goal_distance;
 
-  point_1.x = path_window_radius_ * Goal.x / goal_distance;
-  point_1.y = path_window_radius_ * Goal.y / goal_distance;
-
-  point_2 = FindSafePoint(point_1,costmap_local_);
-
-  // cout << "Before : " << point_1.x << "," << point_1.y << endl;
-  // cout << "After  : " << point_2.x << "," << point_2.y << endl;
-  Goal = point_2;
-
-  ComputeStraight(path_temp,point_1);
-  path_standard_ = path_temp;
-  if(DetectObstcaleGrid(path_temp,costmap_local_)) {
+  ComputeStraight(path_temp,point_end);
+  if(DetectObstcaleGrid(path_temp,costmap_local_,ADDITION_IDEAL)) {
     path_best_ = path_temp; 
     return true;
   }
   return false;
-
 }
 
+
+/******************************************************************************************
+ ****                                 Select Best Path                                 ****
+ ******************************************************************************************
+ * Select the best path from all safe paths                                               *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     Path_set_2d - safe path set in 2d buffer, stored in spline branch order            *
+ *     Goal        - position of current goal in local frame                              *
+ * Output:                                                                                *
+ *     Return      - return false when safe path set is empty                             *
+ *     path_best_  - the best drivable path, call path_best() function to obtain path     *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *     static int last_index - path index of last selected path                           *
+ *     int max_index         - path index of the best path in current set                 *
+ *     int max_size          - path size in current set branch                            *
+ *     bool isLastEnable     - value true when the previous selected path is valid        *
+ *                             in current set (current not used)                          *
+ *     double stable_weight  - addition score scale for previous path (current not used)  *
+ *   Global:                                                                              *
+ ******************************************************************************************/
 bool Planning::SelectBestPath(vector<vector<sensor_msgs::PointCloud>> Path_set_2d,geometry_msgs::Point32 Goal) {
   if(Path_set_2d.size() <= 0) {
     cout << "Candidate Plan Set is Empty" <<endl;
@@ -87,27 +148,21 @@ bool Planning::SelectBestPath(vector<vector<sensor_msgs::PointCloud>> Path_set_2
 
   vector<int> path_grade(Path_set_2d.size());
   vector<int> candidate_path_index;
-
   static int last_index = -1;
   int max_index = -1;
   int max_size = 0;
-
-  int total_path_num = 0;
+  bool isLastEnable = false;
+  double stable_weight = 0;
 
   for (int i = 0; i < Path_set_2d.size(); ++i) {
     path_grade[i] = Path_set_2d[i].size();
-    total_path_num += path_grade[i];
     if(max_size < Path_set_2d[i].size()) {
       max_size = Path_set_2d[i].size();
       max_index = i;
     }
   }
-  // cout << "Path Size: " << total_path_num << endl;
-
   if(max_index < 0) return false;
 
-  bool isLastEnable = false;
-  double stable_weight = 0;
   for (int i = 0; i < path_grade.size(); ++i) {
     if(path_grade[i] == max_size) {
       candidate_path_index.push_back(i);
@@ -119,7 +174,6 @@ bool Planning::SelectBestPath(vector<vector<sensor_msgs::PointCloud>> Path_set_2
     double min_distance = DBL_MAX;
     for (int i = 0; i < candidate_path_index.size(); ++i) {
       geometry_msgs::Point32 candidate_point = Path_set_2d[candidate_path_index[i]][max_size/2].points[Path_set_2d[candidate_path_index[i]][max_size/2].points.size()/3];
-
       double path_distance = hypot((candidate_point.y - Goal.y),(candidate_point.x - Goal.x));
 
       // (max_size > 30) ? stable_weight = 0.1 : stable_weight = 1;
@@ -136,26 +190,33 @@ bool Planning::SelectBestPath(vector<vector<sensor_msgs::PointCloud>> Path_set_2
   }
 
   last_index = max_index;
-
-
-  // cout << endl << "Show Grades" << endl;
-  // for (int i = 0; i < path_grade.size(); ++i) {
-  //   cout << "i = " << i << " Grade = " << path_grade[i] << endl;
-  // }
-  // cout << "My Choice      : " << max_index << endl;
-
   path_best_ = Path_set_2d[max_index][max_size/2];
-
   return true;
 }
 
+
+/******************************************************************************************
+ ****                              Generate Splines Path                               ****
+ ******************************************************************************************
+ * Extract joints set to corresponding level of points then generate splines path         *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     Joints      - joints set, point level information stored in member .z              *
+ * Output:                                                                                *
+ *     Path_set    - generated path set                                                   *
+ *     Path_set_2d - generated path set in 2d buffer, stored in spline branch order       *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *     geometry_msgs::Point32 point_x - joint points for each level                       *
+ *   Global:                                                                              *
+ ******************************************************************************************/
 void Planning::GenerateSplinesPath(vector<sensor_msgs::PointCloud>& Path_set,vector<sensor_msgs::PointCloud> Joints, vector<vector<sensor_msgs::PointCloud>>& Path_set_2d) {
   Path_set.clear();
+  Path_set_2d.clear();
   geometry_msgs::Point32 point_0;
   geometry_msgs::Point32 point_1;
   geometry_msgs::Point32 point_2;
   geometry_msgs::Point32 point_3;
-
 
   vector<vector<sensor_msgs::PointCloud>> temp_vector_2d(Joints.size());
   sensor_msgs::PointCloud path_temp;
@@ -164,40 +225,51 @@ void Planning::GenerateSplinesPath(vector<sensor_msgs::PointCloud>& Path_set,vec
   
   for (int i = 0; i < Joints.size(); ++i) {
     for (int j = 0; j < Joints[i].points.size(); ++j) {
-      // cout << "TEST " << Joints[i].points[j].z << " -- " << int(std::log10(Joints[i].points[j].z)) << endl;
       if(int(std::log10(Joints[i].points[j].z)) == 0) point_1 = Joints[i].points[j];
       if(int(std::log10(Joints[i].points[j].z)) == 1) point_2 = Joints[i].points[j];
       if(int(std::log10(Joints[i].points[j].z)) == 2) point_3 = Joints[i].points[j];
 
       if(ComputeDigit(point_1.z,1) == ComputeDigit(point_2.z,1) && ComputeDigit(point_1.z,1) == ComputeDigit(point_3.z,1) && ComputeDigit(point_2.z,2) == ComputeDigit(point_3.z,2)) {
-        // cout << "Compute " << point_1.z << "," << point_2.z << "," << point_3.z << endl;
         point_0.x = point_1.x / 2;  
         point_0.y = point_1.y / 2;  
         ComputeSplines(path_temp,point_1,point_2,point_3,i);
         temp_vector_2d[i].push_back(path_temp);
-
-        // path_temp.points.push_back(point_0);
-        // path_temp.points.push_back(point_1);
-        // path_temp.points.push_back(point_2);
-        // path_temp.points.push_back(point_3);
         Path_set.push_back(path_temp);
       }
     }
-    // cout << "i:" << i << " size:" << temp_vector_2d[i].size() << endl;
   }
   Path_set_2d = temp_vector_2d;
-
 }
 
+
+/******************************************************************************************
+ ****                             Generate Splines Joints                              ****
+ ******************************************************************************************
+ * Currently set fixed for generating three level of joints                               *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ * Output:                                                                                *
+ *     Output - joints set, point level information stored in member .z                   *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *     double shrink_scale                         - gap scale between each branch        *
+ *     double radius_unit                          - radius unit between each level       *
+ *     vector<int> level_nums                      - number of joints in each level       *
+ *     vector<double> level_unit                   - gap unit in each level               *
+ *     vector<sensor_msgs::PointCloud> temp_vector - temporary stored output vector       *
+ *     sensor_msgs::PointCloud temp_level          - temporary stored single level joints *
+ *   Global:                                                                              *
+ *     double path_window_radius_                  - candidate paths radius               *
+ *     double path_swap_range_                     - maximum joint's distribution radian  *
+ ******************************************************************************************/
 void Planning::GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output) {
   Output.clear();
-  int temp_splines_joints_num = 3;
-
+  const int temp_splines_joints_num = 3;
 
   double shrink_scale = temp_splines_joints_num * 2;
-  double radius_unit = path_window_radius_ / (temp_splines_joints_num);
+  double radius_unit = path_window_radius_ / temp_splines_joints_num;
 
-  vector<int> level_nums = {9,9,7};
+  vector<int> level_nums = {5,5,5}; //{9,9,7};
   vector<double> level_unit(temp_splines_joints_num,0);
   vector<sensor_msgs::PointCloud> temp_vector(level_nums[0]);
 
@@ -238,54 +310,65 @@ void Planning::GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output) {
 }
 
 
-double Planning::ComputePathCost(sensor_msgs::PointCloud Path,geometry_msgs::Point32 Goal) {
-  double path_size = Path.points.size();
-  double node_number = 1;
-
-  geometry_msgs::Point32 last_point = Path.points[path_size-1];
-  geometry_msgs::Point32 start_point = Path.points[0];
-
-  double target_slope = (start_point.y - Goal.y) / (start_point.x - Goal.x);
-
-  double avg_slope;
-  for (int i = 1; i <= path_size; ++i) {
-    int choice_index = (path_size / node_number) * i; 
-    if((start_point.x - Path.points[choice_index].x) == 0) continue;
-    avg_slope += (start_point.y - Path.points[choice_index].y) / (start_point.x - Path.points[choice_index].x);
-  }
-  avg_slope /= node_number;
-
-  return (fabs(target_slope - avg_slope));
-}
-
+/******************************************************************************************
+ ****                                 Check Path Safety                                ****
+ ******************************************************************************************
+ * Iteration 2d vector of path to find non collision paths                                *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     Input_2d  - 2d vector of all candidate path                                        *
+ *     Costmap   - the costmap in local frame                                             *
+ * Output:                                                                                *
+ *     Output    - vector of non collision path                                           *
+ *     Output_2d - 2d vector of non collision path                                        *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *   Global:                                                                              *
+ *     const int ADDITION_SPLINE - addition grid when search obstacle around spline       *
+ ******************************************************************************************/
 void Planning::ComputeSafePath(vector<vector<sensor_msgs::PointCloud>> Input_2d,vector<vector<sensor_msgs::PointCloud>>& Output_2d,vector<sensor_msgs::PointCloud>& Output,nav_msgs::OccupancyGrid Costmap) {
   Output.clear();
   Output_2d.resize(Input_2d.size());
   for (int i = 0; i < Input_2d.size(); ++i) {
     for (int j = 0; j < Input_2d[i].size(); ++j) {
-      if(!DetectObstcaleGrid(Input_2d[i][j],Costmap)) {
+      if(!DetectObstcaleGrid(Input_2d[i][j],Costmap,ADDITION_SPLINE)) {
         continue;
       }
       Output_2d[i].push_back(Input_2d[i][j]);
       Output.push_back(Input_2d[i][j]);
     }
   }
-}
+} 
 
-bool Planning::DetectObstcaleGrid(sensor_msgs::PointCloud Path,nav_msgs::OccupancyGrid Costmap) {
+
+/******************************************************************************************
+ ****                              Check Path Points Safety                            ****
+ ******************************************************************************************
+ * Iteration each points in path and check costmap for collision                          *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     Path     - 2d vector of all candidate path                                         *
+ *     Costmap  - the costmap in local frame                                              *
+ *     Addition - addition grid when search obstacle around point                         *
+ * Output:                                                                                *
+ *     Return   - return false path not safe                                              *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *     safety_threshold           - threshold value for determining collision in costmap  *
+ *   Global:                                                                              *
+ *     int safe_path_search_grid_ - original number of grid when search obstacle          *
+ ******************************************************************************************/
+bool Planning::DetectObstcaleGrid(sensor_msgs::PointCloud Path,nav_msgs::OccupancyGrid Costmap,int Addition) {
+  int search_grid = safe_path_search_grid_ + Addition;
   signed char safety_threshold = 10;
+  int grid_size = Costmap.info.width * Costmap.info.height; 
   for (int i = 0; i < Path.points.size(); ++i) {
     int path_point_index = ConvertCartesianToLocalOccupany(Costmap,Path.points[i]);
-    if (path_point_index < 0) continue;
+    if(path_point_index < 0) continue;
     if(Costmap.data[path_point_index] > safety_threshold) return false;
-    for (int j = 0; j < safe_path_search_grid_ ; ++j) {
-      for (int k = 0; k < safe_path_search_grid_; ++k) {
-        int check_index =  
-          path_point_index 
-          - std::floor(safe_path_search_grid_/2) 
-          - std::floor(safe_path_search_grid_/2) * Costmap.info.width 
-          + j * Costmap.info.width 
-          + k;
+    for (int j = -search_grid; j < search_grid; ++j) {
+      for (int k = -search_grid/2; k < search_grid ; ++k) {
+        int check_index = path_point_index + k * Costmap.info.width + j;
         if(!CheckGrid(Costmap,check_index,safety_threshold)) return false;
       }
     }
@@ -293,18 +376,51 @@ bool Planning::DetectObstcaleGrid(sensor_msgs::PointCloud Path,nav_msgs::Occupan
   return true;
 }
 
+
+/******************************************************************************************
+ ****                              Update Costmap Obstacle                             ****
+ ******************************************************************************************
+ * Update costmap grid value based on fusion obstacle data                                *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     Obstacle - fusion obstacle include map and sensor data                             *
+ *     Costmap  - initiated costmap canvas                                                *
+ * Output:                                                                                *
+ *     Costmap  - updated costmap                                                         *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *     obstacle_occupancy         - value of obstacle represent in costmap                *
+ *   Global:                                                                              *
+ *     int safe_path_search_grid_ - original number of grid when search obstacle          *
+ *     double map_window_radius_  - radius of local costmap                               *
+ ******************************************************************************************/
 void Planning::SetLocalCostmap(nav_msgs::OccupancyGrid& Costmap,sensor_msgs::PointCloud Obstacle) {
   signed char obstacle_occupancy = 50;
-
+  int costmap_size = Costmap.info.width * Costmap.info.height;
   for (int i = 0; i < Obstacle.points.size(); ++i) {
-    if(fabs(Obstacle.points[i].x) > path_window_radius_ || fabs(Obstacle.points[i].y) > path_window_radius_) continue;
+    if(fabs(Obstacle.points[i].x) > map_window_radius_ || fabs(Obstacle.points[i].y) > map_window_radius_) continue;
     if(hypot(Obstacle.points[i].x,Obstacle.points[i].y) < 0.5) continue;
     int obstacle_in_map = ConvertCartesianToLocalOccupany(Costmap,Obstacle.points[i]);
-    if (obstacle_in_map < 0) continue;
+    if (obstacle_in_map < 0 || obstacle_in_map > costmap_size) continue;
     Costmap.data[obstacle_in_map] = obstacle_occupancy;
   }
 }
 
+
+/******************************************************************************************
+ ****                             Initiate Costmap Obstacle                            ****
+ ******************************************************************************************
+ * Initiate costmap with preset parameters                                                *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ * Output:                                                                                *
+ *     Costmap  - updated costmap                                                         *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *     map_origin                 - the origin point position of costmap                  *
+ *   Global:                                                                              *
+ *     double map_window_radius_  - radius of local costmap                               *
+ ******************************************************************************************/
 void Planning::InitLocalCostmap(nav_msgs::OccupancyGrid& Costmap) {
   vector<signed char> map_data;
   geometry_msgs::Pose map_origin;
@@ -313,14 +429,14 @@ void Planning::InitLocalCostmap(nav_msgs::OccupancyGrid& Costmap) {
   Costmap.header.stamp = ros::Time::now();
   Costmap.info.resolution = costmap_resolution_;
 
-  Costmap.info.width  = (int) (2 * path_window_radius_) / Costmap.info.resolution;
-  Costmap.info.height = (int) (2 * path_window_radius_) / Costmap.info.resolution;
+  Costmap.info.width  = (int) (2 * map_window_radius_) / Costmap.info.resolution;
+  Costmap.info.height = (int) (2 * map_window_radius_) / Costmap.info.resolution;
 
   int costmap_size = Costmap.info.width * Costmap.info.height;
   map_data.resize(costmap_size);
   
-  map_origin.position.x = - path_window_radius_;
-  map_origin.position.y = - path_window_radius_;
+  map_origin.position.x = - map_window_radius_;
+  map_origin.position.y = - map_window_radius_;
   map_origin.orientation = tf::createQuaternionMsgFromRollPitchYaw(0,0,0);
 
   Costmap.info.origin = map_origin;
@@ -328,6 +444,21 @@ void Planning::InitLocalCostmap(nav_msgs::OccupancyGrid& Costmap) {
 }
 
 
+/******************************************************************************************
+ ****                                 Generate Splines                                 ****
+ ******************************************************************************************
+ * Generate correspond splines path based on input format                                 *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     Point_x - joint point from close to far                                            *
+ *     Level   - current path belonged level in candidate path set                        *
+ * Output:                                                                                *
+ *     Output  - single spline path                                                       *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *   Global:                                                                              *
+ *     double path_vertical_step_ - path point gap                                        *
+ ******************************************************************************************/
 void Planning::ComputeSplines(sensor_msgs::PointCloud& Output,geometry_msgs::Point32 Point_1,geometry_msgs::Point32 Point_2, double Level) {
 
   Output.points.clear();
@@ -353,7 +484,6 @@ void Planning::ComputeSplines(sensor_msgs::PointCloud& Output,geometry_msgs::Poi
   double cubic_value;
   double linear_value;
 
-
   for (double i = 0; i < iter_num; i++) {
     temp_output.x = i * path_vertical_step_;
 
@@ -374,7 +504,6 @@ void Planning::ComputeSplines(sensor_msgs::PointCloud& Output,geometry_msgs::Poi
     temp_output.z = Level;
     Output.points.push_back(temp_output);
   }
-
 }
 
 
@@ -408,7 +537,6 @@ void Planning::ComputeSplines(sensor_msgs::PointCloud& Output,geometry_msgs::Poi
   double linear_value;
   double correction_value;
 
-
   for (double i = 0; i <= iter_num; i++) {
 
     temp_output.x = i * path_vertical_step_;
@@ -431,7 +559,6 @@ void Planning::ComputeSplines(sensor_msgs::PointCloud& Output,geometry_msgs::Poi
       // cout << "Unknow Range for X" << endl;
       return;
     }
-    
     temp_output.z = Level;
     Output.points.push_back(temp_output);
   }
@@ -467,7 +594,6 @@ void Planning::ComputeSplines(sensor_msgs::PointCloud& Output,geometry_msgs::Poi
   double linear_value;
   double correction_value;
 
-
   for (double i = 0; i <= iter_num; i++) {
 
     temp_output.x = i * path_vertical_step_;
@@ -496,7 +622,21 @@ void Planning::ComputeSplines(sensor_msgs::PointCloud& Output,geometry_msgs::Poi
   }
 }
 
-
+/******************************************************************************************
+ ****                              Generate Straight Line                              ****
+ ******************************************************************************************
+ * Generate straight line from vehicle to goal in local frame                             *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     Goal   - goal position in local frame                                              *
+ * Output:                                                                                *
+ *     Output - straight line path                                                        *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *     iter_num                   - point size in each path                               *
+ *   Global:                                                                              *
+ *     double path_vertical_step_ - path point gap                                        *
+ ******************************************************************************************/
 void Planning::ComputeStraight(sensor_msgs::PointCloud& Output,geometry_msgs::Point32 Goal) {
   Output.points.clear();
   geometry_msgs::Point32 temp_output;
@@ -512,66 +652,4 @@ void Planning::ComputeStraight(sensor_msgs::PointCloud& Output,geometry_msgs::Po
     Output.points.push_back(temp_output);
   }
 
-}
-
-geometry_msgs::Point32 Planning::FindSafePoint(geometry_msgs::Point32 Input,nav_msgs::OccupancyGrid Costmap) {
-  int point_index = ConvertCartesianToLocalOccupany(Costmap,Input);
-  if (point_index < 0) return Input;
-
-  int costmap_size = Costmap.info.width * Costmap.info.height;
-
-  vector<CandidatePixel> candidate_goal;
-  CandidatePixel temp;
-  temp.width = Costmap.info.width;
-  for (int i = 0; i < 3; ++i) {
-    for (int j = 0; j < 3; ++j) {
-      temp.index = point_index + 2 * ((i - 1) * temp.width + j - 1);
-      (temp.index > costmap_size - 1) ? temp.grade = -100 : temp.grade = 100;
-      candidate_goal.push_back(temp);
-    }
-  }
-  
-  for (int k = 0; k < candidate_goal.size(); ++k) {
-    for (int i = 0; i < 3; ++i) {
-      for (int j = 0; j < 3; ++j) {
-        int check_index = candidate_goal[k].index + ((i - 1) * temp.width + j - 1);
-        if(check_index > costmap_size - 1 || check_index < 0) {
-          candidate_goal[k].grade = -100;
-          continue;
-        }
-        if(!CheckGrid(Costmap,check_index,10)) candidate_goal[k].grade -= 10;
-      }
-    }
-  }
-
-  double grade_left  = 0;
-  double grade_right = 0;
-
-  for (int i = 0; i < candidate_goal.size(); ++i) {
-    // cout << i << " ==> "<< candidate_goal[i].grade << endl;
-    if(i < 3) grade_right += candidate_goal[i].grade/100;
-    if(i > 5) grade_left += candidate_goal[i].grade/100;
-  }
-  geometry_msgs::Point32 output = Input;
-  double adjust_scale = 1.5;
-  output.y += (grade_left - grade_right) * adjust_scale;
-
-  return output;
-}
-
-
-sensor_msgs::PointCloud Planning::ComputeArcPoints(geometry_msgs::Point32 Origin,double Radius,double Start_Rad,double End_Rad,int Nums){
-  double unit_rad = (End_Rad - Start_Rad)/double(Nums);
-  double current_rad = Start_Rad;
-
-  sensor_msgs::PointCloud output;
-  geometry_msgs::Point32 point;
-
-  for (int i = 0; i < Nums; ++i) {
-    point.x = Origin.x + Radius * cos(current_rad);
-    point.y = Origin.y + Radius * sin(current_rad);
-    output.points.push_back(point);
-    current_rad += unit_rad;
-  }
-  return output;
 }

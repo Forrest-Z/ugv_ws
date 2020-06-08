@@ -27,6 +27,10 @@ MissionControl::MissionControl():pn("~") {
   global_path_pub = n.advertise<sensor_msgs::PointCloud>("/global_path",1);
   vehicle_model_pub = n.advertise<visualization_msgs::Marker>("/vehicle_model",1);
   vehicle_info_pub = n.advertise<visualization_msgs::Marker>("/vehicle_info",1);
+
+  plan_state_pub = n.advertise<std_msgs::Bool>("/plan_state",1);
+  wait_plan_state_pub = n.advertise<std_msgs::Bool>("/wait_plan_state",1);
+  vehicle_in_map_pub = n.advertise<geometry_msgs::Point32>("/vehicle_in_map",1);
 }
 MissionControl::~MissionControl(){
   cout << "Navigation Node For Closed ~~~" << endl;
@@ -58,7 +62,6 @@ bool MissionControl::Initialization() {
   isReachCurrentGoal_ = false;
 
   map_number_ = 1;
-  planner_state_ = 1;
 
   MyController_.set_speed_scale(controller_linear_scale_);
   MyController_.set_rotation_scale(controller_rotation_scale_);
@@ -84,7 +87,6 @@ void MissionControl::Execute() {
     auto mission_state = DecisionMaker();
 
     if(mission_state == static_cast<int>(AutoState::JOY)) {
-      // cout << "ApplyJoyControl" << endl;
       ApplyJoyControl();
       continue;
     }
@@ -97,7 +99,6 @@ void MissionControl::Execute() {
       continue;      
     }
     else if(mission_state == static_cast<int>(AutoState::AUTO)) {
-      // cout << "ApplyAutoControl" << endl;
       ApplyAutoControl();
       continue;
     }
@@ -190,13 +191,38 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
   ConvertPoint(global_sub_goal_,global_goal_in_local,map_to_base_);
 
   int path_lookahead_index;
-  if(!MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_)) {
+  geometry_msgs::Twist controller_cmd;
+  std_msgs::Bool plan_state;
+  std_msgs::Bool wait_plan_state;
+
+  double search_range = MyPlanner_.map_window_radius();
+  double search_range_min = 2;
+  double iteration_scale = 0.8;
+  double wait_range = 4;
+  wait_plan_state.data = true;
+  while(search_range > search_range_min) {
+    if(!MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_,search_range)) {
+      if(search_range < wait_range) wait_plan_state.data = false;
+    } else {
+      break;
+    }
+    search_range *= iteration_scale;
+
+    if(MyPlanner_.path_all_set().size() > 0) local_all_pub.publish(MyTools_.ConvertVectortoPointcloud(MyPlanner_.path_all_set()));
+  }
+  
+
+  if(search_range <= search_range_min) {
+    plan_state.data = false;
     path_lookahead_index = 0;
   } else {
     path_lookahead_index = MyPlanner_.path_best().points.size()/lookahead_local_scale_;
+    plan_state.data = true;
   }
 
-  geometry_msgs::Twist controller_cmd;
+  plan_state_pub.publish(plan_state); 
+  wait_plan_state_pub.publish(wait_plan_state);
+
   local_sub_goal_ = MyPlanner_.path_best().points[path_lookahead_index];
   MyController_.ComputePurePursuitCommand(global_goal_in_local,local_sub_goal_,controller_cmd);
 
@@ -417,13 +443,12 @@ bool MissionControl::ReadConfig() {
 }
 
 bool MissionControl::UpdateVehicleLocation() {
-  // static tf::StampedTransform stampedtransform;
   try {
     listener_map_to_base.lookupTransform("/map", "/base_link",  
                              ros::Time(0), stampedtransform);
   }
   catch (tf::TransformException ex) {
-    // cout << "Waiting For Transform in MissionControl Node" << endl;
+    cout << "Waiting For Transform in MissionControl Node" << endl;
     return false;
   }
 

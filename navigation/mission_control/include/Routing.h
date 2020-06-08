@@ -105,7 +105,6 @@ private:
     double distances_cost = hypot(abs(Index[End_id-1].position.x-Index[Start_Id-1].position.x)
         ,abs(Index[End_id-1].position.y-Index[Start_Id-1].position.y));
      double global_cost = computeRoutingCost(Start_Id,End_id);
-
      return (distances_cost + global_cost);
   }
 

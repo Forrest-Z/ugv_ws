@@ -33,44 +33,45 @@ class Planning
 {
 public:
 	Planning(){
-		path_window_radius_    = 8;
-		path_swap_range_       = 1.2; // 1.2
+		map_window_radius_     = 8;
+		path_swap_range_       = 1.2;
 		path_vertical_step_    = 0.2;
 
 		splines_joints_num_    = 3;
 
 		costmap_resolution_    = 0.4;
 	 	safe_path_search_grid_ = 5;
-
-	 	path_window_radius_standard_ = path_window_radius_;
 	}
 	~Planning(){}
-
-	bool GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::PointCloud Obstacle);
+	bool GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::PointCloud Obstacle,double Path_Radius);
 	bool SelectBestPath(vector<vector<sensor_msgs::PointCloud>> Path_set_2d,geometry_msgs::Point32 Goal);
 	bool CheckIdealPath(geometry_msgs::Point32& Goal);
 	bool UpdateCostmap(sensor_msgs::PointCloud Obstacle);
+
 	vector<sensor_msgs::PointCloud> path_all_set() {return path_all_set_;}; 
 	vector<sensor_msgs::PointCloud> path_safe_set() {return path_safe_set_;};
-	vector<sensor_msgs::PointCloud> path_debug_set() {return path_debug_set_;};
 	sensor_msgs::PointCloud path_best() {return path_best_;};
 	nav_msgs::OccupancyGrid costmap_local() {return costmap_local_;};
-	double path_window_radius_standard() {return path_window_radius_standard_;};
-	void set_path_window_radius_standard(double Input) {path_window_radius_standard_ = Input;};
+	double map_window_radius() {return map_window_radius_;};
+
+	void set_map_window_radius(double Input) {map_window_radius_ = Input;};
+	void set_path_swap_range(double Input) {path_swap_range_ = Input;};
+	void path_vertical_step(double Input) {path_vertical_step_ = Input;};
 	void set_costmap_resolution(double Input) {costmap_resolution_ = Input;};
 	void set_safe_path_search_grid(double Input) {
 		mtx_radius_.lock();
 		safe_path_search_grid_ = Input;
 		mtx_radius_.unlock();
 	};
-	// int GetPathSize(return )
 
 private:
 	const double PI = 3.14159265359;
+	const int ADDITION_IDEAL = 2;
+	const int ADDITION_SPLINE = 0;
 
 	/** Parameters **/
 	double path_window_radius_;
-	double path_window_radius_standard_;
+	double map_window_radius_;
 	double path_swap_range_;
 	double path_vertical_step_;
 
@@ -86,9 +87,7 @@ private:
 	/** Variables **/
 	vector<sensor_msgs::PointCloud> path_all_set_;
 	vector<sensor_msgs::PointCloud> path_safe_set_;
-	vector<sensor_msgs::PointCloud> path_debug_set_;
 	sensor_msgs::PointCloud path_best_;
-	sensor_msgs::PointCloud path_standard_;
 	nav_msgs::OccupancyGrid costmap_local_;
 
 	/** Functions **/
@@ -104,11 +103,7 @@ private:
 	void InitLocalCostmap(nav_msgs::OccupancyGrid& Costmap);
 	void SetLocalCostmap(nav_msgs::OccupancyGrid& Costmap,sensor_msgs::PointCloud Obstacle);
 	void ComputeSafePath(vector<vector<sensor_msgs::PointCloud>> Input_2d,vector<vector<sensor_msgs::PointCloud>>& Output_2d,vector<sensor_msgs::PointCloud>& Output,nav_msgs::OccupancyGrid Costmap);
-	bool DetectObstcaleGrid(sensor_msgs::PointCloud Path,nav_msgs::OccupancyGrid Costmap);
-	double ComputePathCost(sensor_msgs::PointCloud Path,geometry_msgs::Point32 Goal);
-	sensor_msgs::PointCloud ComputeArcPoints(geometry_msgs::Point32 Origin,double Radius,double Start_Rad,double End_Rad,int Nums);
-
-	geometry_msgs::Point32 FindSafePoint(geometry_msgs::Point32 Input,nav_msgs::OccupancyGrid Costmap);
+	bool DetectObstcaleGrid(sensor_msgs::PointCloud Path,nav_msgs::OccupancyGrid Costmap,int Addition);
 
 	/** Inline Function **/ 
 	inline int ConvertCartesianToLocalOccupany(nav_msgs::OccupancyGrid Grid,geometry_msgs::Point32 Point) {
@@ -152,6 +147,7 @@ private:
   	int output = reminder/pow(10,Digit-1);
   	return output;
   }
+
 
 	
 

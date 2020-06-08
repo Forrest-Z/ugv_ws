@@ -1,39 +1,68 @@
 #include <Routing.h>
 
+
+/******************************************************************************************
+ ****                                 Generate Routing                                 ****
+ ******************************************************************************************
+ * Main function in Routing class, call for generate global route                         *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     Goal_in_map    - Route goal 2D position (x,y)                                      *
+ *     Vehicle_in_map - Vehicle 2D Pose (x,y,yaw) (.z represents yaw)                     *
+ *     Map_folder     - Folder directory for map, map yaml file and node file             *
+ *     Map_number     - Map ID for map changing purpose                                   *
+ * Output:                                                                                *
+ *     path_pointcloud_ - A global variable, call path_pointcloud() function to           *
+ *                        obtain route                                                    *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *   Global:                                                                              *
+ ******************************************************************************************/
 void Routing::RoutingAnalyze(geometry_msgs::Point32& Goal_in_map,geometry_msgs::Point32 Vehicle_in_map,string Map_folder,int Map_number) {
-
 	CleanAllState();
-
 	if(!ReadNodeTXT(Map_folder,Map_number)) return;
 	if(!ReadYamlFile(Map_folder,Map_number)) return;
-
-
 	int start_id = FindPointId(Vehicle_in_map);
 	int end_id = FindPointId(Goal_in_map);
-
 	if(!ComputePath(start_id,end_id)) {
-		cout << "Global Plan Failded" << endl;
+		cout << "Global Plan Failed" << endl;
 		cout << "From     " << start_id << " to " << end_id << endl;
 		cout << "Robot at " << Vehicle_in_map.x << "," << Vehicle_in_map.y << endl;
 		cout << "Goal  at " << Goal_in_map.x << "," << Goal_in_map.y << endl;
 		return;
 	}
-
 	SetPathtoPointcloud();
-	// Goal_in_map = *(path_pointcloud_.points.end()-1);
 }
 
+
+/******************************************************************************************
+ ****                                 Compute Routing                                  ****
+ ******************************************************************************************
+ * Modified A-star algorithm, Heuristic cost added routing cost from map information      *
+ * Search and compute cost on map pixel frame                                             *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     Start_Id - Search Start Point Id from node file                                    *
+ *     End_id   - Search Goal Point Id from node file                                     *
+ * Output:                                                                                *
+ *     Return   - return false when no valid path                                         *
+ *     path_    - A global variable vector stored path IDs in order                       *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *   Global:                                                                              *
+ *     vector<MapGraph> node_info_ - defined structure for each node informations         *
+ ******************************************************************************************/
 bool Routing::ComputePath(int Start_Id,int End_id) {
-	// Modified A-star algorithm, Heuristic cost added routing cost from map information. 
 	if(!checkIndexVaild(Start_Id,node_info_)) {
-		cout<<"Invaild Start Point"<<endl;
+		cout<<"Invalid Start Point"<<endl;
 		return false;
 	}
 	if(!checkIndexVaild(End_id,node_info_)) {
-		cout<<"Invaild End Point"<<endl;
+		cout<<"Invalid End Point"<<endl;
 		return false;
 	}
 
+	// priority queue for store a-star path
 	std::priority_queue<MapGraph,vector<MapGraph>,NodeCompare> path_astar_que;
 
 	vector<int> path;
@@ -48,6 +77,7 @@ bool Routing::ComputePath(int Start_Id,int End_id) {
 
 	findNeighbor(current_id,node_info_,neighbor);
 
+	// explore and compare to find minimum cost at current position until reach the goal
 	while(!isGoalReached_) {
 		for (int i = 0; i < neighbor.size() ; i++) {
 			int next_id = neighbor[i];
@@ -67,6 +97,7 @@ bool Routing::ComputePath(int Start_Id,int End_id) {
 		findNeighbor(current_id,node_info_,neighbor);
 	}
 
+	// Check when queue is valid, push IDs into global vector.
 	int next_point = End_id; 
 	while(!isPathReady_) {
 		if (next_point == 0) {
@@ -82,6 +113,7 @@ bool Routing::ComputePath(int Start_Id,int End_id) {
 	return true;
 }
 
+
 void Routing::CleanAllState() {
 	isPathReady_   = false;
 	isGoalReached_ = false;
@@ -90,6 +122,24 @@ void Routing::CleanAllState() {
 	path_.clear();
 }
 
+
+/******************************************************************************************
+ ****                       Convert ID vector to Pointcloud Path                       ****
+ ******************************************************************************************
+ * Convert vector of node ID into Pointcloud Path                                         *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     path_            - A global variable vector stored path IDs in order               *
+ * Output:                                                                                *
+ *     path_pointcloud_ - A global variable, call path_pointcloud() function to           *
+ *                        obtain route                                                    *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *     double points_gap           - points distance(m) between two node in goal route    *
+ *   Global:                                                                              *
+ *     vector<MapGraph> node_info_ - defined structure for each node informations         *
+ *     YamlInfo map_info_          - defined structure for descried map image to map data *
+ ******************************************************************************************/
 void Routing::SetPathtoPointcloud() {
 	int node_size = path_.size();
   double points_gap = 5;
@@ -129,8 +179,25 @@ void Routing::SetPathtoPointcloud() {
   path_pointcloud_ = pointcloud;
 }
 
+
+
+/******************************************************************************************
+ ****                                  Read Node File                                  ****
+ ******************************************************************************************
+ * Read text file save as vector of nodes information                                     *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     Map_folder - Folder directory for map, map yaml file and node file                 *
+ *     Map_number - Map ID for map changing purpose                                       *
+ * Output:                                                                                *
+ *     Return     - return false when file not exist                                      *
+ *     node_info_ - A global variable stored nodes informations                           *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *     vector<int> read_neighbor - create buffer for potential node neighbors             *
+ *   Global:                                                                              *
+ ******************************************************************************************/
 bool Routing::ReadNodeTXT(string Map_folder,int Map_number) {
-	// Read text file for node information.
 	MapGraph graph;
   std::ifstream node_file;
 
@@ -144,7 +211,7 @@ bool Routing::ReadNodeTXT(string Map_folder,int Map_number) {
   	return false;
   }
 
-  static int linenum = 1;
+  int linenum;
   string str;
   while (std::getline(node_file, str)) {
 		std::stringstream ss(str);
@@ -162,9 +229,23 @@ bool Routing::ReadNodeTXT(string Map_folder,int Map_number) {
 	return true;
 }
 
-
+/******************************************************************************************
+ ****                                  Read Yaml File                                  ****
+ ******************************************************************************************
+ * Read text file save as map's yaml                                                      *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     Map_folder - Folder directory for map, map yaml file and node file                 *
+ *     Map_number - Map ID for map changing purpose                                       *
+ * Output:                                                                                *
+ *     Return     - return false when file not exist                                      *
+ *     map_info_  - A global variable stored map informations                             *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *     int information_required_size - preset information categorize number               *
+ *   Global:                                                                              *
+ ******************************************************************************************/
 bool Routing::ReadYamlFile(string Map_folder,int Map_number){
-	// Read text file as map's yaml file.
   std::ifstream yaml_file;
   std::string file_name_node = Map_folder + std::to_string(Map_number) + "_info.txt";
   yaml_file.open(file_name_node);
@@ -173,7 +254,7 @@ bool Routing::ReadYamlFile(string Map_folder,int Map_number){
   	cout<<"File Not Exist: "<<file_name_node<<endl;
   	return false;
   }
-
+  int information_required_size = 5;
   string str;
   int info_linenum = 0;
   while (std::getline(yaml_file, str)) {
@@ -205,14 +286,26 @@ bool Routing::ReadYamlFile(string Map_folder,int Map_number){
 
 	yaml_file.close(); 
 
-	if(info_linenum == 5) {
+	if(info_linenum == information_required_size) {
 		return true;
 	} else {
 		return false;
 	}
 }
 
-
+/******************************************************************************************
+ ****                                 Search Point ID                                  ****
+ ******************************************************************************************
+ * Read text file save as map's yaml                                                      *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     Input  - point position in map frame                                               *
+ * Output:                                                                                *
+ *     output - point ID in node file                                                     *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *   Global:                                                                              *
+ ******************************************************************************************/
 int Routing::FindPointId(geometry_msgs::Point32 Input) {
 	double closet_dis = DBL_MAX;
 	int output = -1;

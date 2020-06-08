@@ -8,7 +8,6 @@
 #include <vector>
 #include <time.h>
 
-
 using std::string;
 using std::cout;
 using std::endl;
@@ -26,8 +25,6 @@ public:
 
 	}
 	~Controlling(){};
-
-	void set_local_goal(geometry_msgs::Point32 Input) { local_goal_ = Input; };
 	void set_speed_scale(double Input) { speed_scale_ = Input; };
 	void set_rotation_scale(double Input) { rotation_scale_ = Input; };
 
@@ -40,9 +37,5 @@ private:
 	/** Parameters **/
 	double speed_scale_;
 	double rotation_scale_;
-	/** Variables **/
-	geometry_msgs::Point32 local_goal_;
-
-
 };
 #endif

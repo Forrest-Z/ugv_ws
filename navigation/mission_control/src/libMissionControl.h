@@ -8,6 +8,7 @@
 
 #include <std_msgs/Int32.h>
 #include <std_msgs/String.h>
+#include <std_msgs/Bool.h>
 #include <std_msgs/Int32MultiArray.h>
 #include <visualization_msgs/Marker.h>
 
@@ -89,6 +90,10 @@ private:
   ros::Publisher vehicle_model_pub;
   ros::Publisher vehicle_info_pub; 
 
+  ros::Publisher plan_state_pub;
+  ros::Publisher wait_plan_state_pub;
+  ros::Publisher vehicle_in_map_pub;
+
 
   /** ROS Components **/
   tf::TransformListener listener_map_to_base;
@@ -146,19 +151,9 @@ private:
 
 
   int map_number_;
-
-  /* 
-  uninit   -1
-  wait     0
-  move     1
-  rotation 2
-  back     3
-  */
-  int planner_state_;
   ros::Time last_timer_;
 
   tf::StampedTransform stampedtransform;
-
 
   /** Functions **/
   void ApplyAutoControl(ros::Time& Timer,double& Duration_Limit);
@@ -195,8 +190,8 @@ private:
   }
 
   bool setAutoCoefficient(double index) {
-    int search_grid = 3;
-    double grid_res = 0.4;
+    int search_grid = 4;
+    double grid_res = 0.2;
     MyPlanner_.set_safe_path_search_grid(search_grid);
     MyPlanner_.set_costmap_resolution(grid_res);
 
@@ -242,7 +237,7 @@ private:
     temp_point.points.push_back(global_sub_goal_);
     global_goal_pub.publish(temp_point);
 
-    // if(MyPlanner_.path_all_set().size() > 0) local_all_pub.publish(MyTools_.ConvertVectortoPointcloud(MyPlanner_.path_all_set()));
+    if(MyPlanner_.path_all_set().size() > 0) local_all_pub.publish(MyTools_.ConvertVectortoPointcloud(MyPlanner_.path_all_set()));
     if(MyPlanner_.path_safe_set().size() > 0) local_safe_pub.publish(MyTools_.ConvertVectortoPointcloud(MyPlanner_.path_safe_set()));
     local_best_pub.publish(MyPlanner_.path_best());
     global_path_pub.publish(global_path_pointcloud_);
@@ -259,7 +254,7 @@ private:
       return false;
     }
     if(!MyPlanner_.UpdateCostmap(obstacle_in_base_)) {
-      cout << "Update Costmap" << endl;
+      cout << "Update Costmap Failed" << endl;
       return false;
     }
     local_costmap_pub.publish(MyPlanner_.costmap_local());
