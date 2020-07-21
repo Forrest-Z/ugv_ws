@@ -269,7 +269,7 @@ void Planning::GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output) {
   double shrink_scale = temp_splines_joints_num * 2;
   double radius_unit = path_window_radius_ / temp_splines_joints_num;
 
-  vector<int> level_nums = {5,5,5}; //{9,9,7};
+  vector<int> level_nums = {7,5,3}; //{9,9,7};
   vector<double> level_unit(temp_splines_joints_num,0);
   vector<sensor_msgs::PointCloud> temp_vector(level_nums[0]);
 
@@ -366,8 +366,8 @@ bool Planning::DetectObstcaleGrid(sensor_msgs::PointCloud Path,nav_msgs::Occupan
     int path_point_index = ConvertCartesianToLocalOccupany(Costmap,Path.points[i]);
     if(path_point_index < 0) continue;
     if(Costmap.data[path_point_index] > safety_threshold) return false;
-    for (int j = -search_grid; j < search_grid; ++j) {
-      for (int k = -search_grid/2; k < search_grid ; ++k) {
+    for (int j = -search_grid/2; j < search_grid; ++j) {
+      for (int k = -search_grid; k < search_grid ; ++k) {
         int check_index = path_point_index + k * Costmap.info.width + j;
         if(!CheckGrid(Costmap,check_index,safety_threshold)) return false;
       }
@@ -399,7 +399,7 @@ void Planning::SetLocalCostmap(nav_msgs::OccupancyGrid& Costmap,sensor_msgs::Poi
   int costmap_size = Costmap.info.width * Costmap.info.height;
   for (int i = 0; i < Obstacle.points.size(); ++i) {
     if(fabs(Obstacle.points[i].x) > map_window_radius_ || fabs(Obstacle.points[i].y) > map_window_radius_) continue;
-    if(hypot(Obstacle.points[i].x,Obstacle.points[i].y) < 0.5) continue;
+    if(hypot(Obstacle.points[i].x,Obstacle.points[i].y) < 0.2) continue;
     int obstacle_in_map = ConvertCartesianToLocalOccupany(Costmap,Obstacle.points[i]);
     if (obstacle_in_map < 0 || obstacle_in_map > costmap_size) continue;
     Costmap.data[obstacle_in_map] = obstacle_occupancy;

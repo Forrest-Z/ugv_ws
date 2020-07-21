@@ -24,6 +24,7 @@ void Routing::RoutingAnalyze(geometry_msgs::Point32& Goal_in_map,geometry_msgs::
 	if(!ReadYamlFile(Map_folder,Map_number)) return;
 	int start_id = FindPointId(Vehicle_in_map);
 	int end_id = FindPointId(Goal_in_map);
+	if(start_id == end_id) return;
 	if(!ComputePath(start_id,end_id)) {
 		cout << "Global Plan Failed" << endl;
 		cout << "From     " << start_id << " to " << end_id << endl;
@@ -126,7 +127,8 @@ void Routing::CleanAllState() {
 /******************************************************************************************
  ****                       Convert ID vector to Pointcloud Path                       ****
  ******************************************************************************************
- * Convert vector of node ID into Pointcloud Path                                         *
+ * Convert vector of node ID into Pointcloud Path, direct connect two node when the angle * 
+ * of path curve is smaller than threshold, otherwise connect in Bezier Curves            *
  * Explanation : TODO                                                                     *
  * Input:                                                                                 *
  *     path_            - A global variable vector stored path IDs in order               *
@@ -136,6 +138,8 @@ void Routing::CleanAllState() {
  * Variables:                                                                             *
  *   Local :                                                                              *
  *     double points_gap           - points distance(m) between two node in goal route    *
+ *     double curve_threshold      - threshold of radian to generate curve instead line   *
+ *     double curve_ratio          - points density ration between curve and line         *
  *   Global:                                                                              *
  *     vector<MapGraph> node_info_ - defined structure for each node informations         *
  *     YamlInfo map_info_          - defined structure for descried map image to map data *
@@ -143,6 +147,8 @@ void Routing::CleanAllState() {
 void Routing::SetPathtoPointcloud() {
 	int node_size = path_.size();
   double points_gap = 5;
+  double curve_threshold = 2;
+  double curve_ratio = 2;
   geometry_msgs::Point32 last_point;
 
 	sensor_msgs::PointCloud pointcloud;
@@ -168,7 +174,6 @@ void Routing::SetPathtoPointcloud() {
 	      geometry_msgs::Point32 point_mid;
 	      point_mid.x = last_point.x + j * points_gap * cos(points_angle);
 	      point_mid.y = last_point.y + j * points_gap * sin(points_angle);
-	      point_mid.z = last_point.z;
 	      pointcloud.points.push_back(point_mid);
 	    }
     } 
@@ -176,9 +181,155 @@ void Routing::SetPathtoPointcloud() {
   	pointcloud.points.push_back(point);
   }
 
+  for (int i = 0; i < pointcloud.points.size() - 2; ++i) {
+  	geometry_msgs::Point32 point_1 = pointcloud.points[i];
+  	geometry_msgs::Point32 point_2 = pointcloud.points[i+1];
+  	geometry_msgs::Point32 point_3 = pointcloud.points[i+2];
+
+    double distance_12 = hypot((point_1.x - point_2.x),(point_1.y - point_2.y));
+    double distance_23 = hypot((point_2.x - point_3.x),(point_2.y - point_3.y));	
+    double distance_13 = hypot((point_1.x - point_3.x),(point_1.y - point_3.y));	
+    double cosin_2_numerator = pow(distance_12,2) + pow(distance_23,2) - pow(distance_13,2);
+    double cosin_2_denominator = 2 * distance_12 * distance_23;
+    double cosin_2 = cosin_2_numerator/cosin_2_denominator;
+    double radian_2 = acos(cosin_2);
+
+    double point_gap_curve = points_gap/curve_ratio;
+	  int points_number_curve = distance_13/point_gap_curve;
+
+    if(radian_2 < curve_threshold) {
+  		sensor_msgs::PointCloud pointcloud_curve;
+			pointcloud_curve.header.frame_id = "/map";
+	    for (int j = 0; j <= points_number_curve; ++j) {
+	      geometry_msgs::Point32 point_mid;
+	      double tt = static_cast<double>(j)/static_cast<double>(points_number_curve);
+	      point_mid.x = (1-tt)*((1-tt)*point_1.x+tt*point_2.x) + tt*((1-tt)*point_2.x + tt*point_3.x);
+	      point_mid.y = (1-tt)*((1-tt)*point_1.y+tt*point_2.y) + tt*((1-tt)*point_2.y + tt*point_3.y);
+	      pointcloud_curve.points.push_back(point_mid);
+    	}
+    	pointcloud.points.erase(pointcloud.points.begin()+i,pointcloud.points.begin()+i+2);
+    	pointcloud.points.insert(pointcloud.points.begin()+i,pointcloud_curve.points.begin(),pointcloud_curve.points.end());
+    	i+=pointcloud_curve.points.size();
+    	continue;
+    }
+  }
+
+
+
   path_pointcloud_ = pointcloud;
 }
 
+
+/******************************************************************************************
+ ****                               Modify Route Point                                 ****
+ ******************************************************************************************
+ * Modify original route point based on map static obstacles                              *
+ * Explanation : TODO                                                                     *
+ * Input:                                                                                 *
+ *     Input    - original route point                                                    *
+ *     Obstacle - fusion obstacle include map and sensor data                             *
+ * Output:                                                                                *
+ *     output   - modified route point                                                    *
+ * Variables:                                                                             *
+ *   Local :                                                                              *
+ *   Global:                                                                              *
+ ******************************************************************************************/
+void Routing::ModifyRoutePoint(geometry_msgs::Point32 Input,sensor_msgs::PointCloud& Output,sensor_msgs::PointCloud Obstacle) {
+	Output.header.frame_id = Obstacle.header.frame_id;
+	Output.header.stamp = Obstacle.header.stamp;
+	Output.points.clear();
+
+	double left_min_distance_to_route = DBL_MAX;
+	double right_min_distance_to_route = DBL_MAX;  
+	int left_min_obstacle_index = -1;
+	int right_min_obstacle_index = -1;
+
+
+	double left_max_distance_to_route = -1;
+	double right_max_distance_to_route = -1;
+	int left_max_obstacle_index = -1;
+	int right_max_obstacle_index = -1;
+
+	double arc_point_gap = 1;
+
+	for (int i = 0; i < Obstacle.points.size(); ++i) {
+		if(Obstacle.points[i].z < 5) continue;
+		if(hypot(Obstacle.points[i].x,Obstacle.points[i].y) > 8) continue;
+		double diff_x = fabs(Obstacle.points[i].x - Input.x);
+		double diff_y = fabs(Obstacle.points[i].y - Input.y);
+		double temp_distance = hypot(diff_x,diff_y);
+
+		if(Obstacle.points[i].x > 0 && Obstacle.points[i].y > 0) {
+			if(temp_distance < left_min_distance_to_route) {
+				left_min_distance_to_route = temp_distance;
+				left_min_obstacle_index = i;
+			} 
+		} 
+		else if(Obstacle.points[i].x < 0 && Obstacle.points[i].y > 0) {
+			if(temp_distance > left_max_distance_to_route) {
+				left_max_distance_to_route = temp_distance;
+				left_max_obstacle_index = i;
+			}		
+		}
+		else if(Obstacle.points[i].x > 0 && Obstacle.points[i].y < 0) {
+			if(temp_distance < right_min_distance_to_route) {
+				right_min_distance_to_route = temp_distance;
+				right_min_obstacle_index = i;
+			} 	
+		}
+		else if(Obstacle.points[i].x < 0 && Obstacle.points[i].y < 0) {
+			if(temp_distance > right_max_distance_to_route) {
+				right_max_distance_to_route = temp_distance;
+				right_max_obstacle_index = i;
+			}	
+		}
+	}
+
+	if(left_min_obstacle_index != -1) {
+		Obstacle.points[left_min_obstacle_index].z = 10;
+		Output.points.push_back(Obstacle.points[left_min_obstacle_index]);
+	}
+	if(right_min_obstacle_index != -1) {
+		Obstacle.points[right_min_obstacle_index].z = 9;
+		Output.points.push_back(Obstacle.points[right_min_obstacle_index]);
+	}
+	if(left_max_obstacle_index != -1) {
+		Obstacle.points[left_max_obstacle_index].z = 8;
+		Output.points.push_back(Obstacle.points[left_max_obstacle_index]);
+	}
+	if(right_max_obstacle_index != -1) {
+		Obstacle.points[right_max_obstacle_index].z = 7;
+		Output.points.push_back(Obstacle.points[right_max_obstacle_index]);
+	}
+
+	if(left_min_obstacle_index != -1 && right_min_obstacle_index != -1) {
+		geometry_msgs::Point32 temp_point_2;
+		temp_point_2.x =(Obstacle.points[left_min_obstacle_index].x + Obstacle.points[right_min_obstacle_index].x)/2;
+		temp_point_2.y =(Obstacle.points[left_min_obstacle_index].y + Obstacle.points[right_min_obstacle_index].y)/2;
+		temp_point_2.z = 1;
+		Output.points.push_back(temp_point_2);
+
+		geometry_msgs::Point32 temp_point_3;
+		temp_point_3.x =(Obstacle.points[left_min_obstacle_index].x + Obstacle.points[right_min_obstacle_index].x + Input.x)/3;
+		temp_point_3.y =(Obstacle.points[left_min_obstacle_index].y + Obstacle.points[right_min_obstacle_index].y + Input.y)/3;
+		temp_point_3.z = 2;
+		Output.points.push_back(temp_point_3);
+
+		double mid_diff_x = fabs(temp_point_2.x - temp_point_3.x);
+		double mid_diff_y = fabs(temp_point_2.y - temp_point_3.y);
+		double mid_distance = hypot(mid_diff_x,mid_diff_y);
+
+		double point_diff_x = fabs(Input.x - temp_point_3.x);
+		double point_diff_y = fabs(Input.y - temp_point_3.y);
+		double point_distance = hypot(point_diff_x,point_diff_y);
+		if(mid_distance < 3 && point_distance < 2) {
+			temp_point_3.z = -1;
+			Output.points.push_back(temp_point_3);
+		}
+	}
+
+	return;
+}
 
 
 /******************************************************************************************

@@ -106,7 +106,7 @@ private:
 	bool DetectObstcaleGrid(sensor_msgs::PointCloud Path,nav_msgs::OccupancyGrid Costmap,int Addition);
 
 	/** Inline Function **/ 
-	inline int ConvertCartesianToLocalOccupany(nav_msgs::OccupancyGrid Grid,geometry_msgs::Point32 Point) {
+	inline int  ConvertCartesianToLocalOccupany(nav_msgs::OccupancyGrid Grid,geometry_msgs::Point32 Point) {
     geometry_msgs::Point32 temp_point;
     temp_point.x = Point.x - Grid.info.origin.position.x;
     temp_point.y = Point.y - Grid.info.origin.position.y;

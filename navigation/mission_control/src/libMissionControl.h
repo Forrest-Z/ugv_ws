@@ -5,8 +5,12 @@
 #include <Planning.h>
 #include <Controlling.h>
 #include <Tools.h>
+#include <Executing.h>
+#include <Supervising.h>
+#include <mission_control/AutoSuperviseState.h>
 
 #include <std_msgs/Int32.h>
+#include <std_msgs/Int8.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/Int32MultiArray.h>
@@ -16,17 +20,6 @@ struct StationInfo {
   string id;
   double x;
   double y;
-};
-
-enum class AutoState
-{
-  JOY = 0,
-  LTE,
-  WIFI,
-  AUTO,
-  SLOW,
-  STOP,
-  BACK,
 };
 
 class MissionControl
@@ -73,6 +66,9 @@ private:
   ros::Subscriber map_number_sub;
 
 
+  ros::Subscriber reset_sub;
+  ros::Subscriber action_sub;
+  ros::Publisher action_state_pub;
   /** Publishers **/
   ros::Publisher cmd_vel_pub;
   ros::Publisher path_pred_pub;
@@ -90,10 +86,8 @@ private:
   ros::Publisher vehicle_model_pub;
   ros::Publisher vehicle_info_pub; 
 
-  ros::Publisher plan_state_pub;
-  ros::Publisher wait_plan_state_pub;
-  ros::Publisher vehicle_in_map_pub;
-
+  ros::Publisher traceback_pub;
+  ros::Publisher auto_supervise_state_pub;
 
   /** ROS Components **/
   tf::TransformListener listener_map_to_base;
@@ -119,6 +113,7 @@ private:
   bool isWIFIControl_;
   bool isJoyControl_;
   bool isLTEControl_;
+  bool isAction_;
 
   bool isLocationUpdate_;
   bool isReachCurrentGoal_;
@@ -129,6 +124,8 @@ private:
   Planning MyPlanner_;
   Controlling MyController_;
   Routing MyRouter_;
+  Executing MyExecuter_;
+  Supervising MySuperviser_;
 
   geometry_msgs::Point32 vehicle_in_map_;
   geometry_msgs::Point32 goal_in_map_;
@@ -155,6 +152,15 @@ private:
 
   tf::StampedTransform stampedtransform;
 
+  int planner_decision_;
+
+  bool plan_state_;
+  bool wait_plan_state_;
+
+
+  ros::Time action_start_timer_;
+  int current_action_index_;
+  string robot_id_;
   /** Functions **/
   void ApplyAutoControl(ros::Time& Timer,double& Duration_Limit);
 
@@ -173,11 +179,18 @@ private:
   void ApplyStopControl();
   void ApplyBackwardControl();
 
-  void ApplyAutoControl();
+  void ApplyAction();
+  void ApplyLoading();
+
+  void ApplyAutoControl(int mission_state);
   void ApplySlowControl();
 
 
   int DecisionMaker();
+  int SuperviseDecision(int mission_state);
+  geometry_msgs::Twist ExecuteDecision(geometry_msgs::Twist Input,int mission_state,int supervise_state);
+  geometry_msgs::Twist TracebackRoute(vector<geometry_msgs::Point32> Input);
+  bool CheckTracebackState(geometry_msgs::Point32 Input);
 
   geometry_msgs::Twist getJoyCommand() {
     return joy_cmd_;
@@ -190,7 +203,7 @@ private:
   }
 
   bool setAutoCoefficient(double index) {
-    int search_grid = 4;
+    int search_grid = 3;
     double grid_res = 0.2;
     MyPlanner_.set_safe_path_search_grid(search_grid);
     MyPlanner_.set_costmap_resolution(grid_res);
@@ -241,6 +254,21 @@ private:
     if(MyPlanner_.path_safe_set().size() > 0) local_safe_pub.publish(MyTools_.ConvertVectortoPointcloud(MyPlanner_.path_safe_set()));
     local_best_pub.publish(MyPlanner_.path_best());
     global_path_pub.publish(global_path_pointcloud_);
+
+    traceback_pub.publish(MySuperviser_.GetTracebackRoute());
+
+    int* auto_area_state = MySuperviser_.GetAutoAreaState();
+    mission_control::AutoSuperviseState auto_supervise_state;
+    auto_supervise_state.header.stamp = ros::Time::now();
+    auto_supervise_state.danger = auto_area_state[0];
+    auto_supervise_state.danger_assist = auto_area_state[1];
+    auto_supervise_state.route_outside = auto_area_state[2];
+    auto_supervise_state.predict_outside = auto_area_state[3];
+    auto_supervise_state.buffer = auto_area_state[4];
+    auto_supervise_state.front_safe = auto_area_state[5];
+    auto_supervise_state.revolute_safe = auto_area_state[6];
+    auto_supervise_state_pub.publish(auto_supervise_state);
+
   }
 
   bool checkMissionStage() {
@@ -308,7 +336,28 @@ private:
     int input_int = stoi(Input->data);
   } 
 
+  void ResetCallback(const std_msgs::Int32::ConstPtr& Input) {
+    if(Input->data == 0 || Input->data == 1) Initialization();
+  }
+
   void TcpCallback(const std_msgs::String::ConstPtr& Input); 
+
+  void ActionCallback(const std_msgs::Int32::ConstPtr& Input) {
+    if(Input->data == 6 || Input->data == 7) {
+      isAction_ = false;
+      global_path_pointcloud_.points.clear();
+    }
+    else if(Input->data == 3 || Input->data == 4 || Input->data == 5) {
+      global_path_pointcloud_.points.clear();
+      action_start_timer_ = ros::Time::now();
+      isAction_ = true;
+      current_action_index_ = Input->data;
+    } else {
+      isAction_ = false;
+    }
+  }
+
+  
   
 };
 #endif
