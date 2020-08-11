@@ -20,6 +20,7 @@ enum class AutoState
   STOP,
   BACK,
   NARROW,
+  ACTION,
 };
 
 enum class AUTO

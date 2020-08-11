@@ -3,35 +3,41 @@
 MissionControl::MissionControl():pn("~") {
   pn.param<string>("config_folder", config_folder_, "");
   cout << "config_folder :" << config_folder_ << endl;
+  n.param<string>("robot_id", robot_id_, "");
 
-  joy_sub = n.subscribe("joy",1, &MissionControl::JoyCallback,this);
-  goal_sub = n.subscribe("goal",1, &MissionControl::GoalCallback,this);
-  obstacle_sub = n.subscribe("map_obs_points",1, &MissionControl::ObstacleCallback,this); 
-  step_sub = n.subscribe("button",1, &MissionControl::StepNumberCallback,this);
-  cmd_sub = n.subscribe("virtual_joystick/cmd_vel",1, &MissionControl::CmdCallback,this);
-  tcp_sub = n.subscribe("tcp_string",1, &MissionControl::TcpCallback,this);
-  map_number_sub = n.subscribe("/map_number",1, &MissionControl::MapNumberCallback,this);
+  joy_sub = n.subscribe("joy",10, &MissionControl::JoyCallback,this);
+  goal_sub = n.subscribe("goal",10, &MissionControl::GoalCallback,this);
+  obstacle_sub = n.subscribe("map_obs_points",10, &MissionControl::ObstacleCallback,this); 
+  step_sub = n.subscribe("button",10, &MissionControl::StepNumberCallback,this);
+  cmd_sub = n.subscribe("virtual_joystick/cmd_vel",10, &MissionControl::CmdCallback,this);
+  control_sub = n.subscribe("control_string",10, &MissionControl::ControlCallback,this);
+  map_number_sub = n.subscribe("map_number",1, &MissionControl::MapNumberCallback,this);
 
-  cmd_vel_pub = n.advertise<geometry_msgs::Twist> ("/husky_velocity_controller/cmd_vel", 1);
-  path_pred_pub = n.advertise<sensor_msgs::PointCloud>("/pred_path",1);
+  cmd_vel_pub = n.advertise<geometry_msgs::Twist> ("husky_velocity_controller/cmd_vel", 1);
+  path_pred_pub = n.advertise<sensor_msgs::PointCloud>("pred_path",1);
 
-  local_goal_pub = n.advertise<sensor_msgs::PointCloud> ("/local_goal", 1);
-  global_goal_pub = n.advertise<sensor_msgs::PointCloud> ("/global_goal", 1);
+  local_goal_pub = n.advertise<sensor_msgs::PointCloud> ("local_goal", 1);
+  global_goal_pub = n.advertise<sensor_msgs::PointCloud> ("global_goal", 1);
 
-  local_all_pub = n.advertise<sensor_msgs::PointCloud>("/local_all",1);
-  local_safe_pub = n.advertise<sensor_msgs::PointCloud>("/local_safe",1);
-  local_best_pub = n.advertise<sensor_msgs::PointCloud>("/local_best",1);
-  local_costmap_pub = n.advertise<nav_msgs::OccupancyGrid>("/local_costmap",1);
+  local_all_pub = n.advertise<sensor_msgs::PointCloud>("local_all",1);
+  local_safe_pub = n.advertise<sensor_msgs::PointCloud>("local_safe",1);
+  local_best_pub = n.advertise<sensor_msgs::PointCloud>("local_best",1);
+  local_costmap_pub = n.advertise<nav_msgs::OccupancyGrid>("local_costmap",1);
 
-  station_points_pub = n.advertise<sensor_msgs::PointCloud>("/station_points",1);
-  global_path_pub = n.advertise<sensor_msgs::PointCloud>("/global_path",1);
-  vehicle_model_pub = n.advertise<visualization_msgs::Marker>("/vehicle_model",1);
-  vehicle_info_pub = n.advertise<visualization_msgs::Marker>("/vehicle_info",1);
-  traceback_pub = n.advertise<sensor_msgs::PointCloud>("/trace_back",1);
-  auto_supervise_state_pub = n.advertise<mission_control::AutoSuperviseState>("/auto_supervise_state",1);
+  station_points_pub = n.advertise<sensor_msgs::PointCloud>("station_points",1);
+  global_path_pub = n.advertise<sensor_msgs::PointCloud>("global_path",1);
+  vehicle_model_pub = n.advertise<visualization_msgs::Marker>("vehicle_model",1);
+  vehicle_info_pub = n.advertise<visualization_msgs::Marker>("vehicle_info",1);
+  traceback_pub = n.advertise<sensor_msgs::PointCloud>("trace_back",1);
+  auto_supervise_state_pub = n.advertise<mission_control::AutoSuperviseState>("auto_supervise_state",1);
+  
   RRT_pointcloud_pub = n.advertise<sensor_msgs::PointCloud>("/RRT_pointcloud",1);
   Astar_pointcloud_pub = n.advertise<sensor_msgs::PointCloud>("/Astar_pointcloud",1);
   vehicle_run_state_pub = n.advertise<std_msgs::String>("/vehicle_run_state",1);
+  
+  reset_sub = n.subscribe("/reset_control",1,&MissionControl::ResetCallback,this);
+  action_sub = n.subscribe("action_index",1,&MissionControl::ActionCallback,this);
+  action_state_pub = n.advertise<std_msgs::Int32>("action_state",1);
 
 }
 MissionControl::~MissionControl(){
@@ -65,8 +71,9 @@ bool MissionControl::Initialization() {
   isWIFIControl_ = false;
   isJoyControl_  = false;
   isLTEControl_  = false;
+  isLTELock_ = false;
 
-
+  isAction_ = false;
   isLocationUpdate_ = false;
   isReachCurrentGoal_ = false;
 
@@ -74,6 +81,8 @@ bool MissionControl::Initialization() {
 
   MyController_.set_speed_scale(controller_linear_scale_);
   MyController_.set_rotation_scale(controller_rotation_scale_);
+  
+  global_path_pointcloud_.points.clear();
 
   narrow_command_stage_ = 0;
   lookahead_Astar_scale_ = 0.9;
@@ -142,7 +151,13 @@ void MissionControl::Execute() {
       vehicle_run_state_1st_.data = "step1: mission_state was NARROW.";
       ApplyNarrowControl(mission_state);
       continue; 
-    } else {
+    } 
+    else if(mission_state == static_cast<int>(AutoState::ACTION)) {
+      vehicle_run_state_1st_.data = "step1: mission_state was ACTION.";
+      ApplyAction();
+      continue; 
+    } 
+    else {
       cout << "Unknown Mission State" << endl;
       continue;
     }
@@ -155,6 +170,8 @@ void MissionControl::Execute() {
 // ABCD EFGH IJKL MNOP QRST UVWX YZ
 int MissionControl::DecisionMaker() {
   if(isJoyControl_) return static_cast<int>(AutoState::JOY);
+  if(isLTEControl_) return static_cast<int>(AutoState::LTE);
+  if(isAction_) return static_cast<int>(AutoState::ACTION);
 
   if(checkMissionStage()){ 
     if(!MySuperviser_.GetAutoMissionState())
@@ -164,6 +181,16 @@ int MissionControl::DecisionMaker() {
   } 
 
   return static_cast<int>(AutoState::STOP);
+}
+
+void MissionControl::ApplyAction() {
+  double action_time = 2;
+  if((ros::Time::now() - action_start_timer_).toSec() > action_time) {
+    std_msgs::Int32 action_state;
+    action_state.data = current_action_index_;
+    action_state_pub.publish(action_state);
+    isAction_ = false;
+  }
 }
 
 void MissionControl::ApplyJoyControl() {
@@ -602,6 +629,7 @@ bool MissionControl::CheckRouteEndState(geometry_msgs::Point32 Input) {
 }
 
 bool MissionControl::CheckNavigationState() {
+  if(isReachCurrentGoal_) return false;
   double reach_goal_distance = 3;
   geometry_msgs::Point32 goal_local;
   ConvertPoint(goal_in_map_,goal_local,map_to_base_);
@@ -613,6 +641,7 @@ bool MissionControl::CheckNavigationState() {
     MySuperviser_.SetAutoMissionState(true);
     return false;
   }
+
   return true;
 }
 
@@ -623,7 +652,7 @@ void MissionControl::ComputeGlobalPlan(geometry_msgs::Point32& Goal) {
   string map_folder = config_folder_ + "/map/";
   MyRouter_.RoutingAnalyze(Goal,vehicle_in_map_,map_folder,map_number_);
   global_path_pointcloud_ = MyRouter_.path_pointcloud();
-
+  isReachCurrentGoal_ = false;
   if(global_path_pointcloud_.points.size() <= 0) global_path_pointcloud_.points.push_back(goal_in_map_);
 
   cout << "Path Planned" << endl;
@@ -840,7 +869,7 @@ bool MissionControl::ReadConfig() {
 
 bool MissionControl::UpdateVehicleLocation() {
   try {
-    listener_map_to_base.lookupTransform("/map", "/base_link",  
+    listener_map_to_base.lookupTransform("/map", robot_id_ + "/base_link",  
                              ros::Time(0), stampedtransform);
   }
   catch (tf::TransformException ex) {
@@ -857,7 +886,7 @@ bool MissionControl::UpdateVehicleLocation() {
   geometry_msgs::TransformStamped temp_trans;
   temp_trans.header.stamp = ros::Time::now();
   temp_trans.header.frame_id = "/map";
-  temp_trans.child_frame_id = "/base_link";
+  temp_trans.child_frame_id = robot_id_ + "/base_link";
 
   temp_trans.transform.translation.x = stampedtransform.getOrigin().x();
   temp_trans.transform.translation.y = stampedtransform.getOrigin().y();
@@ -902,7 +931,7 @@ bool MissionControl::UpdateVehicleLocation() {
   marker.mesh_resource = "package://config/cfg/model.dae";
 
 
-  infoer.header.frame_id = "/base_link";
+  infoer.header.frame_id = robot_id_ + "/base_link";
   infoer.header.stamp = ros::Time::now();
   infoer.id = 0;
   infoer.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
@@ -912,12 +941,12 @@ bool MissionControl::UpdateVehicleLocation() {
   infoer.color.r = 1;
   infoer.color.g = 1;
   infoer.color.b = 1;
-  infoer.scale.z = 7;
-  infoer.text = "INFO";
+  infoer.scale.z = 0.1;
+  infoer.text = "ID : " + robot_id_;
 
 
   vehicle_model_pub.publish(marker);
-  // vehicle_info_pub.publish(infoer);
+  vehicle_info_pub.publish(infoer);
 
   return true;
 }
@@ -963,62 +992,91 @@ void MissionControl::CmdCallback(const geometry_msgs::Twist::ConstPtr& Input) {
   joy_cmd_ = android_cmd;
 }
 
-void MissionControl::TcpCallback(const std_msgs::String::ConstPtr& Input) {
+void MissionControl::ControlCallback(const std_msgs::String::ConstPtr& Input) {
   last_timer_ = ros::Time::now();
-  isLTEControl_ = true;
-  string command = Input->data;
+  string input_duplicate = Input->data;
+  string delimiter = "$";
+  string token;
+  size_t pos = 0;
 
-  double standard_linear = max_linear_velocity_ * 0.5;
-  double standard_angluar = max_rotation_velocity_ * 0.5;
+  string data_master = "masterlock";
+  string data_lock   = "deadlock";
+  string data_move   = "move";
+  string data_loader = "conveyor";
+  string lock_on = "on";
+  string lock_off = "off";
 
-  double linear_index = 1;
-  double angular_index = 1;
-  /*
-    1 2 3
-    4 5 6
-    7 8 9     24 25
-  */
-  if(command == "button2") {
-    angular_index = 0;
-  }
-  else if(command == "button3") {
-    angular_index = -1;
-  }
-  else if(command == "button4") {
-    linear_index = 0;
-  }
-  else if(command == "button5") {
-    linear_index = 0;
-    angular_index = 0;
-  }
-  else if(command == "button6") {
-    linear_index = 0;
-    angular_index = -1;
-  }
-  else if(command == "button7") {
-    linear_index = -1;
-  }
-  else if(command == "button8") {
-    linear_index = -1;
-    angular_index = 0;
-  }
-  else if(command == "button9") {
-    linear_index = -1;
-    angular_index = -1;
-  }
-  else if(command == "button24") {
-    linear_index = 0;
-    angular_index = 0;
-  }
-  else if(command == "button25") {
-    linear_index = 0;
-    angular_index = 0;
+  string topic_str;
+  string msg_1_str;
+  string msg_2_str;
+
+  // cout << "Raw Input : " << input_duplicate << endl;
+
+  if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+    topic_str = input_duplicate.substr(0, pos);
+    // linear_index = stof(token);
+    input_duplicate.erase(0, pos + delimiter.length());
   }
 
-  geometry_msgs::Twist tcp_cmd;
-  tcp_cmd.linear.x = linear_index * standard_linear;
-  tcp_cmd.angular.z = angular_index * standard_angluar;
-  joy_cmd_ = tcp_cmd;
+  if(topic_str == data_master) {
+    if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+      msg_1_str = input_duplicate.substr(0, pos);
+      input_duplicate.erase(0, pos + delimiter.length());
+      if(msg_1_str == lock_on) {
+        isLTEControl_ = true;
+        cout << robot_id_ << " Control On" << endl;
+      }
+      else if (msg_1_str == lock_off) {
+        isLTEControl_ = false;
+        cout << robot_id_ << " Control Off" << endl;
+      }
+    }
+    return;    
+  }
+
+
+  if(topic_str == data_lock) {
+    if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+      msg_1_str = input_duplicate.substr(0, pos);
+      input_duplicate.erase(0, pos + delimiter.length());
+      if(msg_1_str == lock_on) {
+        isLTELock_ = true;
+        cout << robot_id_ << " Lock On" << endl;
+      }
+      else if (msg_1_str == lock_off) {
+        isLTELock_ = false;
+        cout << robot_id_ << " Lock Off" << endl;
+      }
+    }
+    return;    
+  }
+
+
+  if(isLTELock_) {
+    lte_cmd_.linear.x = 0;
+    lte_cmd_.angular.z = 0;
+    return;
+  }
+
+
+  if(topic_str == data_move) {
+    double linear_speed;
+    double angular_speed;
+    if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+      msg_1_str = input_duplicate.substr(0, pos);
+      angular_speed = stof(msg_1_str);
+      input_duplicate.erase(0, pos + delimiter.length());
+    }
+    if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+      msg_2_str = input_duplicate.substr(0, pos);
+      linear_speed = stof(msg_2_str);
+      input_duplicate.erase(0, pos + delimiter.length());
+    }
+    cout << robot_id_ << " Move command Linear " << linear_speed << ", angular " << angular_speed << endl;
+    lte_cmd_.linear.x = linear_speed;
+    lte_cmd_.angular.z = angular_speed;
+    return;    
+  }
 }
 
 int MissionControl::SuperviseDecision(int mission_state){

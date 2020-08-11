@@ -67,10 +67,13 @@ private:
   ros::Subscriber obstacle_sub;
   ros::Subscriber step_sub;
   ros::Subscriber cmd_sub;
-  ros::Subscriber tcp_sub;  
+  ros::Subscriber control_sub;  
   ros::Subscriber map_number_sub;
 
-
+  
+  ros::Subscriber reset_sub;
+  ros::Subscriber action_sub;
+  ros::Publisher action_state_pub;
   /** Publishers **/
   ros::Publisher cmd_vel_pub;
   ros::Publisher path_pred_pub;
@@ -116,6 +119,8 @@ private:
   bool isWIFIControl_;
   bool isJoyControl_;
   bool isLTEControl_;
+  bool isLTELock_;
+  bool isAction_;
 
   bool isLocationUpdate_;
   bool isReachCurrentGoal_;
@@ -166,6 +171,9 @@ private:
   bool plan_state_;
   bool wait_plan_state_;
 
+  ros::Time action_start_timer_;
+  int current_action_index_;
+  string robot_id_;
   /** Functions **/
   void ApplyAutoControl(ros::Time& Timer,double& Duration_Limit);
 
@@ -183,6 +191,8 @@ private:
   void ApplyLTEControl();
   void ApplyStopControl();
   void ApplyBackwardControl();
+
+  void ApplyAction();
 
   void ApplyAutoControl(int mission_state);
   void ApplySlowControl();
@@ -395,8 +405,26 @@ private:
     int input_int = stoi(Input->data);
   } 
 
-  void TcpCallback(const std_msgs::String::ConstPtr& Input); 
+  void ResetCallback(const std_msgs::Int32::ConstPtr& Input) {
+    if(Input->data == 0 || Input->data == 1) Initialization();
+  }
 
+  void ControlCallback(const std_msgs::String::ConstPtr& Input); 
+
+  void ActionCallback(const std_msgs::Int32::ConstPtr& Input) {
+    if(Input->data == 6 || Input->data == 7) {
+      isAction_ = false;
+      global_path_pointcloud_.points.clear();
+    }
+    else if(Input->data == 3 || Input->data == 4 || Input->data == 5) {
+      global_path_pointcloud_.points.clear();
+      action_start_timer_ = ros::Time::now();
+      isAction_ = true;
+      current_action_index_ = Input->data;
+    } else {
+      isAction_ = false;
+    }
+  }
   //========== 增加Astar 与 RRT =======================
 
   void ApplyNarrowControl(int mission_state);
