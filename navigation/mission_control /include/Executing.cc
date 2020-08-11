@@ -100,3 +100,33 @@ void Executing::ComputeRevoluteCommand(geometry_msgs::Point32 now_pose, geometry
 
 }
 
+//============== narrow 规划器 ==========================
+geometry_msgs::Twist Executing::ApplyNarrowP(geometry_msgs::Twist Input_cmd){
+    geometry_msgs::Twist raw_cmd;
+    raw_cmd.linear.x = 0;
+    raw_cmd.angular.z = 0;
+    return raw_cmd;
+}
+
+geometry_msgs::Twist Executing::ApplyNarrowD1(geometry_msgs::Twist Input_cmd){
+    geometry_msgs::Twist raw_cmd;
+    if(Input_cmd.linear.x > 1) Input_cmd.linear.x = 2;
+    raw_cmd.linear.x = Input_cmd.linear.x;
+    raw_cmd.angular.z = Input_cmd.angular.z;
+    return raw_cmd;
+}
+
+geometry_msgs::Twist Executing::ApplyNarrowR1(geometry_msgs::Twist Input_cmd){
+    geometry_msgs::Twist raw_cmd;
+    raw_cmd.linear.x = 0;
+    raw_cmd.angular.z = 1;
+    return raw_cmd;
+}
+
+geometry_msgs::Twist Executing::ApplyNarrowR2(geometry_msgs::Twist Input_cmd){
+    geometry_msgs::Twist raw_cmd;
+    raw_cmd.linear.x = 0;
+    raw_cmd.angular.z = -1;
+    return raw_cmd;
+}
+

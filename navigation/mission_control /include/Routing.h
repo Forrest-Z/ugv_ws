@@ -65,7 +65,10 @@ struct NodeCompare {
 class Routing
 {
 public:
-  Routing(){};
+  Routing()
+  {
+    path_pointcloud_.header.frame_id = "/map";
+  };
   ~Routing(){};
 
   void RoutingAnalyze(geometry_msgs::Point32& goal_in_map,geometry_msgs::Point32 vehicle_in_map,string map_folder,int map_number);
@@ -95,7 +98,7 @@ private:
   int FindPointId(geometry_msgs::Point32 Input);
 
   bool ComputePath(int Start_Id,int End_id);
-  void SetPathtoPointcloud();
+  void SetPathtoPointcloud(geometry_msgs::Point32 Goal);
   void CleanAllState();
 
   /** Inline Function **/ 

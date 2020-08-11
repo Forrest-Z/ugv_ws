@@ -29,6 +29,7 @@ public:
 	void set_rotation_scale(double Input) { rotation_scale_ = Input; };
 
 	void ComputePurePursuitCommand(geometry_msgs::Point32 Goal_Route, geometry_msgs::Point32 Goal_Plan,geometry_msgs::Twist& Pp_command);
+	void ComputePurePursuitRRTCommand(geometry_msgs::Point32 Goal_Route, geometry_msgs::Point32 Goal_Plan,geometry_msgs::Twist& Pp_command);
 
 private:
 	const int ROS_RATE_HZ   = 20;

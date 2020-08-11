@@ -15,6 +15,11 @@
 #include <std_msgs/Bool.h>
 #include <std_msgs/Int32MultiArray.h>
 #include <visualization_msgs/Marker.h>
+#include <string>
+#include "time.h"
+
+using std::to_string;
+using std::string;
 
 struct StationInfo {
   string id;
@@ -66,9 +71,6 @@ private:
   ros::Subscriber map_number_sub;
 
 
-  ros::Subscriber reset_sub;
-  ros::Subscriber action_sub;
-  ros::Publisher action_state_pub;
   /** Publishers **/
   ros::Publisher cmd_vel_pub;
   ros::Publisher path_pred_pub;
@@ -88,6 +90,7 @@ private:
 
   ros::Publisher traceback_pub;
   ros::Publisher auto_supervise_state_pub;
+  ros::Publisher vehicle_run_state_pub;
 
   /** ROS Components **/
   tf::TransformListener listener_map_to_base;
@@ -113,7 +116,6 @@ private:
   bool isWIFIControl_;
   bool isJoyControl_;
   bool isLTEControl_;
-  bool isAction_;
 
   bool isLocationUpdate_;
   bool isReachCurrentGoal_;
@@ -142,7 +144,14 @@ private:
 
   geometry_msgs::Point32 local_sub_goal_;
   geometry_msgs::Point32 global_sub_goal_;
-  
+
+  std_msgs::String vehicle_run_state_;
+  std_msgs::String vehicle_run_state_1st_;
+  std_msgs::String vehicle_run_state_2nd_;
+  std_msgs::String vehicle_run_state_3rd_;
+  std_msgs::String vehicle_run_state_4th_;
+
+
   double lookahead_global_meter_;
   double lookahead_local_scale_;
 
@@ -157,10 +166,6 @@ private:
   bool plan_state_;
   bool wait_plan_state_;
 
-
-  ros::Time action_start_timer_;
-  int current_action_index_;
-  string robot_id_;
   /** Functions **/
   void ApplyAutoControl(ros::Time& Timer,double& Duration_Limit);
 
@@ -178,9 +183,6 @@ private:
   void ApplyLTEControl();
   void ApplyStopControl();
   void ApplyBackwardControl();
-
-  void ApplyAction();
-  void ApplyLoading();
 
   void ApplyAutoControl(int mission_state);
   void ApplySlowControl();
@@ -208,12 +210,17 @@ private:
     MyPlanner_.set_safe_path_search_grid(search_grid);
     MyPlanner_.set_costmap_resolution(grid_res);
 
+    MyPlanner_.set_Astar_map_window_radius(Astar_local_map_window_radius_);
+	  MyPlanner_.set_RRT_iteration(RRT_iteration_);
+	  MyPlanner_.set_RRT_exten_step(RRT_extend_step_);
+	  MyPlanner_.set_RRT_search_plan_num(RRT_search_plan_num_);
+	  MyPlanner_.set_RRT_expand_size(RRT_expand_size_);
+    
     MyController_.set_speed_scale(index * controller_linear_scale_);
     MyController_.set_rotation_scale(index * controller_rotation_scale_);
 
     lookahead_global_meter_ = 5;
     lookahead_local_scale_ = 2;
-
     return true;
   }
 
@@ -269,6 +276,51 @@ private:
     auto_supervise_state.revolute_safe = auto_area_state[6];
     auto_supervise_state_pub.publish(auto_supervise_state);
 
+    vehicle_run_state_4th_.data = "step4: " + string("danger was ") + to_string(auto_area_state[0]) + 
+                                  string(", danger_assist was ") + to_string(auto_area_state[1]) + 
+                                  string(", route_outside was ") + to_string(auto_area_state[2]) + 
+                                  string(", predict_outside was ") + to_string(auto_area_state[3]) +
+                                  string(", buffer was ") + to_string(auto_area_state[4]) +
+                                  string(", front_safe was ") + to_string(auto_area_state[5]) +
+                                  string(", revolute_safe was ") + to_string(auto_area_state[6]);
+    static string temp_run_state_4th;
+    if(temp_run_state_4th != vehicle_run_state_4th_.data) {
+      std_msgs::String temp_run_state;
+      temp_run_state.data = GetLocalTime() + vehicle_run_state_4th_.data;
+      vehicle_run_state_pub.publish(temp_run_state);
+      temp_run_state_4th = vehicle_run_state_4th_.data;
+    }
+
+
+    RRT_pointcloud_global_.header.frame_id = "/map";
+    RRT_pointcloud_global_.header.stamp = ros::Time::now();
+    RRT_pointcloud_pub.publish(RRT_pointcloud_global_);
+    Astar_pointcloud_global_.header.frame_id = "/map";
+    Astar_pointcloud_global_.header.stamp = ros::Time::now();
+    Astar_pointcloud_pub.publish(Astar_pointcloud_global_);
+
+
+
+  }
+
+  void readVehicleState() {
+    static string temp_run_state_1st;
+    if(temp_run_state_1st != vehicle_run_state_1st_.data) {
+      std_msgs::String temp_run_state;
+      temp_run_state.data = GetLocalTime() + vehicle_run_state_1st_.data;
+      vehicle_run_state_pub.publish(temp_run_state);
+      temp_run_state_1st = vehicle_run_state_1st_.data;
+    }
+
+    static string temp_run_state_2nd;
+    if(vehicle_run_state_1st_.data == "step1: mission_state was NARROW.") {
+      if(temp_run_state_2nd != vehicle_run_state_2nd_.data) {
+        std_msgs::String temp_run_state;
+        temp_run_state.data = GetLocalTime() + vehicle_run_state_2nd_.data;
+        vehicle_run_state_pub.publish(temp_run_state);
+        temp_run_state_2nd = vehicle_run_state_2nd_.data;
+      }
+    }
   }
 
   bool checkMissionStage() {
@@ -285,8 +337,14 @@ private:
       cout << "Update Costmap Failed" << endl;
       return false;
     }
+    if(!MyPlanner_.UpdateAstarCostmap(obstacle_in_base_)) {
+      cout << "Update Astar Costmap Failed" << endl;
+      return false;
+    }
     local_costmap_pub.publish(MyPlanner_.costmap_local());
     if(!CheckNavigationState()) {
+      lookahead_Astar_scale_ = 0.9;
+      lookahead_RRT_scale_ = 0.9;
       return false;
     }
     return true;
@@ -322,6 +380,7 @@ private:
     goal_in_map_.x = Input->pose.position.x;
     goal_in_map_.y = Input->pose.position.y;
     ComputeGlobalPlan(goal_in_map_);
+    narrow_command_stage_ = 0;
   }
 
   void ObstacleCallback(const sensor_msgs::PointCloud::ConstPtr& Input) {
@@ -336,28 +395,53 @@ private:
     int input_int = stoi(Input->data);
   } 
 
-  void ResetCallback(const std_msgs::Int32::ConstPtr& Input) {
-    if(Input->data == 0 || Input->data == 1) Initialization();
-  }
-
   void TcpCallback(const std_msgs::String::ConstPtr& Input); 
 
-  void ActionCallback(const std_msgs::Int32::ConstPtr& Input) {
-    if(Input->data == 6 || Input->data == 7) {
-      isAction_ = false;
-      global_path_pointcloud_.points.clear();
-    }
-    else if(Input->data == 3 || Input->data == 4 || Input->data == 5) {
-      global_path_pointcloud_.points.clear();
-      action_start_timer_ = ros::Time::now();
-      isAction_ = true;
-      current_action_index_ = Input->data;
-    } else {
-      isAction_ = false;
-    }
+  //========== 增加Astar 与 RRT =======================
+
+  void ApplyNarrowControl(int mission_state);
+  geometry_msgs::Twist getNarrowCommand();
+  sensor_msgs::PointCloud NarrowAstarPathfind();
+  sensor_msgs::PointCloud NarrowRRTPathfind();
+  geometry_msgs::Twist PursuitAstarPathCommand();
+  geometry_msgs::Twist PursuitRRTPathCommand();
+  bool CheckAstarRouteState(geometry_msgs::Point32 Input);
+  bool CheckRRTRouteState(geometry_msgs::Point32 Input);
+  bool CheckRouteEndState(geometry_msgs::Point32 Input);
+  double ComputePathDistance(sensor_msgs::PointCloud Path);
+  bool NarrowSubPlannerDecision();
+  void CheckNarrowToAutoState();
+
+  int narrow_command_stage_;
+  bool isAstarPathfind_;
+  bool RRT_refind_;
+  double lookahead_Astar_scale_;
+  double lookahead_RRT_scale_;
+  sensor_msgs::PointCloud Astar_pointcloud_global_;
+  sensor_msgs::PointCloud RRT_pointcloud_global_;
+
+  double Astar_local_map_window_radius_;
+  double Astar_local_costmap_resolution_;
+  int RRT_iteration_;
+  double RRT_extend_step_;
+  int RRT_search_plan_num_;
+	int RRT_expand_size_;
+
+  ros::Publisher RRT_pointcloud_pub;
+  ros::Publisher Astar_pointcloud_pub;
+
+  string GetLocalTime() {
+    std::time_t tmp_ptr;
+    std::tm *tmp_local_ptr = NULL;
+    std::time(&tmp_ptr);
+    tmp_local_ptr = localtime(&tmp_ptr);
+
+    string time_local = to_string(1900+tmp_local_ptr->tm_year) + string("-") + to_string(1+tmp_local_ptr->tm_mon)
+                      + string("-") + to_string(tmp_local_ptr->tm_mday) + string("-") + to_string(tmp_local_ptr->tm_hour)
+                      + string("-") + to_string(tmp_local_ptr->tm_min) + string("-") + to_string(tmp_local_ptr->tm_sec) + string(", ");
+    return time_local;
   }
 
-  
   
 };
 #endif

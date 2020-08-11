@@ -1,4 +1,4 @@
-max_linear_velocity 3
+max_linear_velocity 2
 max_rotation_velocity 1.5
 
 max_linear_acceleration 0.05
@@ -11,3 +11,10 @@ controller_linear_scale 1
 controller_rotation_scale 2
 
 vehicle_radius 0.3
+
+Astar_local_map_window_radius 25
+Astar_local_costmap_resolution 0.5
+RRT_iteration 5000
+RRT_extend_step 0.2
+RRT_search_plan_num 1
+RRT_expand_size 2

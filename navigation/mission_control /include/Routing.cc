@@ -24,7 +24,15 @@ void Routing::RoutingAnalyze(geometry_msgs::Point32& Goal_in_map,geometry_msgs::
 	if(!ReadYamlFile(Map_folder,Map_number)) return;
 	int start_id = FindPointId(Vehicle_in_map);
 	int end_id = FindPointId(Goal_in_map);
-	if(start_id == end_id) return;
+
+	// cout << "From     " << start_id << " to " << end_id << endl;
+	// cout << "Robot at " << Vehicle_in_map.x << "," << Vehicle_in_map.y << endl;
+	// cout << "Goal  at " << Goal_in_map.x << "," << Goal_in_map.y << endl;
+	if(start_id == end_id) {
+		// cout << "Global Plan Failed" << endl;
+		// cout << "ID Duplicate" << endl;
+		return;
+	}
 	if(!ComputePath(start_id,end_id)) {
 		cout << "Global Plan Failed" << endl;
 		cout << "From     " << start_id << " to " << end_id << endl;
@@ -32,7 +40,7 @@ void Routing::RoutingAnalyze(geometry_msgs::Point32& Goal_in_map,geometry_msgs::
 		cout << "Goal  at " << Goal_in_map.x << "," << Goal_in_map.y << endl;
 		return;
 	}
-	SetPathtoPointcloud();
+	SetPathtoPointcloud(Goal_in_map);
 }
 
 
@@ -144,19 +152,51 @@ void Routing::CleanAllState() {
  *     vector<MapGraph> node_info_ - defined structure for each node informations         *
  *     YamlInfo map_info_          - defined structure for descried map image to map data *
  ******************************************************************************************/
-void Routing::SetPathtoPointcloud() {
+void Routing::SetPathtoPointcloud(geometry_msgs::Point32 Goal) {
 	int node_size = path_.size();
   double points_gap = 5;
   double curve_threshold = 2;
   double curve_ratio = 2;
   geometry_msgs::Point32 last_point;
 
+  geometry_msgs::Point32 point_1st;
+  geometry_msgs::Point32 point_2nd;
+
+  int path_order = 0;
+  int node_index = path_[path_order] - 1;
+  point_1st.x = (node_info_[node_index].position.y / map_info_.ratio) * map_info_.resolution 
+    + map_info_.origin.x;
+  point_1st.y = (map_info_.height - (node_info_[node_index].position.x / map_info_.ratio)) * map_info_.resolution 
+    + map_info_.origin.y;
+  point_1st.z = node_info_[node_index].position.z;
+
+  path_order++;
+  node_index = path_[path_order] - 1;
+
+  point_2nd.x = (node_info_[node_index].position.y / map_info_.ratio) * map_info_.resolution 
+    + map_info_.origin.x;
+  point_2nd.y = (map_info_.height - (node_info_[node_index].position.x / map_info_.ratio)) * map_info_.resolution 
+    + map_info_.origin.y;
+  point_2nd.z = node_info_[node_index].position.z;
+
+
+
+  double last_closet_dis = hypot((Goal.x-point_2nd.x),(Goal.y-point_2nd.y));
+  double closet_dis = hypot((point_1st.x-Goal.x),(point_1st.y-Goal.y));
+	double two_point_dis = hypot((point_1st.x-point_2nd.x),(point_1st.y-point_2nd.y));
+
+	double cos_angle_2nd = (pow(last_closet_dis,2) + pow(two_point_dis,2) - pow(closet_dis,2))/(2 * last_closet_dis * two_point_dis);
+	double cos_angle_1st = (pow(closet_dis,2) + pow(two_point_dis,2) - pow(last_closet_dis,2))/(2 * closet_dis * two_point_dis);
+
+	double angle_2nd = acos(cos_angle_2nd);
+	double angle_1st = acos(cos_angle_1st);
+
 	sensor_msgs::PointCloud pointcloud;
   pointcloud.header.frame_id = "/map";
 	for (int i = 0; i < node_size; i++) {
     geometry_msgs::Point32 point;
-    int path_order = node_size - i - 1;
-    int node_index = path_[path_order] -1;
+    path_order = node_size - i - 1;
+    node_index = path_[path_order] -1;
     point.x = (node_info_[node_index].position.y / map_info_.ratio) * map_info_.resolution 
       + map_info_.origin.x;
     point.y = (map_info_.height - (node_info_[node_index].position.x / map_info_.ratio)) * map_info_.resolution 
@@ -181,6 +221,13 @@ void Routing::SetPathtoPointcloud() {
   	pointcloud.points.push_back(point);
   }
 
+
+	if(angle_2nd < 1.58 && angle_1st < 1.58) {
+		pointcloud.points.back() = Goal;
+	} else {
+		pointcloud.points.push_back(Goal);
+	}
+
   for (int i = 0; i < pointcloud.points.size() - 2; ++i) {
   	geometry_msgs::Point32 point_1 = pointcloud.points[i];
   	geometry_msgs::Point32 point_2 = pointcloud.points[i+1];
@@ -203,18 +250,18 @@ void Routing::SetPathtoPointcloud() {
 	    for (int j = 0; j <= points_number_curve; ++j) {
 	      geometry_msgs::Point32 point_mid;
 	      double tt = static_cast<double>(j)/static_cast<double>(points_number_curve);
+
 	      point_mid.x = (1-tt)*((1-tt)*point_1.x+tt*point_2.x) + tt*((1-tt)*point_2.x + tt*point_3.x);
 	      point_mid.y = (1-tt)*((1-tt)*point_1.y+tt*point_2.y) + tt*((1-tt)*point_2.y + tt*point_3.y);
 	      pointcloud_curve.points.push_back(point_mid);
+
     	}
-    	pointcloud.points.erase(pointcloud.points.begin()+i,pointcloud.points.begin()+i+2);
+    	pointcloud.points.erase(pointcloud.points.begin()+i,pointcloud.points.begin()+i+3);
     	pointcloud.points.insert(pointcloud.points.begin()+i,pointcloud_curve.points.begin(),pointcloud_curve.points.end());
     	i+=pointcloud_curve.points.size();
     	continue;
     }
   }
-
-
 
   path_pointcloud_ = pointcloud;
 }
@@ -459,15 +506,18 @@ bool Routing::ReadYamlFile(string Map_folder,int Map_number){
  ******************************************************************************************/
 int Routing::FindPointId(geometry_msgs::Point32 Input) {
 	double closet_dis = DBL_MAX;
+	int closet_id = -1;
 	int output = -1;
 	geometry_msgs::Point32 point_in_pixel = ConvertMapToPixel(Input);
 
 	for (int i = 0; i < node_info_.size(); i++) {
-		double current_dis = hypot( abs(node_info_[i].position.x-point_in_pixel.x),abs(node_info_[i].position.y-point_in_pixel.y) );
+		double current_dis = hypot(fabs(node_info_[i].position.x-point_in_pixel.x),fabs(node_info_[i].position.y-point_in_pixel.y));
 		if(current_dis <= closet_dis) {
 			closet_dis = current_dis;
-			output = i+1;
+			closet_id = i;
 		}
 	}
+
+	output = closet_id + 1;
 	return output;
 }

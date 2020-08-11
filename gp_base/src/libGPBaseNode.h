@@ -6,6 +6,7 @@
 #include <cmath>
 #include <vector>
 #include <time.h>
+#include <cfloat>
 
 #include <boost/asio.hpp>
 #include <boost/asio/serial_port.hpp>
@@ -19,6 +20,8 @@
 #include <geometry_msgs/Twist.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/Float32.h>
+#include <geometry_msgs/Point32.h>
+
 
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
@@ -37,14 +40,19 @@ using std::endl;
 using std::string;
 using std::vector;
 using std::to_string;
+using std::list;
 
-const int ROS_RATE_HZ   = 20;
+const int ROS_RATE_HZ   = 10;
 const double PI = 3.14159265359;
 
-const double WHEEL_RADIUS_M = 0.165;
+const int MAX_16BIT = 65535;
+
+const double WHEEL_RADIUS_M = 0.165/2;
 const double WHELL_BASE_M = 0.59;
 
-const double speed_scale = 8;
+const double speed_scale = 102/19;
+
+const int HISTORY_SIZE  = 20;
 
 
 typedef boost::shared_ptr<boost::asio::serial_port> serial_port_ptr;
@@ -66,6 +74,8 @@ private:
 
   /** Publishers **/
   ros::Publisher odom_pub;
+  ros::Publisher battery_pub;
+
 
   /** Subscribers **/
   ros::Subscriber cmd_sub;
@@ -91,12 +101,23 @@ private:
   geometry_msgs::Twist cmd_vel_;
   geometry_msgs::Twist base_twist_;
   nav_msgs::Odometry base_odom_;
+
+  list<float> battery_history_;
+
   /** Functions **/
   void sendBaseData();
   void readBaseData();
-  bool checkDataHead(vector<char>& input);
+  bool checkDataHead(vector<unsigned char> input);
   void publishOdom();
   void debugFunction();
+
+  vector<unsigned char> num2hex(int Input);
+  int hex2num(vector<unsigned char> Input);
+
+  void read_some_handler(const boost::system::error_code& error,std::size_t bytes_transferred) {
+    cout << "handler" << endl;
+    // sendBaseData();
+  }
 
   double rpm2ms(int Input){
     return (Input * 2 * PI * WHEEL_RADIUS_M)/(60 * speed_scale);
@@ -111,87 +132,33 @@ private:
     return 1 + int(log10(fabs(Input)));
   }
 
-  vector<unsigned char> num2hex(int Input){
-    vector<unsigned char> Output;
-    if(Input >= 0) {
-      std::stringstream ss;
-      ss << std::hex << Input;
-      string output_str = ss.str();
-      for (int i = 0; i < output_str.size()-4; ++i) {
-        output_str = "0" + output_str;
-      }
-
-      string part_1 = output_str.substr(0,2);
-      string part_2 = output_str.substr(2,2);
-
-
-      int part_1_int = stoi(part_1,nullptr,16);
-      int part_2_int = stoi(part_2,nullptr,16);
-
-      unsigned char part_1_char = part_1_int;
-      unsigned char part_2_char = part_2_int; 
-
-
-      Output.push_back(part_2_char);
-      Output.push_back(part_1_char);
-
-      // cout << "Input    :" << Input << endl;
-      // cout << "part_1   :" << part_1 << endl;
-      // cout << "part_2   :" << part_2 << endl; 
-      // cout << "char_1   :" << int(part_1_char) << endl;
-      // cout << "char_2   :" << int(part_2_char) << endl;
-      // cout << "output_1 :" << int(Output[0]) << endl;
-      // cout << "output_2 :" << int(Output[1]) << endl; 
-    } else {
-      std::stringstream ss;
-      ss << std::hex << abs(Input);
-      string output_str = ss.str();
-      for (int i = 0; i < output_str.size()-4; ++i) {
-        output_str = "0" + output_str;
-      }
-
-      int before_int = stoi(output_str,nullptr,16);
-      std::bitset<16> input_bin(before_int);
-      input_bin = ~input_bin;
-      int after_int = stoi(input_bin.to_string(),nullptr,2);
-      after_int++;
-
-      std::stringstream ss_after;
-      ss_after << std::hex << after_int;
-      string output_str_after = ss_after.str();
-
-      for (int i = 0; i < output_str_after.size()-4; ++i) {
-        output_str_after = "0" + output_str_after;
-      }
-
-      string part_1 = output_str_after.substr(0,2);
-      string part_2 = output_str_after.substr(2,2);
-
-
-      int part_1_int = stoi(part_1,nullptr,16);
-      int part_2_int = stoi(part_2,nullptr,16);
-
-      unsigned char part_1_char = part_1_int;
-      unsigned char part_2_char = part_2_int; 
-
-      Output.push_back(part_2_char);
-      Output.push_back(part_1_char);
-      // cout << "Input    :" << Input << endl;
-      // cout << "String   :" << after_string << endl;
-      // cout << "part_1   :" << part_1 << endl;
-      // cout << "part_2   :" << part_2 << endl; 
-      // cout << "char_1   :" << int(part_1_char) << endl;
-      // cout << "char_2   :" << int(part_2_char) << endl;
-      // cout << "output_1 :" << int(Output[0]) << endl;
-      // cout << "output_2 :" << int(Output[1]) << endl; 
+  float checkBatteryAverage() {
+    float output;
+    for (auto const& val : battery_history_) {
+      output += val;
     }
+    output /= battery_history_.size();
+    return output;
+  }
+
+  void addBatteryHistory(float Input) {
+    if(battery_history_.size() > HISTORY_SIZE) battery_history_.pop_front();
+    battery_history_.push_back(Input);
+  }
 
 
+  string fillZero(std::string input,int Dig) {
+    std::string output;
+    for (int i = 0; i < Dig - input.size(); ++i) {
+      output += "0";
+    }
+    output += input;
+    return output;
+  }
 
-
-
-    return Output;
-
+  void async_write_handler(const boost::system::error_code& error,std::size_t bytes_transferred) {
+    cout << "async_write_handler" << endl;
+    // sendBaseData();
   }
 
   void cmd_callback(const geometry_msgs::Twist::ConstPtr& input) {

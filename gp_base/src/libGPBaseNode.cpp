@@ -1,4 +1,4 @@
-#include "libGPBaseNode.h"
+ #include "libGPBaseNode.h"
 
 GPBase::GPBase():pn("~")
 {
@@ -6,8 +6,9 @@ GPBase::GPBase():pn("~")
   pn.param<int>("baud_rate", baud_rate_, 115200);
 
   odom_pub = n.advertise<nav_msgs::Odometry>("/wheel_odom", 1);
+  battery_pub = n.advertise<geometry_msgs::Point32>("/battery_info", 1);
 
-  cmd_sub = n.subscribe("/husky_velocity_controller/cmd_vel",1, &GPBase::cmd_callback,this);
+  cmd_sub = n.subscribe("/cmd_vel",1, &GPBase::cmd_callback,this);
 
   isCmdUpdate_ = false;
   isGetFirstData_ = false;
@@ -44,66 +45,71 @@ void GPBase::Manager() {
     loop_rate.sleep();
     ros::spinOnce();
   }
+
+  if (port_) {
+    port_->cancel();
+    port_->close();
+    port_.reset();
+  }
+  io_service_.stop();
+  io_service_.reset();   
 }
 
 void GPBase::Mission() {
-
-  // debugFunction();
-  // return;
-
+  // if(!port_->is_open()){
+  //   cout << "Reopen port" << endl;
+  //   port_ = serial_port_ptr(new boost::asio::serial_port(io_service_));
+  //   port_->open(port_name_, error_code_);
+  //   if (error_code_) {
+  //     ROS_INFO_STREAM("error : port_->open() failed...port_name=" << port_name_ << ", e=" << error_code_.message().c_str());
+  //     sleep(1);   
+  //     return;
+  //   }
+  //   port_->set_option(boost::asio::serial_port_base::baud_rate(baud_rate_));
+  // }
+  
   sendBaseData();
-
   // readBaseData();
 
   // publishOdom();
   // return;
-  
+
+  // if (port_) {
+  //   port_->cancel();
+  //   port_->close();
+  //   port_.reset();
+  // }
+  // io_service_.stop();
+  // io_service_.reset();
 }
 
 void GPBase::debugFunction() {
- auto test = num2hex(-200);
 }
 
 
 void GPBase::sendBaseData() {
   double linear_speed = cmd_vel_.linear.x;
   double angular_speed = cmd_vel_.angular.z;
-
-
-  double speed_1 = (2 * linear_speed - WHELL_BASE_M * angular_speed)/2;
-  double speed_2 = (2 * linear_speed + WHELL_BASE_M * angular_speed)/2;
-
+  double speed_left = (2 * linear_speed - WHELL_BASE_M * angular_speed)/2;
+  double speed_right = (2 * linear_speed + WHELL_BASE_M * angular_speed)/2;
 
   if(!isCmdUpdate_){
-    speed_1 = 0;
-    speed_2 = 0;
+    speed_left = 0;
+    speed_right = 0;
   }
   isCmdUpdate_ = false;
+  int rpm_left = ms2rpm(speed_left);
+  int rpm_right = ms2rpm(speed_right);
 
-  int num1 = ms2rpm(speed_1);
-  int num2 = ms2rpm(speed_2);
+  if(linear_speed != 0 || angular_speed != 0){
+    cout << "Linear  Speed : " << linear_speed << endl;
+    cout << "Angular Speed : " << angular_speed << endl;
+    // cout << "Speed   Left  : " << speed_left << endl;
+    // cout << "Speed   Right : " << speed_right << endl;    
+  }
 
-
-  // cout << "Command : " << linear_speed << " | " << angular_speed << endl; 
-  // cout << "speed_1 : " << speed_1 << endl;
-  // cout << "speed_2 : " << speed_2 << endl;
-  // cout << "num1    : " << num1 << endl;
-  // cout << "num2    : " << num2 << endl;
-
-  // if(num1 < 0 || num2 < 0) return;
-
-
-  vector<unsigned char> motor_left = num2hex(num1);
-  vector<unsigned char> motor_right = num2hex(num2);
-
-
-  // vector<unsigned char> motor_left = {0x38,0xff};
-  // vector<unsigned char> motor_right = {0x38,0xff};
-
-
-  // cout << "Left  " << int(motor_left[1]) << " " << int(motor_left[0]) << endl;
-  // cout << "Right " << int(motor_right[1]) << " " << int(motor_right[0]) << endl;
-
+  vector<unsigned char> motor_left = num2hex(rpm_left);
+  vector<unsigned char> motor_right = num2hex(rpm_right);
 
   vector<unsigned char>output = {0xa5,0xb0};
   vector<unsigned char>status = {0x05,0x3f};
@@ -116,100 +122,122 @@ void GPBase::sendBaseData() {
   output.insert(output.end(), check.begin(), check.end());
   output.insert(output.end(), footer.begin(), footer.end());
 
-  boost::asio::write(*port_.get(),boost::asio::buffer(output),error_code_);
+  //boost::asio::write(*port_.get(),boost::asio::buffer(output),boost::asio::transfer_all(),error_code_);
+  boost::asio::async_write(*port_.get(),boost::asio::buffer(output),boost::asio::transfer_all(),
+    boost::bind(&GPBase::async_write_handler,this,_1,_2));
+  // printf("send ");
+  // for (int i = 0; i < output.size(); ++i) {
+  //   printf("%x ",output[i]);
+  // }
+  // printf("\n");
 }
 
 void GPBase::readBaseData() {
-  int char_size = 64;
-  double linear_speed = 0;
-  double angular_speed = 0;
-  vector<char> output(char_size);
+  int char_size = 38;
+  vector<unsigned char> output(char_size);
+  size_t len = port_->read_some(boost::asio::buffer(output),error_code_);
+  // port_->async_read_some(boost::asio::buffer(output),boost::bind(&GPBase::read_some_handler,this,_1,port_));
+  // port_->async_read_some(boost::asio::buffer(output),read_some_handler);
+  if (error_code_) {
+    ROS_INFO_STREAM("error read some " << port_name_ << ", e=" << error_code_.message().c_str()); 
 
-  size_t len = port_->read_some(boost::asio::buffer(output));
-
-  if(checkDataHead(output)){
-    if(!isGetFirstData_){
-      last_time_ = ros::Time::now();
-      isGetFirstData_ = true;
+    port_ = serial_port_ptr(new boost::asio::serial_port(io_service_));
+    port_->open(port_name_, error_code_);
+    if (error_code_) {
+      ROS_INFO_STREAM("error : port_->open() failed...port_name=" << port_name_ << ", e=" << error_code_.message().c_str());
+      sleep(1);   
+      return;
     }
-    current_time_ = ros::Time::now();
-
-    int speed_1 = 0;
-    int speed_2 = 0;
-    int index_1 = 1;
-    int index_2 = 1;
-
-    int mid_index = 0;
-    int end_index = 0;
-    for (int i = 5; i < char_size; ++i){
-      if(int(output[i]) <= 0) break;
-      if(int(output[i]) == 58){
-        mid_index = i;
-      }
-      if(int(output[i]) == 13){
-        end_index = i;
-        break;
-      }
-    }
-
-    for (int i = 5; i < char_size; ++i){
-      if(int(output[i]) <= 0 || int(output[i]) == 13) break;
-      if(i == mid_index) continue;
-
-      if(i < mid_index){
-        if(int(output[i]) == 45){
-          index_1 = -1;
-          continue;
-        }
-        int power_1 = mid_index - i - 1;
-        speed_1 += pow(10,power_1) * (int(output[i])-48);
-      }
-
-      if(i > mid_index){
-        if(int(output[i]) == 45){
-          index_2 = -1;
-          continue;
-        }
-        int power_2 = end_index - i - 1;
-        speed_2 += pow(10,power_2) * (int(output[i])-48);
-      }
-    }
-
-    speed_1 *= index_1 * -1;
-    speed_2 *= index_2 * 1;
-
-    linear_speed = (rpm2ms(speed_1) + rpm2ms(speed_2))/2;
-    angular_speed = (rpm2ms(speed_2) - rpm2ms(speed_1))/WHELL_BASE_M;  
+    port_->set_option(boost::asio::serial_port_base::baud_rate(baud_rate_));
+    
+    return;
   }
+  // printf("read ");
+  // for (int i = 0; i < output.size(); ++i) {
+  //   printf("%x ",output[i]);
+  // }
+  // printf("\n");
+  if(!checkDataHead(output)) return;
+  
+  geometry_msgs::Point32 msg_battery;
+  float battery_full_voltage = 24;
+  float battery_low_voltage  = 20;
+  float standard_current = 0.5;
+  float standard_time_min = 200;
+  float battery_unit = 100/(battery_full_voltage - battery_low_voltage);
 
-  base_twist_.linear.x = linear_speed;
-  base_twist_.angular.z = angular_speed;
+  vector<unsigned char> motor_left = {output[22],output[23]};
+  vector<unsigned char> motor_right = {output[24],output[25]};
+
+  int rpm_left = static_cast<int>(hex2num(motor_left));
+  int rpm_right = static_cast<int>(hex2num(motor_right));
+
+  if(rpm_left >= MAX_16BIT/2) rpm_left -= MAX_16BIT;
+  if(rpm_right >= MAX_16BIT/2) rpm_right -= MAX_16BIT;
+
+  double ms_left = rpm2ms(rpm_left);
+  double ms_right = rpm2ms(rpm_right);
+
+  double linear_speed = (ms_right + ms_left)/2;
+  double angular_speed = (ms_right - ms_left)/WHELL_BASE_M; 
+
+  // if(linear_speed != 0 || angular_speed != 0){
+  //   cout << "rpm_left : " << rpm_left << endl;
+  //   cout << "rpm_right : " << rpm_right << endl;  
+  //   cout << "linear_speed : " << linear_speed << endl;
+  //   cout << "angular_speed : " << angular_speed << endl;    
+  // }
+
+
+  vector<unsigned char> voltage = {output[26],output[27]};
+  vector<unsigned char> current = {output[28],output[29]};
+  msg_battery.x = static_cast<float>(hex2num(voltage))/100;
+  msg_battery.y = static_cast<float>(hex2num(current))/10;
+  float battery_percent = 100 - (battery_unit * (battery_full_voltage - msg_battery.x));
+  float current_time_left = standard_time_min * battery_percent * (standard_current/msg_battery.y) * 0.01;
+  if(current_time_left < 0) current_time_left = -1;
+  addBatteryHistory(current_time_left);
+  msg_battery.z = checkBatteryAverage();
+  battery_pub.publish(msg_battery);
+
+
+
+
 
 }
 
 
-bool GPBase::checkDataHead(vector<char>& input) {
-  int odom_begin = -1;
-  for (int i = 0; i < input.size()-1; ++i) {
-    if(input[i] == 63 && input[i+1] == 83){
-      odom_begin = i;
-      break;
-    }
+int GPBase::hex2num(vector<unsigned char> Input){
+  int Output;
+  int part_1 = int(Input[0]);
+  int part_2 = int(Input[1]);
+
+  std::stringstream ss_1;
+  std::stringstream ss_2;
+  ss_1 << std::hex << part_1;
+  ss_2 << std::hex << part_2;
+
+  string output_1_str = fillZero(ss_1.str(),2);
+  string output_2_str = fillZero(ss_2.str(),2);
+
+  string output = output_2_str + output_1_str;
+
+  int output_int = stoi(output,nullptr,16);
+  Output = output_int;
+
+  return Output;
+}
+
+
+bool GPBase::checkDataHead(vector<unsigned char> input) {
+  vector<unsigned char>header = {0xa5,0xb0};
+  // printf("Header : %x,%x\n",header[0],header[1]);
+  // printf("Input  : %x,%x\n",input[0],input[1]);
+  if(input[0] == header[0] && input[1] == header[1]) 
+  {
+    return true;
   }
-  if(odom_begin < 0) return false;
-
-  auto first = input.begin() + odom_begin;
-  auto last = input.end();
-  vector<char> temp(first,last);
-
-  input = temp;
-
-  if(input[0] != 63) return false;
-  if(input[1] != 83) return false;
-  if(input[2] != 13) return false;
-  if(input[3] != 83) return false;
-  if(input[4] != 61) return false;
-  return true;
+  return false;
 }
 
 
@@ -263,4 +291,67 @@ void GPBase::publishOdom() {
   odom_pub.publish(base_odom_);
 
   last_time_ = current_time_;
+}
+
+
+
+vector<unsigned char> GPBase::num2hex(int Input){
+  vector<unsigned char> Output;
+  if(Input >= 0) {
+    std::stringstream ss;
+    ss << std::hex << Input;
+    string output_str = ss.str();
+    for (int i = 0; i < output_str.size()-4; ++i) {
+      output_str = "0" + output_str;
+    }
+
+    string part_1 = output_str.substr(0,2);
+    string part_2 = output_str.substr(2,2);
+
+
+    int part_1_int = stoi(part_1,nullptr,16);
+    int part_2_int = stoi(part_2,nullptr,16);
+
+    unsigned char part_1_char = part_1_int;
+    unsigned char part_2_char = part_2_int; 
+
+
+    Output.push_back(part_2_char);
+    Output.push_back(part_1_char);
+  } else {
+    std::stringstream ss;
+    ss << std::hex << abs(Input);
+    string output_str = ss.str();
+    for (int i = 0; i < output_str.size()-4; ++i) {
+      output_str = "0" + output_str;
+    }
+
+    int before_int = stoi(output_str,nullptr,16);
+    std::bitset<16> input_bin(before_int);
+    input_bin = ~input_bin;
+    int after_int = stoi(input_bin.to_string(),nullptr,2);
+    after_int++;
+
+    std::stringstream ss_after;
+    ss_after << std::hex << after_int;
+    string output_str_after = ss_after.str();
+
+    for (int i = 0; i < output_str_after.size()-4; ++i) {
+      output_str_after = "0" + output_str_after;
+    }
+
+    string part_1 = output_str_after.substr(0,2);
+    string part_2 = output_str_after.substr(2,2);
+
+
+    int part_1_int = stoi(part_1,nullptr,16);
+    int part_2_int = stoi(part_2,nullptr,16);
+
+    unsigned char part_1_char = part_1_int;
+    unsigned char part_2_char = part_2_int; 
+
+    Output.push_back(part_2_char);
+    Output.push_back(part_1_char);
+  }
+  return Output;
 }

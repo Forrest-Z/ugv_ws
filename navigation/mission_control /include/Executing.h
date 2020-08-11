@@ -28,6 +28,11 @@ public:
     void ComputeRevoluteCommand(geometry_msgs::Point32 now_pose, geometry_msgs::Point32 start_Pose, double end_theta, geometry_msgs::Twist& Pp_command);
     void SetMaxLinearVel(double Input) {max_linear_velocity_ = Input;}
 
+    geometry_msgs::Twist ApplyNarrowP(geometry_msgs::Twist Input_cmd);
+    geometry_msgs::Twist ApplyNarrowD1(geometry_msgs::Twist Input_cmd);
+    geometry_msgs::Twist ApplyNarrowR1(geometry_msgs::Twist Input_cmd);
+    geometry_msgs::Twist ApplyNarrowR2(geometry_msgs::Twist Input_cmd);
+
 private:
     const double PI;
     double rotation_scale_;

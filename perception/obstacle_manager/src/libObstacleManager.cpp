@@ -79,7 +79,7 @@ void ObstacleManager::publishMapObstacle() {
 
   pointcloud_map.header.frame_id = "/map";
   
-  double window_size = 10;
+  double window_size = 30;
 
   int search_unit = window_size/static_map_info_.resolution;
   int vehicle_in_grid_x = (robot_in_map_.x - static_map_info_.origin.position.x) 
