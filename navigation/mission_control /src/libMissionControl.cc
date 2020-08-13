@@ -65,6 +65,19 @@ bool MissionControl::Initialization() {
 		RRT_search_plan_num_ 				      = 1;
 		RRT_expand_size_ 					        = 2;
 
+    limit_danger_radius_     = 0.5;
+    min_danger_longth_       = 0.35;
+    min_danger_width_        = 0.25;
+    limit_route_radius_      = 5;
+    limit_predict_radius_    = 10;
+    buffer_radius_           = 2;
+    back_safe_radius_        = 1;
+    front_safe_radius_       = 1;
+    revolute_safe_radius_    = 0.5;
+    danger_assist_radius_    = 1;
+
+    spline_search_grid_ = 3;
+
     vehicle_radius_ = 0.3;
   }
 
@@ -283,7 +296,7 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
   geometry_msgs::Twist controller_cmd;
 
   double search_range = MyPlanner_.map_window_radius();
-  double search_range_min = 2;
+  double search_range_min = 4;
   double iteration_scale = 0.8;
   double wait_range = 4;
   wait_plan_state_ = true;
@@ -630,7 +643,7 @@ bool MissionControl::CheckRouteEndState(geometry_msgs::Point32 Input) {
 
 bool MissionControl::CheckNavigationState() {
   if(isReachCurrentGoal_) return false;
-  double reach_goal_distance = 3;
+  double reach_goal_distance = 1;
   geometry_msgs::Point32 goal_local;
   ConvertPoint(goal_in_map_,goal_local,map_to_base_);
 
@@ -859,6 +872,50 @@ bool MissionControl::ReadConfig() {
     }
     else if(yaml_info == "RRT_expand_size") {
       ss >> RRT_expand_size_;
+      info_linenum++;
+    }
+    else if(yaml_info == "limit_danger_radius") {
+      ss >> limit_danger_radius_;
+      info_linenum++;
+    }
+    else if(yaml_info == "min_danger_longth") {
+      ss >> min_danger_longth_;
+      info_linenum++;
+    }
+    else if(yaml_info == "min_danger_width") {
+      ss >> min_danger_width_;
+      info_linenum++;
+    }
+    else if(yaml_info == "limit_route_radius") {
+      ss >> limit_route_radius_;
+      info_linenum++;
+    }
+    else if(yaml_info == "limit_predict_radius") {
+      ss >> limit_predict_radius_;
+      info_linenum++;
+    }
+    else if(yaml_info == "buffer_radius") {
+      ss >> buffer_radius_;
+      info_linenum++;
+    }
+    else if(yaml_info == "back_safe_radius") {
+      ss >> back_safe_radius_;
+      info_linenum++;
+    }
+    else if(yaml_info == "front_safe_radius") {
+      ss >> front_safe_radius_;
+      info_linenum++;
+    }
+    else if(yaml_info == "revolute_safe_radius") {
+      ss >> revolute_safe_radius_;
+      info_linenum++;
+    }
+    else if(yaml_info == "danger_assist_radius") {
+      ss >> danger_assist_radius_;
+      info_linenum++;
+    }
+    else if(yaml_info == "spline_search_grid") {
+      ss >> spline_search_grid_;
       info_linenum++;
     }
   }

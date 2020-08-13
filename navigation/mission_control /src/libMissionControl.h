@@ -115,6 +115,18 @@ private:
   double controller_linear_scale_;
   double controller_rotation_scale_;
 
+  double limit_danger_radius_;
+  double min_danger_longth_;
+  double min_danger_width_;
+  double limit_route_radius_;
+  double limit_predict_radius_;
+  double buffer_radius_;
+  double back_safe_radius_;
+  double front_safe_radius_;
+  double revolute_safe_radius_;
+  double danger_assist_radius_;
+  double spline_search_grid_;
+
   /** Flag **/
   bool isWIFIControl_;
   bool isJoyControl_;
@@ -215,9 +227,8 @@ private:
   }
 
   bool setAutoCoefficient(double index) {
-    int search_grid = 3;
     double grid_res = 0.2;
-    MyPlanner_.set_safe_path_search_grid(search_grid);
+    MyPlanner_.set_safe_path_search_grid(spline_search_grid_);
     MyPlanner_.set_costmap_resolution(grid_res);
 
     MyPlanner_.set_Astar_map_window_radius(Astar_local_map_window_radius_);
@@ -229,6 +240,17 @@ private:
     MyController_.set_speed_scale(index * controller_linear_scale_);
     MyController_.set_rotation_scale(index * controller_rotation_scale_);
 
+    MySuperviser_.set_limit_danger_radius(limit_danger_radius_);
+    MySuperviser_.set_min_danger_longth(min_danger_longth_);
+    MySuperviser_.set_min_danger_width(min_danger_width_);
+    MySuperviser_.set_limit_route_radius(limit_route_radius_);
+    MySuperviser_.set_limit_predict_radius(limit_predict_radius_);
+    MySuperviser_.set_buffer_radius(buffer_radius_);
+    MySuperviser_.set_back_safe_radius(back_safe_radius_);
+    MySuperviser_.set_front_safe_radius(front_safe_radius_);
+    MySuperviser_.set_revolute_safe_radius(revolute_safe_radius_);
+    MySuperviser_.set_danger_assist_radius(danger_assist_radius_);
+    
     lookahead_global_meter_ = 5;
     lookahead_local_scale_ = 2;
     return true;

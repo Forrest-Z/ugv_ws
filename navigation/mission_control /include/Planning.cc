@@ -672,7 +672,6 @@ void Planning::SetAstarLocalCostmap(nav_msgs::OccupancyGrid& Costmap,sensor_msgs
         int obstacle_in_map = ConvertCartesianToLocalOccupany(Costmap,Obstacle.points[i]);
 		    geometry_msgs::Point32 ptr = ConvertCartesianToAstarArray(Obstacle.points[i]);
 		    Astar_costmap_array_[ptr.x][ptr.y] = obstacle_occupancy;
-        if(abs(ptr.x) > 130 && abs(ptr.y) > 130) {cout << "ptr: " << ptr.x << " , " << ptr.y; }
         if (obstacle_in_map < 0 || obstacle_in_map > costmap_size) continue;
         Costmap.data[obstacle_in_map] = obstacle_occupancy;
     }
@@ -917,10 +916,10 @@ bool Planning::isAstarCanreach(const AstarPoint *point, const AstarPoint *target
 	}
 	else
 	{		
-		for (int x = target->x - 1; x <= target->x + 1; x++)
-		for (int y = target->y - 1; y <= target->y + 1; y++)
-		if(x >= 0 && x <= Astar_local_costmap_.info.width-1 && y >= 0 && y <= Astar_local_costmap_.info.height-1)
-		if (Astar_costmap_array_[x][y] >= 50) return false;
+		// for (int x = target->x - 1; x <= target->x + 1; x++) //判断点四周有障碍物则返回false
+		// for (int y = target->y - 1; y <= target->y + 1; y++)
+		if(target->x >= 0 && target->x <= Astar_local_costmap_.info.width-1 && target->y >= 0 && target->y <= Astar_local_costmap_.info.height-1)
+		if (Astar_costmap_array_[target->x][target->y] >= 50) return false;
 		return true;
 	}
 }
@@ -1156,7 +1155,7 @@ bool Planning::RRTExtendSingleStep(const RRTTreeNode* rrtnode, RRTTreeNode* &nod
     check_point.x = node->cell.x;
     check_point.y = node->cell.y;
 
-    if(hypot(goal.x - check_point.x,goal.y - check_point.y) < 2) return true; //目标点2m以内障碍物忽略
+    if(hypot(goal.x - check_point.x,goal.y - check_point.y) < 0.5) return true; //目标点2m以内障碍物忽略
 
     int check_id = ConvertCartesianToLocalOccupany(RRT_costmap_local_,check_point);
     if(RRT_costmap_local_.data[check_id] >= 50) {

@@ -1,4 +1,4 @@
- #include "libGPBaseNode.h"
+#include "libGPBaseNode.h"
 
 GPBase::GPBase():pn("~")
 {
@@ -8,7 +8,7 @@ GPBase::GPBase():pn("~")
   odom_pub = n.advertise<nav_msgs::Odometry>("/wheel_odom", 1);
   battery_pub = n.advertise<geometry_msgs::Point32>("/battery_info", 1);
 
-  cmd_sub = n.subscribe("/cmd_vel",1, &GPBase::cmd_callback,this);
+  cmd_sub = n.subscribe("/husky_velocity_controller/cmd_vel",1, &GPBase::cmd_callback,this);
 
   isCmdUpdate_ = false;
   isGetFirstData_ = false;
@@ -69,9 +69,9 @@ void GPBase::Mission() {
   // }
   
   sendBaseData();
-  // readBaseData();
+  readBaseData();
 
-  // publishOdom();
+  publishOdom();
   // return;
 
   // if (port_) {
@@ -138,20 +138,20 @@ void GPBase::readBaseData() {
   size_t len = port_->read_some(boost::asio::buffer(output),error_code_);
   // port_->async_read_some(boost::asio::buffer(output),boost::bind(&GPBase::read_some_handler,this,_1,port_));
   // port_->async_read_some(boost::asio::buffer(output),read_some_handler);
-  if (error_code_) {
-    ROS_INFO_STREAM("error read some " << port_name_ << ", e=" << error_code_.message().c_str()); 
+  // if (error_code_) {
+  //   ROS_INFO_STREAM("error read some " << port_name_ << ", e=" << error_code_.message().c_str()); 
 
-    port_ = serial_port_ptr(new boost::asio::serial_port(io_service_));
-    port_->open(port_name_, error_code_);
-    if (error_code_) {
-      ROS_INFO_STREAM("error : port_->open() failed...port_name=" << port_name_ << ", e=" << error_code_.message().c_str());
-      sleep(1);   
-      return;
-    }
-    port_->set_option(boost::asio::serial_port_base::baud_rate(baud_rate_));
+  //   port_ = serial_port_ptr(new boost::asio::serial_port(io_service_));
+  //   port_->open(port_name_, error_code_);
+  //   if (error_code_) {
+  //     ROS_INFO_STREAM("error : port_->open() failed...port_name=" << port_name_ << ", e=" << error_code_.message().c_str());
+  //     sleep(1);   
+  //     return;
+  //   }
+  //   port_->set_option(boost::asio::serial_port_base::baud_rate(baud_rate_));
     
-    return;
-  }
+  //   return;
+  // }
   // printf("read ");
   // for (int i = 0; i < output.size(); ++i) {
   //   printf("%x ",output[i]);
@@ -178,7 +178,7 @@ void GPBase::readBaseData() {
   double ms_left = rpm2ms(rpm_left);
   double ms_right = rpm2ms(rpm_right);
 
-  double linear_speed = (ms_right + ms_left)/2;
+  double linear_speed = -(ms_right + ms_left)/2;
   double angular_speed = (ms_right - ms_left)/WHELL_BASE_M; 
 
   // if(linear_speed != 0 || angular_speed != 0){
@@ -187,7 +187,8 @@ void GPBase::readBaseData() {
   //   cout << "linear_speed : " << linear_speed << endl;
   //   cout << "angular_speed : " << angular_speed << endl;    
   // }
-
+  base_twist_.linear.x = linear_speed;
+  base_twist_.angular.z = angular_speed;
 
   vector<unsigned char> voltage = {output[26],output[27]};
   vector<unsigned char> current = {output[28],output[29]};
@@ -199,10 +200,6 @@ void GPBase::readBaseData() {
   addBatteryHistory(current_time_left);
   msg_battery.z = checkBatteryAverage();
   battery_pub.publish(msg_battery);
-
-
-
-
 
 }
 
@@ -251,11 +248,19 @@ void GPBase::publishOdom() {
   double vth = base_twist_.angular.z * 0.45;
 
   //vth = 0;
-
+  current_time_ = ros::Time::now();
   double dt = (current_time_ - last_time_).toSec();
   double delta_x = (vx * cos(th) - vy * sin(th)) * dt;
   double delta_y = (vx * sin(th) + vy * cos(th)) * dt;
   double delta_th = vth * dt;
+
+  // cout << "Odometry" << endl;
+  // cout << "current : " << current_time_.toSec() << endl;
+  // cout << "last : " << last_time_.toSec() << endl;
+  // cout << "dt : " << dt << endl;
+  // cout << "delta_x : " << delta_x << endl;
+  // cout << "delta_y : " << delta_y << endl;
+  // cout << "delta_th : " << delta_th << endl;
 
   x += delta_x;
   y += delta_y;
@@ -272,7 +277,7 @@ void GPBase::publishOdom() {
   odom_trans.transform.translation.y = 0;
   odom_trans.transform.translation.z = 0.0;
   odom_trans.transform.rotation = odom_quat;
-  odom_broadcaster.sendTransform(odom_trans);
+  // odom_broadcaster.sendTransform(odom_trans);
 
   odom_quat = tf::createQuaternionMsgFromYaw(th);
   base_odom_.header.stamp = current_time_;

@@ -118,6 +118,10 @@ bool Routing::ComputePath(int Start_Id,int End_id) {
 		next_point = visited[next_point];
 	}
 	path_ = path;
+	for(int i = 0; i < path.size(); i++) {
+		cout << path[i] << " "; 
+	}
+	cout << endl;
 
 	return true;
 }
@@ -154,7 +158,7 @@ void Routing::CleanAllState() {
  ******************************************************************************************/
 void Routing::SetPathtoPointcloud(geometry_msgs::Point32 Goal) {
 	int node_size = path_.size();
-  double points_gap = 5;
+  double points_gap = 2;
   double curve_threshold = 2;
   double curve_ratio = 2;
   geometry_msgs::Point32 last_point;
@@ -192,16 +196,16 @@ void Routing::SetPathtoPointcloud(geometry_msgs::Point32 Goal) {
 	double angle_1st = acos(cos_angle_1st);
 
 	sensor_msgs::PointCloud pointcloud;
-  pointcloud.header.frame_id = "/map";
+  	pointcloud.header.frame_id = "/map";
 	for (int i = 0; i < node_size; i++) {
-    geometry_msgs::Point32 point;
-    path_order = node_size - i - 1;
-    node_index = path_[path_order] -1;
-    point.x = (node_info_[node_index].position.y / map_info_.ratio) * map_info_.resolution 
-      + map_info_.origin.x;
-    point.y = (map_info_.height - (node_info_[node_index].position.x / map_info_.ratio)) * map_info_.resolution 
-      + map_info_.origin.y;
-    point.z = node_info_[node_index].position.z;
+		geometry_msgs::Point32 point;
+		path_order = node_size - i - 1;
+		node_index = path_[path_order] -1;
+		point.x = (node_info_[node_index].position.y / map_info_.ratio) * map_info_.resolution 
+		+ map_info_.origin.x;
+		point.y = (map_info_.height - (node_info_[node_index].position.x / map_info_.ratio)) * map_info_.resolution 
+		+ map_info_.origin.y;
+		point.z = node_info_[node_index].position.z;
 
     if(i > 0) {
 		  double diff_x = point.x - last_point.x;
@@ -242,7 +246,7 @@ void Routing::SetPathtoPointcloud(geometry_msgs::Point32 Goal) {
     double radian_2 = acos(cosin_2);
 
     double point_gap_curve = points_gap/curve_ratio;
-	  int points_number_curve = distance_13/point_gap_curve;
+	int points_number_curve = distance_13/point_gap_curve;
 
     if(radian_2 < curve_threshold) {
   		sensor_msgs::PointCloud pointcloud_curve;

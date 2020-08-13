@@ -32,6 +32,7 @@ Supervising::Supervising(){
     traceback_index     = 0;
 
     angle_offset_       = 0.2;
+    revolute_angle_     = PI/8;
     
     Ka = 1.0/3;
     Kb = tan(PI/18);
@@ -42,7 +43,7 @@ Supervising::Supervising(){
     
     narrow_danger_longth = 0.4;
     narrow_danger_width = 0.3;
-    narrow_buffer_radius = 1;
+    narrow_buffer_radius = 0.5;
 
     traceback_route.header.frame_id = "/map";
 
@@ -328,6 +329,10 @@ int Supervising::AutoSuperviseDecision(sensor_msgs::PointCloud obstacle_in_base,
                 // traceback_index = 0;
                 // return static_cast<int>(AUTO::P);
                 if(!buffer){
+                    AUTO_mission_state_ = false; //test
+                    attempt_times = 0;
+                    traceback_index = 0;
+                    return static_cast<int>(AUTO::P);
                     return static_cast<int>(AUTO::D1); 
                 }else if(buffer){
                     return static_cast<int>(AUTO::P); 
@@ -391,12 +396,12 @@ int Supervising::AutoSuperviseDecision(sensor_msgs::PointCloud obstacle_in_base,
                             if(yaw_now - revolute_pose_.z >= 0) yaw_now = yaw_now;
                             else if(yaw_now - revolute_pose_.z < 0) yaw_now = yaw_now + 2*PI;
                         }
-                        if((yaw_now - revolute_pose_.z >= 0) && (PI/4 - yaw_now + revolute_pose_.z > angle_offset_)){
+                        if((yaw_now - revolute_pose_.z >= 0) && (revolute_angle_ - yaw_now + revolute_pose_.z > angle_offset_)){
                             revolute_flag = true;
                             revolute_1_flag = true;
                             revolute_2_flag = false; 
                             return static_cast<int>(AUTO::REVOLUTE1);
-                        }else if(PI/4 - yaw_now + revolute_pose_.z <= angle_offset_){
+                        }else if(revolute_angle_ - yaw_now + revolute_pose_.z <= angle_offset_){
                             if(index_ <= 1) {
                                 if(back_safe_left){
                                     return static_cast<int>(AUTO::P); 
@@ -590,12 +595,12 @@ int Supervising::AstarSuperviseDecision(sensor_msgs::PointCloud obstacle_in_base
                             if(yaw_now - revolute_pose_.z >= 0) yaw_now = yaw_now;
                             else if(yaw_now - revolute_pose_.z < 0) yaw_now = yaw_now + 2*PI;
                         }
-                        if((yaw_now - revolute_pose_.z >= 0) && (PI/4 - yaw_now + revolute_pose_.z > angle_offset_)){
+                        if((yaw_now - revolute_pose_.z >= 0) && (revolute_angle_ - yaw_now + revolute_pose_.z > angle_offset_)){
                             revolute_flag = true;
                             revolute_1_flag = true;
                             revolute_2_flag = false; 
                             return static_cast<int>(AUTO::REVOLUTE1);
-                        }else if(PI/4 - yaw_now + revolute_pose_.z <= angle_offset_){
+                        }else if(revolute_angle_ - yaw_now + revolute_pose_.z <= angle_offset_){
                             if(index_ <= 1) {
                                 if(back_safe_left){
                                     return static_cast<int>(AUTO::P); 
@@ -696,7 +701,7 @@ void Supervising::NarrowObstaclePercept(sensor_msgs::PointCloud obstacle_in_base
 bool Supervising::NarrowPlannerRestart(sensor_msgs::PointCloud obstacle_in_base,vector<geometry_msgs::Point32> path_local,nav_msgs::OccupancyGrid Grid,geometry_msgs::Twist Input_cmd) {
     
     for(int i = 0; i < path_local.size(); i++) {
-        if(fabs(path_local[i].x) > 8 || fabs(path_local[i].y) > 8) continue;
+        if(fabs(path_local[i].x) > Grid.info.width*Grid.info.resolution/2 || fabs(path_local[i].y) > Grid.info.height*Grid.info.resolution/2) continue;
 
         geometry_msgs::Point32 temp_point;
         temp_point.x = path_local[i].x - Grid.info.origin.position.x;

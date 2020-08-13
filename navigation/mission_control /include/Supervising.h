@@ -74,7 +74,16 @@ public:
     void SetAutoMissionState(bool Input) {AUTO_mission_state_ = Input;}
     bool GetNarrowRefind() {return narrow_refind_;}
 
-
+    void set_limit_danger_radius(double Input) {limit_danger_radius = Input;}
+    void set_min_danger_longth(double Input) {min_danger_longth = Input;}
+    void set_min_danger_width(double Input) {min_danger_width = Input;}
+    void set_limit_route_radius(double Input) {limit_route_radius = Input;}
+    void set_limit_predict_radius(double Input) {limit_predict_radius = Input;}
+    void set_buffer_radius(double Input) {buffer_radius = Input;}
+    void set_back_safe_radius(double Input) {back_safe_radius = Input;}
+    void set_front_safe_radius(double Input) {front_safe_radius = Input;}
+    void set_revolute_safe_radius(double Input) {revolute_safe_radius = Input;}
+    void set_danger_assist_radius(double Input) {danger_assist_radius = Input;}
 
 private:
     geometry_msgs::Point32 revolute_pose_;
@@ -119,6 +128,7 @@ private:
     int attempt_times;
     int traceback_index;
     double angle_offset_;
+    double revolute_angle_;
 
     inline void ConvertAnglePositive(float& angle, geometry_msgs::Point32 vehicle_in_map) {
         if(vehicle_in_map.z + angle_offset_ > PI) angle = vehicle_in_map.z + angle_offset_ - 2*PI;
