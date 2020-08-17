@@ -2,7 +2,7 @@
 
 GPBase::GPBase():pn("~")
 {
-  pn.param<string>("port_name", port_name_, "/dev/ttyACM0");
+  pn.param<string>("port_name", port_name_, "/dev/ttyACM0"  );
   pn.param<int>("baud_rate", baud_rate_, 115200);
 
   odom_pub = n.advertise<nav_msgs::Odometry>("/wheel_odom", 1);

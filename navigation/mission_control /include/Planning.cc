@@ -269,7 +269,7 @@ void Planning::GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output) {
   double shrink_scale = temp_splines_joints_num * 2;
   double radius_unit = path_window_radius_ / temp_splines_joints_num;
 
-  vector<int> level_nums = {7,5,3}; //{9,9,7};
+  vector<int> level_nums = {5,5,3}; //{9,9,7};
   vector<double> level_unit(temp_splines_joints_num,0);
   vector<sensor_msgs::PointCloud> temp_vector(level_nums[0]);
 
@@ -285,8 +285,8 @@ void Planning::GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output) {
 
   for (int i = 0; i < temp_vector.size(); ++i) {
     double level_0_angle = -(path_swap_range_/2) + i*level_unit[0];
-    temp_joint.x = radius_unit * 1 * cos(level_0_angle);
-    temp_joint.y = radius_unit * 1 * sin(level_0_angle);
+    temp_joint.x = radius_unit * 0.5 * cos(level_0_angle);
+    temp_joint.y = radius_unit * 0.5 * sin(level_0_angle); // 由radius_unit*1 -> radius_unit*0.5, 缩短第一个节点距离
     temp_joint.z = i+1;
     temp_level.points.push_back(temp_joint);
     for (int j = 0; j < level_nums[1]; ++j) {

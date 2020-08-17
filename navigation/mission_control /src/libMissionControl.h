@@ -227,7 +227,7 @@ private:
   }
 
   bool setAutoCoefficient(double index) {
-    double grid_res = 0.2;
+    double grid_res = 0.1;
     MyPlanner_.set_safe_path_search_grid(spline_search_grid_);
     MyPlanner_.set_costmap_resolution(grid_res);
 

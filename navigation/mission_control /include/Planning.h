@@ -59,13 +59,13 @@ class Planning
 public:
 	Planning(){
 		map_window_radius_     				= 8;
-		path_swap_range_       				= 1.2;
+		path_swap_range_       				= 0.8;
 		path_vertical_step_    				= 0.2;
 
 		splines_joints_num_    				= 3;
 
-		costmap_resolution_    				= 0.2; // xiugai
-	 	safe_path_search_grid_ 				= 5;
+		costmap_resolution_    				= 0.1; // xiugai
+	 	safe_path_search_grid_ 				= 3;
 
 		Astar_local_map_window_radius_ 		= 30;
     	Astar_local_costmap_resolution_ 	= 0.5;

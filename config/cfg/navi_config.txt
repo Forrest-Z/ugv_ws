@@ -1,5 +1,5 @@
 max_linear_velocity 0.5
-max_rotation_velocity 0.8
+max_rotation_velocity 0.5
 
 max_linear_acceleration 0.01
 max_rotation_acceleration 0.1
@@ -17,7 +17,7 @@ Astar_local_costmap_resolution 0.5
 RRT_iteration 5000
 RRT_extend_step 0.2
 RRT_search_plan_num 1
-RRT_expand_size 2
+RRT_expand_size 3
 
 limit_danger_radius 0.3
 min_danger_longth 0.3
@@ -30,4 +30,4 @@ front_safe_radius 1
 revolute_safe_radius 0.3
 danger_assist_radius 0.5
 
-spline_search_grid 2
+spline_search_grid 4

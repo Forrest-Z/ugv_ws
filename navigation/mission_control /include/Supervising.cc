@@ -41,8 +41,8 @@ Supervising::Supervising(){
     narrow_buffer       = false;
     AUTO_mission_state_ = true;
     
-    narrow_danger_longth = 0.4;
-    narrow_danger_width = 0.3;
+    narrow_danger_longth = 0.3;
+    narrow_danger_width = 0.2;
     narrow_buffer_radius = 0.5;
 
     traceback_route.header.frame_id = "/map";
@@ -148,8 +148,8 @@ void Supervising::AutoObstaclePercept(sensor_msgs::PointCloud obstacle_in_base, 
         }    
     }    
 
-    if(danger_num > 0) danger = true;
-    else if(danger_num == 0) danger = false;
+    if(danger_num > 2) danger = true;
+    else if(danger_num <= 0) danger = false;
      
     if(route_outside_num > 0) route_outside = true;
     else if(route_outside_num == 0) route_outside = false;
@@ -163,17 +163,17 @@ void Supervising::AutoObstaclePercept(sensor_msgs::PointCloud obstacle_in_base, 
     if(predict_map_num > 0) predict_map = true;
     else if(predict_map_num == 0) predict_map = false;
 
-    if(buffer_num > 0) buffer = true;
-    else if(buffer_num == 0) buffer = false;
+    if(buffer_num > 2) buffer = true;
+    else if(buffer_num <= 2) buffer = false;
 
     if(front_safe_num > 0) front_safe = true;
     else if(front_safe_num == 0) front_safe = false;
 
-    if(revolute_safe_num > 0) revolute_safe = true;
-    else if(revolute_safe_num == 0) revolute_safe = false;
+    if(revolute_safe_num > 2) revolute_safe = true;
+    else if(revolute_safe_num <= 2) revolute_safe = false;
 
-    if(danger_assist_num > 0) danger_assist = true;
-    else if(danger_assist_num == 0) danger_assist = false;
+    if(danger_assist_num > 2) danger_assist = true;
+    else if(danger_assist_num <= 2) danger_assist = false;
 
     if(first_quadrant_num > fourth_quadrant_num) back_turn = 1;
     else if(first_quadrant_num < fourth_quadrant_num) back_turn = 2;
@@ -196,7 +196,9 @@ void Supervising::AutoObstaclePercept(sensor_msgs::PointCloud obstacle_in_base, 
     auto_area_state_[3] = predict_outside_num;
     auto_area_state_[4] = buffer_num;
     auto_area_state_[5] = front_safe_num;
-    auto_area_state_[6] = revolute_safe_num;  
+    auto_area_state_[6] = revolute_safe_num;
+
+    danger_obstacle_state_ = danger;  
 
 }
 
@@ -324,15 +326,11 @@ int Supervising::AutoSuperviseDecision(sensor_msgs::PointCloud obstacle_in_base,
             if(danger){
                 return static_cast<int>(AUTO::P);  
             }else if(!plan_state){
-                // AUTO_mission_state_ = false; //test
-                // attempt_times = 0;
-                // traceback_index = 0;
-                // return static_cast<int>(AUTO::P);
+                AUTO_mission_state_ = false; //test
+                attempt_times = 0;
+                traceback_index = 0;
+                return static_cast<int>(AUTO::P);
                 if(!buffer){
-                    AUTO_mission_state_ = false; //test
-                    attempt_times = 0;
-                    traceback_index = 0;
-                    return static_cast<int>(AUTO::P);
                     return static_cast<int>(AUTO::D1); 
                 }else if(buffer){
                     return static_cast<int>(AUTO::P); 
@@ -379,6 +377,10 @@ int Supervising::AutoSuperviseDecision(sensor_msgs::PointCloud obstacle_in_base,
             if(danger){
                 return static_cast<int>(AUTO::P); 
             }else if(buffer){
+                AUTO_mission_state_ = false;
+                attempt_times = 0;
+                traceback_index = 0;
+                return static_cast<int>(AUTO::P);
                 if(!revolute_safe){
                     if(yaw_index == 0) {
                         revolute_pose_.x = vehicle_in_map.x;
@@ -440,7 +442,11 @@ int Supervising::AutoSuperviseDecision(sensor_msgs::PointCloud obstacle_in_base,
                 }else if(revolute_safe){
                     return static_cast<int>(AUTO::P);
                 }
-            }else if(!plan_state){    
+            }else if(!plan_state){ 
+                AUTO_mission_state_ = false;
+                attempt_times = 0;
+                traceback_index = 0;
+                return static_cast<int>(AUTO::P);  
                 return static_cast<int>(AUTO::D1);               
             }else{
                 return static_cast<int>(AUTO::AUTO);
@@ -682,8 +688,8 @@ void Supervising::NarrowObstaclePercept(sensor_msgs::PointCloud obstacle_in_base
         }
     }    
 
-    if(narrow_danger_num > 0) narrow_danger = true;
-    else if(narrow_danger_num == 0) narrow_danger = false;
+    if(narrow_danger_num > 2) narrow_danger = true;
+    else if(narrow_danger_num <= 2) narrow_danger = false;
 
     if(narrow_buffer_num > 0) narrow_buffer = true;
     else if(narrow_buffer_num == 0) narrow_buffer = false;
@@ -695,6 +701,8 @@ void Supervising::NarrowObstaclePercept(sensor_msgs::PointCloud obstacle_in_base
     cout << "narrow_danger_num :" << narrow_danger_num << endl;
     cout << "narrow_first_quadrant_num :" << narrow_first_quadrant_num << endl;
     cout << "narrow_fourth_quadrant_num :" << narrow_fourth_quadrant_num << endl;
+
+    danger_obstacle_state_ = narrow_danger;
 
 }
 

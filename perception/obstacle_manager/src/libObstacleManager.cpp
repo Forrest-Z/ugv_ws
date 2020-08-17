@@ -154,6 +154,7 @@ void ObstacleManager::publishScanObstacle() {
   if(pointcloud_scan_.points.size()==0) return;
   for (int i = 0; i < pointcloud_scan_.points.size(); ++i) {
     pointcloud_scan_.points[i].z = 1;
+    // pointcloud_scan_.points[i].x += 0.25;
     // pointcloud_scan_2_.points[i].z = 1;
     // pointcloud_scan_1_.points[i].x -= 0.5;
     // pointcloud_scan_2_.points[i].x -= 0.5;

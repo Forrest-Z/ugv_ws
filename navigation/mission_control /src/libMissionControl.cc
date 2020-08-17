@@ -185,7 +185,6 @@ int MissionControl::DecisionMaker() {
   if(isJoyControl_) return static_cast<int>(AutoState::JOY);
   if(isLTEControl_) return static_cast<int>(AutoState::LTE);
   if(isAction_) return static_cast<int>(AutoState::ACTION);
-
   if(checkMissionStage()){ 
     if(!MySuperviser_.GetAutoMissionState())
       return static_cast<int>(AutoState::NARROW);
@@ -295,7 +294,8 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
   int path_lookahead_index;
   geometry_msgs::Twist controller_cmd;
 
-  double search_range = MyPlanner_.map_window_radius();
+  // double search_range = MyPlanner_.map_window_radius();
+  double search_range = 6;
   double search_range_min = 4;
   double iteration_scale = 0.8;
   double wait_range = 4;
@@ -350,7 +350,8 @@ geometry_msgs::Twist MissionControl::getNarrowCommand() {
     }
 
     //决策Astar or RRT ？ 
-    isAstarPathfind_ = NarrowSubPlannerDecision();
+    // isAstarPathfind_ = NarrowSubPlannerDecision();
+    isAstarPathfind_ = false;
     narrow_command_stage_++;
     if(isAstarPathfind_)  vehicle_run_state_2nd_.data = "step2: NARROW sub planner was Astar, " + string("Astar size was ") + to_string(Astar_pointcloud_local.points.size());
     else vehicle_run_state_2nd_.data = "step2: NARROW sub planner was RRT, " + string("RRT size was ") + to_string(RRT_pointcloud_local.points.size());
@@ -362,10 +363,6 @@ geometry_msgs::Twist MissionControl::getNarrowCommand() {
     else {
       if(RRT_refind_) {
         sensor_msgs::PointCloud RRT_pointcloud_local = NarrowRRTPathfind();
-        if(RRT_pointcloud_local.points.empty()) {
-          narrow_command_stage_ = 0;
-          RRT_refind_ = false;
-        }
         RRT_pointcloud_global_.points.clear();
         for(int j = 0; j < RRT_pointcloud_local.points.size(); j++) {
           geometry_msgs::Point32 temp_RRT_point_global;
@@ -374,7 +371,10 @@ geometry_msgs::Twist MissionControl::getNarrowCommand() {
 
         }
       }
-
+      if(RRT_pointcloud_global_.points.empty()) {
+        narrow_command_stage_ = 0;
+        RRT_refind_ = false;
+      }
       controller_cmd = PursuitRRTPathCommand();
     }    
   }
@@ -615,7 +615,7 @@ geometry_msgs::Twist MissionControl::PursuitRRTPathCommand() {
 }
 
 bool MissionControl::CheckAstarRouteState(geometry_msgs::Point32 Input) {  
-    double reach_goal_distance = 3;
+    double reach_goal_distance = 1;
     if(hypot(vehicle_in_map_.x-Input.x,vehicle_in_map_.y-Input.y) < reach_goal_distance) {
         return true;
     }else{
@@ -633,7 +633,7 @@ bool MissionControl::CheckRRTRouteState(geometry_msgs::Point32 Input) {
 }
 
 bool MissionControl::CheckRouteEndState(geometry_msgs::Point32 Input) {  
-    double reach_goal_distance = 3;
+    double reach_goal_distance = 1;
     if(hypot(vehicle_in_map_.x-Input.x,vehicle_in_map_.y-Input.y) < reach_goal_distance) {
         return true;
     }else{
@@ -744,12 +744,15 @@ int MissionControl::FindCurrentGoalRoute(sensor_msgs::PointCloud Path,geometry_m
 
 void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel) {
   static geometry_msgs::Twist last_cmd_vel;
-
-  if(Cmd_vel.linear.x == 0) {
-    last_cmd_vel = Cmd_vel;
-    return; //速度为0，依靠无人车机械性能急刹
+  auto mission_state = DecisionMaker();
+  if(mission_state != static_cast<int>(AutoState::JOY)){
+    if(!MySuperviser_.DangerObstaclepPercept())
+    if(Cmd_vel.linear.x == 0 && Cmd_vel.linear.x < last_cmd_vel.linear.x) {
+      Cmd_vel.linear.x = last_cmd_vel.linear.x - max_linear_acceleration_;
+      last_cmd_vel = Cmd_vel;
+      return; //速度为0，依靠无人车机械性能急刹
+    }
   }
-
   // Velocity Limit
   if(fabs(Cmd_vel.linear.x) > fabs(max_linear_velocity_)) Cmd_vel.linear.x = ComputeSign(Cmd_vel.linear.x) * max_linear_velocity_;
   if(fabs(Cmd_vel.angular.z) > fabs(max_rotation_velocity_)) Cmd_vel.angular.z = ComputeSign(Cmd_vel.angular.z) * max_rotation_velocity_;

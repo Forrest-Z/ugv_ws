@@ -84,6 +84,7 @@ public:
     void set_front_safe_radius(double Input) {front_safe_radius = Input;}
     void set_revolute_safe_radius(double Input) {revolute_safe_radius = Input;}
     void set_danger_assist_radius(double Input) {danger_assist_radius = Input;}
+    bool DangerObstaclepPercept() {return danger_obstacle_state_;}
 
 private:
     geometry_msgs::Point32 revolute_pose_;
@@ -110,6 +111,8 @@ private:
     bool front_safe;
     bool revolute_safe;
     bool danger_assist;
+
+    bool danger_obstacle_state_;
 
     //=================区域半径========================
     double limit_danger_radius;
