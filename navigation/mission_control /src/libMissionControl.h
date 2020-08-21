@@ -377,8 +377,6 @@ private:
     }
     local_costmap_pub.publish(MyPlanner_.costmap_local());
     if(!CheckNavigationState()) {
-      lookahead_Astar_scale_ = 0.9;
-      lookahead_RRT_scale_ = 0.9;
       return false;
     }
     return true;
@@ -407,6 +405,18 @@ private:
     return min_distance;
   }
 
+  inline void ClearAutoMissionState() {
+    MySuperviser_.SetAutoMissionState(true);
+    ClearNarrowMissionState();
+  }
+  inline void ClearNarrowMissionState() {
+    narrow_command_stage_ = 0;
+    ClearRRTPlanState();
+  }
+  inline void ClearRRTPlanState() {
+    lookahead_RRT_scale_ = 0.9;
+  }
+
   /** Callbacks **/
   void JoyCallback(const sensor_msgs::Joy::ConstPtr& Input);
   void CmdCallback(const geometry_msgs::Twist::ConstPtr& Input);
@@ -414,7 +424,7 @@ private:
     goal_in_map_.x = Input->pose.position.x;
     goal_in_map_.y = Input->pose.position.y;
     ComputeGlobalPlan(goal_in_map_);
-    narrow_command_stage_ = 0;
+    ClearAutoMissionState();
   }
 
   void ObstacleCallback(const sensor_msgs::PointCloud::ConstPtr& Input) {
@@ -467,7 +477,6 @@ private:
   int narrow_command_stage_;
   bool isAstarPathfind_;
   bool RRT_refind_;
-  double lookahead_Astar_scale_;
   double lookahead_RRT_scale_;
   sensor_msgs::PointCloud Astar_pointcloud_global_;
   sensor_msgs::PointCloud RRT_pointcloud_global_;

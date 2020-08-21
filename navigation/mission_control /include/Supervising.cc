@@ -44,7 +44,7 @@ Supervising::Supervising(){
     
     narrow_danger_longth = 0.3;
     narrow_danger_width = 0.2;
-    narrow_buffer_radius = 0.5;
+    narrow_buffer_radius = 0.4;
 
     traceback_route.header.frame_id = "/map";
 

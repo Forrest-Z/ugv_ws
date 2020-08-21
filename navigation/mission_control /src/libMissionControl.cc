@@ -72,7 +72,7 @@ bool MissionControl::Initialization() {
     limit_predict_radius_    = 10;
     buffer_radius_           = 2;
     back_safe_radius_        = 1;
-    front_safe_radius_       = 1;
+    front_safe_radius_       = 2;
     revolute_safe_radius_    = 0.5;
     danger_assist_radius_    = 1;
 
@@ -95,11 +95,11 @@ bool MissionControl::Initialization() {
 
   MyController_.set_speed_scale(controller_linear_scale_);
   MyController_.set_rotation_scale(controller_rotation_scale_);
+  MyExecuter_.SetMaxLinearVel(max_linear_velocity_);
   
   global_path_pointcloud_.points.clear();
 
   narrow_command_stage_ = 0;
-  lookahead_Astar_scale_ = 0.9;
   lookahead_RRT_scale_ = 0.9;
 
   RRT_refind_ = false;
@@ -128,6 +128,7 @@ void MissionControl::Execute() {
 
     if(mission_state == static_cast<int>(AutoState::JOY)) {
       vehicle_run_state_1st_.data = "step1: mission_state was JOY.";
+      ClearAutoMissionState();
       ApplyJoyControl(mission_state);
       continue;
     }
@@ -334,12 +335,12 @@ geometry_msgs::Twist MissionControl::getNarrowCommand() {
     sensor_msgs::PointCloud Astar_pointcloud_local = NarrowAstarPathfind();
     sensor_msgs::PointCloud RRT_pointcloud_local = NarrowRRTPathfind();
     Astar_pointcloud_global_.points.clear();
-    for(int i = 0; i < Astar_pointcloud_local.points.size(); i++) {
-
-      geometry_msgs::Point32 temp_Astar_point_global;
-      ConvertPoint(Astar_pointcloud_local.points[i],temp_Astar_point_global,base_to_map_);
-      Astar_pointcloud_global_.points.push_back(temp_Astar_point_global);
-
+    for(int i = Astar_pointcloud_local.points.size()-1; i >= 0; i--) {
+      if(i == 0 || i % 5 == 0 || i == Astar_pointcloud_local.points.size()-1) {
+        geometry_msgs::Point32 temp_Astar_point_global;
+        ConvertPoint(Astar_pointcloud_local.points[i],temp_Astar_point_global,base_to_map_);
+        Astar_pointcloud_global_.points.push_back(temp_Astar_point_global);
+      }
     }
 
     RRT_pointcloud_global_.points.clear();
@@ -354,8 +355,11 @@ geometry_msgs::Twist MissionControl::getNarrowCommand() {
     //决策Astar or RRT ？ 
     isAstarPathfind_ = NarrowSubPlannerDecision();
     narrow_command_stage_++;
-    if(isAstarPathfind_)  vehicle_run_state_2nd_.data = "step2: NARROW sub planner was Astar, " + string("Astar size was ") + to_string(Astar_pointcloud_local.points.size());
-    else vehicle_run_state_2nd_.data = "step2: NARROW sub planner was RRT, " + string("RRT size was ") + to_string(RRT_pointcloud_local.points.size());
+    if(isAstarPathfind_) {
+      vehicle_run_state_2nd_.data = "step2: NARROW sub planner was Astar, " + string("Astar size was ") + to_string(Astar_pointcloud_local.points.size());
+    }else {
+      vehicle_run_state_2nd_.data = "step2: NARROW sub planner was RRT, " + string("RRT size was ") + to_string(RRT_pointcloud_local.points.size());
+    }
   }
 
   geometry_msgs::Twist controller_cmd;
@@ -373,8 +377,7 @@ geometry_msgs::Twist MissionControl::getNarrowCommand() {
         }
       }
       if(RRT_pointcloud_global_.points.empty()) {
-        narrow_command_stage_ = 0;
-        RRT_refind_ = false;
+        ClearNarrowMissionState();
       }
       controller_cmd = PursuitRRTPathCommand();
     }    
@@ -389,8 +392,7 @@ void MissionControl::CheckNarrowToAutoState() {
 
   double check_search_range = 6;
   if(MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_,check_search_range)){
-    narrow_command_stage_ = 0;
-    MySuperviser_.SetAutoMissionState(true);
+    ClearAutoMissionState();
 
     vehicle_run_state_3rd_.data = GetLocalTime() + "step3： The route condition was better, NARROW planner had changed to AUTO.";
     vehicle_run_state_pub.publish(vehicle_run_state_3rd_);
@@ -493,23 +495,17 @@ geometry_msgs::Twist MissionControl::PursuitAstarPathCommand() {
   geometry_msgs::Twist controller_cmd;
   if(Astar_pointcloud_global_.points.empty()) return controller_cmd;
 
-  sensor_msgs::PointCloud Astar_pointcloud_local;
-  for(int i = 0; i < Astar_pointcloud_global_.points.size(); i++) {
-    geometry_msgs::Point32 temp_Astar_point_local;
-    ConvertPoint(Astar_pointcloud_global_.points[i],temp_Astar_point_local,map_to_base_);
-    Astar_pointcloud_local.points.push_back(temp_Astar_point_local);
-  }
+  int path_index = FindCurrentGoalRoute(Astar_pointcloud_global_,vehicle_in_map_,lookahead_global_meter_);
 
-  int path_index = Astar_pointcloud_local.points.size() * lookahead_Astar_scale_;
-
-  geometry_msgs::Point32 Astar_sub_goal_local = Astar_pointcloud_local.points[path_index];
+  geometry_msgs::Point32 Astar_sub_goal_local;
+  ConvertPoint(Astar_pointcloud_global_.points[path_index],Astar_sub_goal_local,map_to_base_);
 
   if(MySuperviser_.GetNarrowRefind()) {
-    lookahead_Astar_scale_ = 0.9;
-    narrow_command_stage_ = 0; //Astar路径跟踪时判断是否重Narrow规划
+    ClearNarrowMissionState(); //Astar路径跟踪时判断是否重Narrow规划
     vehicle_run_state_3rd_.data = GetLocalTime() + "step3： Astar was broken, NARROW planner started to replan.";
     vehicle_run_state_pub.publish(vehicle_run_state_3rd_);
   }
+
   ConvertPoint(Astar_sub_goal_local,global_sub_goal_,base_to_map_);
   sensor_msgs::PointCloud temp_pointcloud;
   MyRouter_.ModifyRoutePoint(Astar_sub_goal_local,temp_pointcloud,obstacle_in_base_);
@@ -521,11 +517,8 @@ geometry_msgs::Twist MissionControl::PursuitAstarPathCommand() {
     }
   }
 
-  if(CheckAstarRouteState(global_sub_goal_)) lookahead_Astar_scale_ = lookahead_Astar_scale_ * 0.9;
-  if(CheckRouteEndState(Astar_pointcloud_global_.points.front())) {
-    lookahead_Astar_scale_ = 0.9;
-    narrow_command_stage_ = 0;
-    MySuperviser_.SetAutoMissionState(true);
+  if(CheckRouteEndState(Astar_pointcloud_global_.points.back())) {
+    ClearAutoMissionState();
     vehicle_run_state_3rd_.data = GetLocalTime() + "step3: Astar route had been completed.";
     vehicle_run_state_pub.publish(vehicle_run_state_3rd_);
     return controller_cmd; 
@@ -604,19 +597,17 @@ geometry_msgs::Twist MissionControl::PursuitRRTPathCommand() {
   if(RRT_refind_) {
     vehicle_run_state_3rd_.data = GetLocalTime() + "step3： RRT route appeared obstacle or achived sub goal, RRT started to replan. ";
     vehicle_run_state_pub.publish(vehicle_run_state_3rd_);
-    lookahead_RRT_scale_ = 0.9;
+    ClearRRTPlanState();
     return controller_cmd;
   }
 
   MyController_.ComputePurePursuitRRTCommand(RRT_pointcloud_local.points.front(),RRT_pointcloud_local.points[path_lookahead_index],controller_cmd);
   if(CheckRRTRouteState(RRT_pointcloud_global_.points[path_lookahead_index])) lookahead_RRT_scale_ = lookahead_RRT_scale_ * 0.9;
-  if(CheckRouteEndState(global_path_pointcloud_.points.back())) lookahead_RRT_scale_ = 0.9;
-
   return controller_cmd;
 }
 
 bool MissionControl::CheckAstarRouteState(geometry_msgs::Point32 Input) {  
-    double reach_goal_distance = 1;
+    double reach_goal_distance = 2;
     if(hypot(vehicle_in_map_.x-Input.x,vehicle_in_map_.y-Input.y) < reach_goal_distance) {
         return true;
     }else{
@@ -625,7 +616,7 @@ bool MissionControl::CheckAstarRouteState(geometry_msgs::Point32 Input) {
 }
 
 bool MissionControl::CheckRRTRouteState(geometry_msgs::Point32 Input) {  
-    double reach_goal_distance = 0.5;
+    double reach_goal_distance = 1;
     if(hypot(vehicle_in_map_.x-Input.x,vehicle_in_map_.y-Input.y) < reach_goal_distance) {
         return true;
     }else{
@@ -651,8 +642,7 @@ bool MissionControl::CheckNavigationState() {
   if(hypot(goal_local.x,goal_local.y) < reach_goal_distance) {
     isReachCurrentGoal_ = true;
     global_path_pointcloud_.points.clear();
-    narrow_command_stage_ = 0;
-    MySuperviser_.SetAutoMissionState(true);
+    ClearAutoMissionState();
     return false;
   }
 

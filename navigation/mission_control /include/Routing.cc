@@ -158,7 +158,7 @@ void Routing::CleanAllState() {
  ******************************************************************************************/
 void Routing::SetPathtoPointcloud(geometry_msgs::Point32 Goal) {
 	int node_size = path_.size();
-  double points_gap = 2;
+  double points_gap = 3;
   double curve_threshold = 2;
   double curve_ratio = 2;
   geometry_msgs::Point32 last_point;

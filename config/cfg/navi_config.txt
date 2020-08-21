@@ -26,7 +26,7 @@ limit_route_radius 5
 limit_predict_radius 10
 buffer_radius 1
 back_safe_radius 0.5
-front_safe_radius 1
+front_safe_radius 2
 revolute_safe_radius 0.3
 danger_assist_radius 0.5
 
