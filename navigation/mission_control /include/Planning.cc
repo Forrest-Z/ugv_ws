@@ -916,11 +916,15 @@ bool Planning::isAstarCanreach(const AstarPoint *point, const AstarPoint *target
 	}
 	else
 	{		
-		// for (int x = target->x - 1; x <= target->x + 1; x++) //判断点四周有障碍物则返回false
-		// for (int y = target->y - 1; y <= target->y + 1; y++)
-		if(target->x >= 0 && target->x <= Astar_local_costmap_.info.width-1 && target->y >= 0 && target->y <= Astar_local_costmap_.info.height-1)
-		if (Astar_costmap_array_[target->x][target->y] >= 50) return false;
+		for (int x = target->x - 1; x <= target->x + 1; x++) //判断点四周有障碍物则返回false
+		for (int y = target->y - 1; y <= target->y + 1; y++)
+		if(x >= 0 && x <= Astar_local_costmap_.info.width-1 && y >= 0 && y <= Astar_local_costmap_.info.height-1)
+		if (Astar_costmap_array_[x][y] >= 50) return false;
 		return true;
+
+		// if(target->x >= 0 && target->x <= Astar_local_costmap_.info.width-1 && target->y >= 0 && target->y <= Astar_local_costmap_.info.height-1)
+		// if (Astar_costmap_array_[target->x][target->y] >= 50) return false;
+		// return true;
 	}
 }
  

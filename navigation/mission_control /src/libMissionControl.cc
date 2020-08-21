@@ -90,6 +90,7 @@ bool MissionControl::Initialization() {
   isLocationUpdate_ = false;
   isReachCurrentGoal_ = false;
 
+  isJOYscram_ = false;
   map_number_ = 1;
 
   MyController_.set_speed_scale(controller_linear_scale_);
@@ -127,17 +128,17 @@ void MissionControl::Execute() {
 
     if(mission_state == static_cast<int>(AutoState::JOY)) {
       vehicle_run_state_1st_.data = "step1: mission_state was JOY.";
-      ApplyJoyControl();
+      ApplyJoyControl(mission_state);
       continue;
     }
     else if(mission_state == static_cast<int>(AutoState::LTE)) {
       vehicle_run_state_1st_.data = "step1:> mission_state was LTE.";
-      ApplyLTEControl();
+      ApplyLTEControl(mission_state);
       continue;
     }
     else if(mission_state == static_cast<int>(AutoState::WIFI)) {
       vehicle_run_state_1st_.data = "step1: mission_state was WIFI.";
-      ApplyWIFIControl();
+      ApplyWIFIControl(mission_state);
       continue;      
     }
     else if(mission_state == static_cast<int>(AutoState::AUTO)) {
@@ -152,7 +153,7 @@ void MissionControl::Execute() {
     }
     else if(mission_state == static_cast<int>(AutoState::STOP)) {
       vehicle_run_state_1st_.data = "step1: mission_state was STOP.";
-      ApplyStopControl();
+      ApplyStopControl(mission_state);
       continue; 
     }    
     else if(mission_state == static_cast<int>(AutoState::BACK)) {
@@ -205,40 +206,41 @@ void MissionControl::ApplyAction() {
   }
 }
 
-void MissionControl::ApplyJoyControl() {
+void MissionControl::ApplyJoyControl(int mission_state) {
   geometry_msgs::Twist safe_cmd;
   geometry_msgs::Twist raw_cmd = getJoyCommand();
-  checkCommandSafety(raw_cmd,safe_cmd);
+  checkCommandSafety(raw_cmd,safe_cmd,mission_state);
   createCommandInfo(safe_cmd);
   publishCommand();
   if(!updateState()) return;
   return;
 }
 
-void MissionControl::ApplyLTEControl() {
+void MissionControl::ApplyLTEControl(int mission_state) {
   geometry_msgs::Twist safe_cmd;
   geometry_msgs::Twist raw_cmd = getLTECommand();
-  checkCommandSafety(raw_cmd,safe_cmd);
+  checkCommandSafety(raw_cmd,safe_cmd,mission_state);
   createCommandInfo(safe_cmd);
   publishCommand();
   if(!updateState()) return;
   return;
 }
 
-void MissionControl::ApplyWIFIControl() {
+void MissionControl::ApplyWIFIControl(int mission_state) {
   geometry_msgs::Twist safe_cmd;
   geometry_msgs::Twist raw_cmd = getWIFICommand();
-  checkCommandSafety(raw_cmd,safe_cmd);
+  checkCommandSafety(raw_cmd,safe_cmd,mission_state);
   createCommandInfo(safe_cmd);
   publishCommand();
   if(!updateState()) return;
   return;
 }
 
-void MissionControl::ApplyStopControl() {
+void MissionControl::ApplyStopControl(int mission_state) {
   geometry_msgs::Twist safe_cmd;
   geometry_msgs::Twist raw_cmd;
   ZeroCommand(raw_cmd);
+  checkCommandSafety(raw_cmd,safe_cmd,mission_state);
   createCommandInfo(safe_cmd);
   publishCommand();
   if(!updateState()) return;
@@ -252,7 +254,7 @@ void MissionControl::ApplyAutoControl(int mission_state) {
   geometry_msgs::Twist raw_cmd = getAutoCommand();
   auto supervise_state = SuperviseDecision(mission_state);
   raw_cmd = ExecuteDecision(raw_cmd,mission_state,supervise_state);
-  checkCommandSafety(raw_cmd,safe_cmd);
+  checkCommandSafety(raw_cmd,safe_cmd,mission_state);
   createCommandInfo(safe_cmd);
   publishCommand();
   publishInfo();
@@ -265,7 +267,7 @@ void MissionControl::ApplyNarrowControl(int mission_state) {
   geometry_msgs::Twist raw_cmd = getNarrowCommand();
   auto supervise_state = SuperviseDecision(mission_state);
   raw_cmd = ExecuteDecision(raw_cmd,mission_state,supervise_state);
-  checkCommandSafety(raw_cmd,safe_cmd);
+  checkCommandSafety(raw_cmd,safe_cmd,mission_state);
   createCommandInfo(safe_cmd);
   publishCommand();
   publishInfo();
@@ -350,8 +352,7 @@ geometry_msgs::Twist MissionControl::getNarrowCommand() {
     }
 
     //决策Astar or RRT ？ 
-    // isAstarPathfind_ = NarrowSubPlannerDecision();
-    isAstarPathfind_ = false;
+    isAstarPathfind_ = NarrowSubPlannerDecision();
     narrow_command_stage_++;
     if(isAstarPathfind_)  vehicle_run_state_2nd_.data = "step2: NARROW sub planner was Astar, " + string("Astar size was ") + to_string(Astar_pointcloud_local.points.size());
     else vehicle_run_state_2nd_.data = "step2: NARROW sub planner was RRT, " + string("RRT size was ") + to_string(RRT_pointcloud_local.points.size());
@@ -643,7 +644,7 @@ bool MissionControl::CheckRouteEndState(geometry_msgs::Point32 Input) {
 
 bool MissionControl::CheckNavigationState() {
   if(isReachCurrentGoal_) return false;
-  double reach_goal_distance = 1;
+  double reach_goal_distance = 2;
   geometry_msgs::Point32 goal_local;
   ConvertPoint(goal_in_map_,goal_local,map_to_base_);
 
@@ -742,17 +743,14 @@ int MissionControl::FindCurrentGoalRoute(sensor_msgs::PointCloud Path,geometry_m
   return output;
 }
 
-void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel) {
+void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel,int mission_state) {
   static geometry_msgs::Twist last_cmd_vel;
-  auto mission_state = DecisionMaker();
-  if(mission_state != static_cast<int>(AutoState::JOY)){
-    if(!MySuperviser_.DangerObstaclepPercept())
-    if(Cmd_vel.linear.x == 0 && Cmd_vel.linear.x < last_cmd_vel.linear.x) {
-      Cmd_vel.linear.x = last_cmd_vel.linear.x - max_linear_acceleration_;
-      last_cmd_vel = Cmd_vel;
-      return; //速度为0，依靠无人车机械性能急刹
-    }
-  }
+  static geometry_msgs::Twist last_run_vel;
+  static geometry_msgs::Twist last_origin_vel;
+  last_origin_vel = Cmd_vel;
+  if(mission_state != static_cast<int>(AutoState::STOP)) last_run_vel = Cmd_vel;
+
+
   // Velocity Limit
   if(fabs(Cmd_vel.linear.x) > fabs(max_linear_velocity_)) Cmd_vel.linear.x = ComputeSign(Cmd_vel.linear.x) * max_linear_velocity_;
   if(fabs(Cmd_vel.angular.z) > fabs(max_rotation_velocity_)) Cmd_vel.angular.z = ComputeSign(Cmd_vel.angular.z) * max_rotation_velocity_;
@@ -761,15 +759,39 @@ void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel) {
   // Acceleration Limit
   if((Cmd_vel.linear.x * last_cmd_vel.linear.x) < 0 || Cmd_vel.linear.x == 0) Cmd_vel.linear.x = 0;
   else if(Cmd_vel.linear.x > 0 && Cmd_vel.linear.x < last_cmd_vel.linear.x) {Cmd_vel.linear.x = last_cmd_vel.linear.x - max_linear_acceleration_;}
-  else if(fabs(Cmd_vel.linear.x) - fabs(last_cmd_vel.linear.x) < max_linear_acceleration_) {Cmd_vel.linear.x = Cmd_vel.linear.x;}
+  else if(fabs(fabs(Cmd_vel.linear.x) - fabs(last_cmd_vel.linear.x)) < max_linear_acceleration_) {Cmd_vel.linear.x = Cmd_vel.linear.x;}
   else if(Cmd_vel.linear.x > last_cmd_vel.linear.x) Cmd_vel.linear.x = last_cmd_vel.linear.x + max_linear_acceleration_;
   else if(Cmd_vel.linear.x < last_cmd_vel.linear.x) Cmd_vel.linear.x = last_cmd_vel.linear.x - max_linear_acceleration_;
 
   double velocity_rotation_ratio = max_translational_velocity_ / max_rotation_velocity_;
   double max_moving_rotation_velocity = max_rotation_velocity_ * (velocity_rotation_ratio - fabs(Cmd_vel.angular.z / max_rotation_velocity_));
-  if(fabs(Cmd_vel.linear.x) > fabs(max_moving_rotation_velocity)) Cmd_vel.linear.x = ComputeSign(Cmd_vel.linear.x) * max_moving_rotation_velocity;  
+  if(fabs(Cmd_vel.linear.x) > fabs(max_moving_rotation_velocity)) Cmd_vel.linear.x = ComputeSign(Cmd_vel.linear.x) * max_moving_rotation_velocity;
 
-  last_cmd_vel = Cmd_vel;
+  if(fabs(last_origin_vel.linear.x) < fabs(last_cmd_vel.linear.x)) {
+    if(mission_state == static_cast<int>(AutoState::JOY)) {
+      if(isJOYscram_) {
+        if(last_origin_vel.linear.x == 0)
+          Cmd_vel.linear.x = 0;    
+      } else {
+        if(last_origin_vel.linear.x == 0) {
+          Cmd_vel.linear.x = last_cmd_vel.linear.x - 2 * max_linear_acceleration_;
+          if(Cmd_vel.linear.x < 0) Cmd_vel.linear.x = 0;
+        }
+      }
+    }
+    else if(mission_state == static_cast<int>(AutoState::STOP)) {
+      if(last_run_vel.linear.x == 0) Cmd_vel.linear.x = 0; 
+      else {
+        Cmd_vel.linear.x = last_cmd_vel.linear.x - 2 * max_linear_acceleration_;
+        if(Cmd_vel.linear.x < 0) Cmd_vel.linear.x = 0;
+      }
+    }
+  }
+
+  if(mission_state == static_cast<int>(AutoState::AUTO) && mission_state == static_cast<int>(AutoState::NARROW))
+    if(MySuperviser_.DangerObstaclepPercept()) Cmd_vel.linear.x = 0;  
+
+  last_cmd_vel = Cmd_vel; 
 }
 
 
@@ -919,6 +941,10 @@ bool MissionControl::ReadConfig() {
     }
     else if(yaml_info == "spline_search_grid") {
       ss >> spline_search_grid_;
+      info_linenum++;
+    }
+    else if(yaml_info == "isJOYscram") {
+      ss >> isJOYscram_;
       info_linenum++;
     }
   }

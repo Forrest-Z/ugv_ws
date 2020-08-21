@@ -183,6 +183,8 @@ private:
   bool plan_state_;
   bool wait_plan_state_;
 
+  bool isJOYscram_;
+
   ros::Time action_start_timer_;
   int current_action_index_;
   string robot_id_;
@@ -193,15 +195,15 @@ private:
   void ComputeGlobalPlan(geometry_msgs::Point32& Goal);
   void ConvertPoint(geometry_msgs::Point32 Input,geometry_msgs::Point32& Output,tf::Transform Transform);
   int FindCurrentGoalRoute(sensor_msgs::PointCloud Path,geometry_msgs::Point32 Robot,double Lookahead);
-  void LimitCommand(geometry_msgs::Twist& Cmd_vel);
+  void LimitCommand(geometry_msgs::Twist& Cmd_vel,int mission_state);
   void PrintConfig();
   bool ReadConfig();
   bool UpdateVehicleLocation();
 
-  void ApplyJoyControl();
-  void ApplyWIFIControl();
-  void ApplyLTEControl();
-  void ApplyStopControl();
+  void ApplyJoyControl(int mission_state);
+  void ApplyWIFIControl(int mission_state);
+  void ApplyLTEControl(int mission_state);
+  void ApplyStopControl(int mission_state);
   void ApplyBackwardControl();
 
   void ApplyAction();
@@ -261,9 +263,9 @@ private:
 
 
 
-  void checkCommandSafety(geometry_msgs::Twist raw,geometry_msgs::Twist& safe) {
+  void checkCommandSafety(geometry_msgs::Twist raw,geometry_msgs::Twist& safe,int mission_state) {
     safe = raw;
-    LimitCommand(safe);
+    LimitCommand(safe,mission_state);
   }
   void createCommandInfo(geometry_msgs::Twist input) {
     MyTools_.BuildPredictPath(input);

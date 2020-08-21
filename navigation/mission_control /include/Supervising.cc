@@ -40,6 +40,7 @@ Supervising::Supervising(){
     narrow_danger       = false;
     narrow_buffer       = false;
     AUTO_mission_state_ = true;
+    danger_obstacle_state_ = false;
     
     narrow_danger_longth = 0.3;
     narrow_danger_width = 0.2;
@@ -148,7 +149,7 @@ void Supervising::AutoObstaclePercept(sensor_msgs::PointCloud obstacle_in_base, 
         }    
     }    
 
-    if(danger_num > 2) danger = true;
+    if(danger_num > 0) danger = true;
     else if(danger_num <= 0) danger = false;
      
     if(route_outside_num > 0) route_outside = true;
