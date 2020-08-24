@@ -73,6 +73,7 @@ public:
 
   void RoutingAnalyze(geometry_msgs::Point32& goal_in_map,geometry_msgs::Point32 vehicle_in_map,string map_folder,int map_number);
   sensor_msgs::PointCloud path_pointcloud(){ return path_pointcloud_; };
+  vector<int> path(){ return path_; };
 
   void ModifyRoutePoint(geometry_msgs::Point32 Input,sensor_msgs::PointCloud& Output,sensor_msgs::PointCloud Obstacle);
 private:

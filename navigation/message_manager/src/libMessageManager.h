@@ -38,7 +38,7 @@ public:
   void Execute();
 
 private:
-  const int ROS_RATE_HZ = 10;
+  const int ROS_RATE_HZ = 20;
   const int robot_number = 2;
 
   /** ROS Components **/
@@ -54,6 +54,7 @@ private:
   ros::Publisher command_pub;
   ros::Publisher center_pub;
   ros::Publisher heart_pub;
+  ros::Publisher info_pub;
 
   ros::Publisher goal_pub;
   ros::Publisher action_pub;
@@ -62,11 +63,17 @@ private:
 
   /** Parameters **/
   string robot_id_;
+  string community_id_;
   int id_number_;
 
   /** Flags **/
   /** Variables **/
+  int robot_x_cm_;
+  int robot_y_cm_;
+  int robot_yaw_;
+
   int robot_speed_;
+  int robot_rotation_;
   string robot_seq_;
   string robot_act_;
 
@@ -81,17 +88,21 @@ private:
   void StationCallback(const std_msgs::String::ConstPtr& Input);
   void RecallCallback(const std_msgs::String::ConstPtr& Input);
   void ProcessMission(string Type,string Seq,string Command_1,string Command_2);
-  void UpdateRealtimeInfo(ros::Time& Timer,double Freq);
-  void UpdateTaskInfo(string Input = "01");
+  void UpdateHeartbeat(ros::Time& Timer,double Pause);
+  void UpdateRealtimeInfo(ros::Time& Timer,double Pause);
+  void UpdateTaskInfo(string Input = "start");
+
+  bool UpdateVehicleLocation();
 
   void ActionStateCallback(const std_msgs::Int32::ConstPtr& Input) {
     // cout << robot_id_ << " ActionStateCallback" << endl;
-    robot_act_ = FillInt2String(Input->data,2,1);
-    UpdateTaskInfo("02");
+    // robot_act_ = FillInt2String(Input->data,2,1);
+    UpdateTaskInfo("end");
   }
 
   void CommandCallback(const geometry_msgs::Twist::ConstPtr& Input) {
-    robot_speed_ = int(Input->linear.x * 10);
+    robot_speed_ = int(Input->linear.x * 100);
+    robot_rotation_ = int(Input->angular.z * 100);
     // if(robot_id_ == "robot_1") cout << robot_id_ << " Speed Update " << robot_speed_ << endl;
   }
 
@@ -123,9 +134,13 @@ private:
 
 
   int FindMissionType(string Input) {
-    if(Input == "00" || Input == "01" || Input == "02" || Input == "08" ) return 1;
-    if(Input == "06" || Input == "07") return 2;
-    if(Input == "03" || Input == "04" || Input == "05") return 3;
+    string data_goto = "goto";
+    string data_picking   = "picking";
+    string data_loading   = "loading";
+    string data_unloading   = "unloading";
+
+    if(Input == data_goto) return 2;
+    else if(Input == data_picking || Input == data_loading || Input == data_unloading) return 1;
     return -1;
   }
 

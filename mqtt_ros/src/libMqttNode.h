@@ -32,7 +32,7 @@ class myMqtt : public mosqpp::mosquittopp
 public:
   myMqtt(){
   };
-  myMqtt(const char* id, const char* host, int port,int keepalive):
+  myMqtt(const char* id, const char* host, int port,int keepalive,string robot_id,string building_id):
     mosquittopp(id)
   {
     max_payload_ = 100;
@@ -41,7 +41,7 @@ public:
     loop_start();
     ROS_INFO_ONCE("Mqtt Connection Init");
     isMqttReady_ = false;
-    mqtt_download_topic_ = "robot/+/download/#";
+    mqtt_download_topic_ = "robot/" + building_id + "/" + robot_id + "/download/#";
   }
 
   ~myMqtt() {
@@ -90,7 +90,7 @@ private:
 class MqttROS : public myMqtt
 {
 public:
-  MqttROS(string id,string host,vector<string> topic,int port);
+  MqttROS(string id,string host,vector<string> topic,int port,string community);
   ~MqttROS();
 
   void Manager();
@@ -129,14 +129,17 @@ private:
   ros::Subscriber heartbeat_sub;
   ros::Subscriber scan_str_sub;
   ros::Subscriber joy_sub;
+  ros::Subscriber info_sub;
+  ros::Subscriber plan_str_sub;
   /** Variables **/
   string mqtt_command_topic_;
   string mqtt_control_topic_;
+
   string mqtt_heartbeat_topic_;
   string mqtt_return_topic_;
-
+  string mqtt_info_topic_;
   string mqtt_scan_topic_;
-  string mqtt_navi_topic_;
+  string mqtt_path_topic_;
 
   bool isManualControl_;
   string mqtt_command_str_;
@@ -144,31 +147,27 @@ private:
   int heartbeat_id_pos_;
   int command_id_pos_;
   int return_id_pos_;
-  string node_id_;
+  string robot_id_;
+  string community_id_;
 
   /** Functions **/
   void on_message(const struct mosquitto_message *message) {
     int payload_size = max_payload_ + 1;
     char buf[payload_size];
-    string mqtt_sub_header = "robot/" + node_id_ + "/download/";
+    string mqtt_sub_header = "robot/" + community_id_ + "/" + robot_id_ + "/download/";
 
     string mqtt_task_topic = mqtt_sub_header + mqtt_command_topic_;
     string mqtt_control_topic = mqtt_sub_header + mqtt_control_topic_;
 
     // cout << "mqtt_task_topic    : " << mqtt_task_topic << endl;
     // cout << "mqtt_control_topic : " << mqtt_control_topic << endl;
-    // cout << "received topic     : " << message->topic << endl;
+    cout << robot_id_ << " Received topic : " << message->topic << endl;
 
     if(!strcmp(message->topic, mqtt_task_topic.c_str()))
     {
       memset(buf, 0, payload_size * sizeof(char));
       memcpy(buf, message->payload, max_payload_ * sizeof(char));
-
-      string message_str = buf;
-      string robot_id = message_str.substr(command_id_pos_,2);
-      if(robot_id != node_id_) return;
-
-      // cout  << "Task Received: " << buf << endl;
+      cout  << robot_id_  << "Task Received: " << buf << endl;
       std_msgs::String temp_str;
       temp_str.data = buf;
       command_pub.publish(temp_str);
@@ -178,8 +177,7 @@ private:
     {
       memset(buf, 0, payload_size * sizeof(char));
       memcpy(buf, message->payload, max_payload_ * sizeof(char));
-      // ROS_INFO("Timer");
-      // cout << node_id_ << " Control Received: "<< buf << endl;
+      cout << robot_id_ << " Control Received: "<< buf << endl;
       std_msgs::String temp_str;
       temp_str.data = buf;
       control_pub.publish(temp_str);
@@ -195,19 +193,15 @@ private:
   void ReturnCallback(const std_msgs::String::ConstPtr& Input) {
     if(!isMqttReady_) return;
     string message_str = Input->data;
-    string robot_id = message_str.substr(return_id_pos_,2);
-    if(robot_id != node_id_) return;
-    string mqtt_topic = "robot/" + robot_id + "/upload/" + mqtt_return_topic_;
+    string mqtt_topic = "robot/" + community_id_ + "/" + robot_id_ + "/upload/" + mqtt_return_topic_;
     publish(NULL, mqtt_topic.c_str(), strlen(message_str.c_str()), message_str.c_str(), 2, false);
-    // cout << "Return Topic : " << mqtt_topic << " - data : " << message_str <<endl;
+    cout << robot_id_ << " Return Topic : " << mqtt_topic << " - data : " << message_str <<endl;
   }
 
   void HeartbeatCallback(const std_msgs::String::ConstPtr& Input) {
     if(!isMqttReady_) return;
     string message_str = Input->data;
-    string robot_id = message_str.substr(heartbeat_id_pos_,2);
-    if(robot_id != node_id_) return;
-    string mqtt_topic = "robot/" + robot_id + "/upload/" + mqtt_heartbeat_topic_;
+    string mqtt_topic = "robot/" + community_id_ + "/" + robot_id_ + "/upload/" + mqtt_heartbeat_topic_;
     publish(NULL, mqtt_topic.c_str(), strlen(message_str.c_str()), message_str.c_str(), 0,false);
     // cout << "Heartbeat Topic : " << mqtt_topic << " - data : " << message_str <<endl;
   }
@@ -215,11 +209,26 @@ private:
   void ScanCallback(const std_msgs::String::ConstPtr& Input) {
     if(!isMqttReady_) return;
     string message_str = Input->data;
-    string mqtt_topic = "robot/" + node_id_ + "/upload/" + mqtt_scan_topic_;
+    string mqtt_topic = "robot/" + community_id_ + "/" + robot_id_ + "/upload/" + mqtt_scan_topic_;
     publish(NULL, mqtt_topic.c_str(), strlen(message_str.c_str()), message_str.c_str(), 0,false);
-    // cout << "Heartbeat Topic : " << mqtt_topic << " - data : " << message_str <<endl;
+    // cout << "Scan Topic : " << mqtt_topic << " - data : " << message_str <<endl;
   }
-  void JoyCallback(const sensor_msgs::Joy::ConstPtr& Input);
+
+  void PlanCallback(const std_msgs::String::ConstPtr& Input) {
+    if(!isMqttReady_) return;
+    string message_str = Input->data;
+    string mqtt_topic = "robot/" + community_id_ + "/" + robot_id_ + "/upload/" + mqtt_path_topic_;
+    publish(NULL, mqtt_topic.c_str(), strlen(message_str.c_str()), message_str.c_str(), 2,false);
+    cout << robot_id_  << " Plan Topic : " << mqtt_topic << " - data : " << message_str <<endl;
+  }
+
+  void InfoCallback(const std_msgs::String::ConstPtr& Input) {
+    if(!isMqttReady_) return;
+    string message_str = Input->data;
+    string mqtt_topic = "robot/" + community_id_ + "/" + robot_id_ + "/upload/" + mqtt_info_topic_;
+    publish(NULL, mqtt_topic.c_str(), strlen(message_str.c_str()), message_str.c_str(), 0,false);
+    // cout << "Info Topic : " << mqtt_topic << " - data : " << message_str <<endl;
+  }
 
 
 

@@ -19,6 +19,7 @@
 #include <nav_msgs/Path.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <tf/transform_datatypes.h>
+#include <random>
 
 using std::string;
 using std::cout;

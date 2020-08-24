@@ -118,10 +118,10 @@ bool Routing::ComputePath(int Start_Id,int End_id) {
 		next_point = visited[next_point];
 	}
 	path_ = path;
-	for(int i = 0; i < path.size(); i++) {
-		cout << path[i] << " "; 
-	}
-	cout << endl;
+	// for(int i = 0; i < path.size(); i++) {
+	// 	cout << path[i] << " "; 
+	// }
+	// cout << endl;
 
 	return true;
 }
@@ -265,6 +265,13 @@ void Routing::SetPathtoPointcloud(geometry_msgs::Point32 Goal) {
     	i+=pointcloud_curve.points.size();
     	continue;
     }
+  }
+
+  for (int i = 0; i < pointcloud.points.size(); ++i)
+  {
+  	if(std::isnan(pointcloud.points[i].x) || (std::isnan(pointcloud.points[i].y))) {
+  		pointcloud.points.erase(pointcloud.points.begin()+i);
+  	}
   }
 
   path_pointcloud_ = pointcloud;

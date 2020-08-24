@@ -74,6 +74,8 @@ private:
   ros::Subscriber reset_sub;
   ros::Subscriber action_sub;
   ros::Publisher action_state_pub;
+  ros::Publisher plan_str_pub;
+
   /** Publishers **/
   ros::Publisher cmd_vel_pub;
   ros::Publisher path_pred_pub;
@@ -188,6 +190,8 @@ private:
   ros::Time action_start_timer_;
   int current_action_index_;
   string robot_id_;
+  string community_id_;
+
   /** Functions **/
   void ApplyAutoControl(ros::Time& Timer,double& Duration_Limit);
 
@@ -382,7 +386,7 @@ private:
     return true;
   }
 
-
+  void SendMqttRoute(vector<int> Input);
 
   /** Inline Function **/ 
   inline void ZeroCommand(geometry_msgs::Twist& Cmd_vel) {
@@ -446,11 +450,11 @@ private:
   void ControlCallback(const std_msgs::String::ConstPtr& Input); 
 
   void ActionCallback(const std_msgs::Int32::ConstPtr& Input) {
-    if(Input->data == 6 || Input->data == 7) {
+    if(Input->data == 0) {
       isAction_ = false;
       global_path_pointcloud_.points.clear();
     }
-    else if(Input->data == 3 || Input->data == 4 || Input->data == 5) {
+    else if(Input->data == 1) {
       global_path_pointcloud_.points.clear();
       action_start_timer_ = ros::Time::now();
       isAction_ = true;

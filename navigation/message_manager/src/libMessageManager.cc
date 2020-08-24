@@ -1,15 +1,19 @@
 #include "libMessageManager.h"
 
 MessageManager::MessageManager():pn("~") {
-  n.param<string>("robot_id", robot_id_, "robot_999");
+  n.param<string>("robot_id", robot_id_, "robot_12");
+  n.param<string>("community_id", community_id_, "2");
   cmd_sub = n.subscribe("husky_velocity_controller/cmd_vel",10, &MessageManager::CommandCallback,this);
   reset_sub = n.subscribe("/reset_control",10,&MessageManager::ResetCallback,this);
   action_state_sub = n.subscribe("action_state",10, &MessageManager::ActionStateCallback,this);
 	
-	station_sub = n.subscribe("/to_robot_task",10, &MessageManager::StationCallback,this);
+	station_sub = n.subscribe("to_robot_task",10, &MessageManager::StationCallback,this);
 	control_sub = n.subscribe("to_robot_control",10, &MessageManager::ControlCallback,this);
-	center_pub = n.advertise<std_msgs::String>("/robot_backend_task",1);
-	heart_pub = n.advertise<std_msgs::String>("/robot_backend_info",1);
+
+
+	center_pub = n.advertise<std_msgs::String>("from_robot_task",1);
+	heart_pub = n.advertise<std_msgs::String>("from_robot_status",1);
+	info_pub = n.advertise<std_msgs::String>("from_robot_info",1);
 
 	command_pub = n.advertise<std_msgs::String>("control_string",1);
 	goal_pub = n.advertise<geometry_msgs::PoseStamped>("goal",1);
@@ -21,17 +25,17 @@ MessageManager::~MessageManager() {
 }
 
 void MessageManager::Initialization() {
-	robot_seq_ = "0000";
+	robot_seq_ = "0";
 	robot_act_ = "XX";
 	robot_speed_ = 0;
 
 	run_timer_ = ros::Time::now();
 
-	last_input_raw_ = "NEWW";
-	last_input_sequence_ = "NEWW";
+	last_input_raw_ = "NEW";
+	last_input_sequence_ = "NEW";
 
-	last_input_control_ = "NEWW";
-	last_input_control_sequence_ = "NEWW";
+	last_input_control_ = "NEW";
+	last_input_control_sequence_ = "NEW";
 
  	std::size_t pos = robot_id_.find("_");
 	string string_temp = robot_id_.substr(pos+1);
@@ -44,51 +48,143 @@ void MessageManager::Execute() {
   ros::Rate loop_rate(ROS_RATE_HZ);
   cout << "Message Node For " << robot_id_ << " Started" << endl;
   ros::Time heartbeat_timer = ros::Time::now();
-  double heartbeat_freq = 1;
+  ros::Time realtime_timer = ros::Time::now();
+  double heartbeat_pause = 1;
+  double realtime_pause = 0.1;
   while (ros::ok()) {
   	ros::spinOnce();
     loop_rate.sleep();
-    UpdateRealtimeInfo(heartbeat_timer,heartbeat_freq);    
+    if(UpdateVehicleLocation()) {
+	    UpdateHeartbeat(heartbeat_timer,heartbeat_pause);    
+	    UpdateRealtimeInfo(realtime_timer,realtime_pause);
+    }
+
   }
 
   cout << "Message Node For " << robot_id_ << " Closed" << endl;
 }
 
+void MessageManager::UpdateRealtimeInfo(ros::Time& Timer,double Pause) {
+	if((ros::Time::now() - Timer).toSec() < Pause) return;
+	Timer = ros::Time::now();
+  string delimiter = "$";
 
+  string head_str = "GPMAPD";
+  string source_str = "robot";
+  string community_str = community_id_;
+  string id_str = to_string(id_number_);
+  string status_str = "ok";
+  string seq_str = "1";
+  string type_str = "info";
+  string task_str = "trajectory";
+  string end_str = "HE";
+ 
+  string msg_1_str = to_string(robot_rotation_);
+  string msg_2_str = to_string(robot_speed_);
+  string msg_3_str = to_string(robot_x_cm_);
+  string msg_4_str = to_string(robot_y_cm_);
+  string msg_5_str = to_string(robot_yaw_);
 
-void MessageManager::UpdateTaskInfo(string Input) {
-	int size_robot_id      = 2;
+  int length_raw = head_str.size() + source_str.size() + community_str.size() +
+                   id_str.size() + status_str.size() +
+                   seq_str.size() + type_str.size() + 
+                   task_str.size() + msg_1_str.size() +
+                   msg_2_str.size() + msg_3_str.size() +
+                   msg_4_str.size() + msg_5_str.size() +
+                   end_str.size() + 14 * delimiter.size();
+  length_raw += static_cast<int>(log10(static_cast<double>(length_raw)));
+  length_raw ++;
+	if(to_string(length_raw).size() != to_string(length_raw-1).size()) length_raw++;
+  string length_str = to_string(length_raw);
 
-	string data_head          = "GPMAPD";
-	string data_length        = "26";
-	string data_source        = "00";
-	string data_message_type  = "00";
-	string data_robot_id      = FillInt2String(id_number_,size_robot_id,1);
-	string data_system_status = "01";
-	string data_sequence      = robot_seq_;
-	string data_mission_type  = robot_act_;
-	string data_status        = Input;
-	string data_reserve       = "XXXXXX";
-	string data_end           = "HE";
+  string output = head_str + delimiter + 
+                length_str + delimiter + 
+                source_str + delimiter + 
+                community_str + delimiter + 
+                id_str + delimiter + 
+                status_str + delimiter + 
+                seq_str + delimiter + 
+                type_str + delimiter + 
+                task_str + delimiter + 
+                msg_1_str + delimiter + 
+                msg_2_str + delimiter +
+                msg_3_str + delimiter + 
+                msg_4_str + delimiter + 
+                msg_5_str + delimiter + 
+                end_str;
 
+  std_msgs::String topic_data;
+	topic_data.data = output;
+	info_pub.publish(topic_data);
 
-	string output_overall = data_head; 
-	output_overall += data_length;
-	output_overall += data_source;
-	output_overall += data_message_type;
-	output_overall += data_robot_id;
-	output_overall += data_system_status;
-	output_overall += data_sequence;
-	output_overall += data_mission_type;
-	output_overall += data_status;
-	output_overall += data_reserve;
-	output_overall += data_end;
-
-	std_msgs::String topic_data;
-	topic_data.data = output_overall;
-	center_pub.publish(topic_data);
-	// cout << robot_id_ << " UpdateTaskInfo" << endl;
 }
+
+
+void MessageManager::UpdateHeartbeat(ros::Time& Timer,double Pause) {
+	if((ros::Time::now() - Timer).toSec() < Pause) return;
+	Timer = ros::Time::now();
+
+	string delimiter = "$";
+
+  string head_str = "GPMAPD";
+  string source_str = "robot";
+  string community_str = community_id_;
+  string id_str = to_string(id_number_);
+  string status_str = "ok";
+  string seq_str = robot_seq_;
+  string type_str = "status";
+  string end_str = "HE";
+ 
+  string coord_x_str = to_string(robot_x_cm_);
+  string coord_y_str = to_string(robot_y_cm_);
+  string heading_str = to_string(robot_yaw_);
+  string speed_str = to_string(robot_speed_);
+  string battery_str = "99";
+  string charge_str = "off";
+  string masterlock_str = "off";
+  string deadlock_str = "off";
+  string environment_str = "0";
+
+
+  int length_raw = head_str.size() + source_str.size() + community_str.size() +
+                   id_str.size() + status_str.size() +
+                   seq_str.size() + type_str.size() + 
+                   coord_x_str.size() + coord_y_str.size() +
+                   heading_str.size() + speed_str.size() +
+                   battery_str.size() + charge_str.size() +
+                   masterlock_str.size() + deadlock_str.size() + 
+                   environment_str.size() +
+                   end_str.size() + 17 * delimiter.size();
+  length_raw += static_cast<int>(log10(static_cast<double>(length_raw)));
+  length_raw ++;
+	if(to_string(length_raw).size() != to_string(length_raw-1).size()) length_raw++;
+  string length_str = to_string(length_raw);
+
+  string output = head_str + delimiter + 
+                length_str + delimiter + 
+                source_str + delimiter + 
+                community_str + delimiter + 
+                id_str + delimiter + 
+                status_str + delimiter + 
+                seq_str + delimiter + 
+                type_str + delimiter + 
+                coord_x_str + delimiter + 
+                coord_y_str + delimiter + 
+                heading_str + delimiter +
+                speed_str + delimiter + 
+                battery_str + delimiter + 
+                charge_str + delimiter + 
+                masterlock_str + delimiter + 
+                deadlock_str + delimiter + 
+                environment_str + delimiter + 
+                end_str;
+
+  std_msgs::String topic_data;
+	topic_data.data = output;
+	heart_pub.publish(topic_data);
+}
+
+
 
 void MessageManager::ControlCallback(const std_msgs::String::ConstPtr& Input) {
 	string input = Input->data;
@@ -103,6 +199,7 @@ void MessageManager::ControlCallback(const std_msgs::String::ConstPtr& Input) {
 	string msg_head_str;
 	int msg_total_size = -1;
 	string msg_source_str;
+	string msg_community_str;
 	int msg_id_int = -1;
 	string msg_status_str;
 	int msg_sequence_int = -1;
@@ -114,8 +211,9 @@ void MessageManager::ControlCallback(const std_msgs::String::ConstPtr& Input) {
 
 	string data_head   = "GPMAPD";
 	string data_source = "backend";
+	string data_community_id = community_id_;
 	string data_status = "ok";
-	string data_type   = "basiccontrol";
+	string data_type   = "basic";
 	string data_master = "masterlock";
 	string data_lock   = "deadlock";
 	string data_end    = "HE";
@@ -160,6 +258,18 @@ void MessageManager::ControlCallback(const std_msgs::String::ConstPtr& Input) {
 		return;
 	}
 
+	if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+		msg_community_str = input_duplicate.substr(0, pos);
+		input_duplicate.erase(0, pos + delimiter.length());
+	} else {
+		cout << "Couldn't Find Delimiter for Community ID" << endl;
+		return;
+	}
+	if(msg_community_str != data_community_id) {
+		cout << "Community Unknown From : " << msg_community_str << endl;
+		return;
+	}
+
 
 	if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
 		token = input_duplicate.substr(0, pos);
@@ -170,8 +280,10 @@ void MessageManager::ControlCallback(const std_msgs::String::ConstPtr& Input) {
 		cout << "Couldn't Find Delimiter for ID" << endl;
 		return;
 	}
-	if(msg_id_int != id_number_) return;
-
+	if(msg_id_int != id_number_) {
+		cout << "Robot ID Not Match MyID/Received: " << id_number_ << "/" << msg_id_int << endl;
+		return;
+	}
 
 	if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
 		msg_status_str = input_duplicate.substr(0, pos);
@@ -269,109 +381,195 @@ void MessageManager::StationCallback(const std_msgs::String::ConstPtr& Input) {
 	if(input == last_input_raw_) return;
 	last_input_raw_ = input;
 
+	string input_duplicate = input;
 
-	int size_head          = 6;
-	int size_length        = 2;
-	int size_source        = 2;
-	int size_robot_id      = 2;
-	int size_system_status = 2;
+	string delimiter = "$";
+	string token;
+	size_t pos = 0;
 
-	int size_sequence      = 4;
-	int size_mission_type  = 2;
-	int size_mission_1     = 8;
-	int size_mission_2     = 8;
-	int size_mission_3     = 8;
-	int size_reserve       = 6;
-	int size_end           = 2;
+	string msg_head_str;
+	int msg_total_size = -1;
+	string msg_source_str;
+	string msg_community_str;
+	int msg_id_int = -1;
+	string msg_status_str;
+	int msg_sequence_int = -1;
+	string msg_type_str;
+	string msg_task_str;
+	string msg_1_str;
+	string msg_2_str;
+	string msg_end_str;
 
+	string data_head   = "GPMAPD";
+	string data_source = "backend";
+	string data_community_id = community_id_;
+	string data_status = "ok";
+	string data_type   = "task";
+	string data_goto = "goto";
+	string data_picking   = "picking";
+	string data_loading   = "loading";
+	string data_unloading   = "unloading";
 
-	int total_size = 52;
-	if(input.size() != total_size) {
-		cout << "Size Not Match total_size/input_size : " << total_size << "/" << input.size() << endl;
+	string data_end    = "HE";
+
+	if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+		msg_head_str = input_duplicate.substr(0, pos);
+		input_duplicate.erase(0, pos + delimiter.length());
+	} else {
+		cout << "Couldn't Find Delimiter for Header" << endl;
+		return;
+	}
+	if(msg_head_str != data_head) {
+		cout << "HEAD Not Match msg_head/head : " << msg_head_str << "/" << data_head << endl;
 		return;
 	}
 
-	int check_dig = size_head + size_length + size_source;
-	string check_id = input.substr(check_dig,size_robot_id);
-	if(check_id.at(0) == '0' ){
-		check_id = check_id.substr(1.1);
-	}
-	if(check_id != to_string(id_number_)) return;
 
-
-	string data_head = "GPMAPD";
-	string data_source = "01";
-	string data_system_error_status = "00";
-	string data_end = "HE";
-
-	int tracking_index = 0;
-
-	if(input.substr(tracking_index,size_head) != data_head) {
-		cout << "HEAD Not Match" << endl;
+	if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+		token = input_duplicate.substr(0, pos);
+		msg_total_size = stoi(token);
+		input_duplicate.erase(0, pos + delimiter.length());
+	} else {
+		cout << "Couldn't Find Delimiter for Size" << endl;
 		return;
 	}
-	tracking_index += size_head;
-
-
-	if(input.size() - size_head != stoi(input.substr(tracking_index,size_length))) {
-		cout << "Size Byte Mismatch" << endl;
-		cout << input << endl;
+	if(msg_total_size != input.size()) {
+		cout << "Size Not Match total_size/input_size : " << msg_total_size << "/" << input.size() << endl;
 		return;
 	}
-	tracking_index += size_length;
 
 
-	if(input.substr(tracking_index,size_source) != data_source) {
-		cout << "Source Unknown" << endl;
-		cout << input << endl;
+	if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+		msg_source_str = input_duplicate.substr(0, pos);
+		input_duplicate.erase(0, pos + delimiter.length());
+	} else {
+		cout << "Couldn't Find Delimiter for Source" << endl;
 		return;
 	}
-	tracking_index += size_source;
-
-
-	string robot_id = input.substr(tracking_index,size_robot_id);
-	if(robot_id.at(0) == '0' ){
-		robot_id = robot_id.substr(1.1);
-	}
-	tracking_index += size_robot_id;
-
-
-	if(input.substr(tracking_index,size_system_status) == data_system_error_status) {
-		cout << "System Status Abnormal" << endl;
-		cout << input << endl;
+	if(msg_source_str != data_source) {
+		cout << "Source Unknown From : " << msg_source_str << endl;
 		return;
 	}
-	string system_status = input.substr(tracking_index,size_system_status);
-	tracking_index += size_system_status;
 
-	
-	string task_sequence = input.substr(tracking_index,size_sequence);
-	if(last_input_sequence_ == task_sequence) {
-		cout << "Duplicated Sequence Number" << endl;
-		cout << input << endl;
+	if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+		msg_community_str = input_duplicate.substr(0, pos);
+		input_duplicate.erase(0, pos + delimiter.length());
+	} else {
+		cout << "Couldn't Find Delimiter for Community ID" << endl;
 		return;
 	}
-	last_input_sequence_ = task_sequence;
-	tracking_index += size_sequence;
-
-
-	string misstion_type = input.substr(tracking_index,size_mission_type);
-	tracking_index += size_mission_type;
-
-	string mission_command_1 = input.substr(tracking_index,size_mission_1);
-	tracking_index += size_mission_1;
-	string mission_command_2 = input.substr(tracking_index,size_mission_2);
-	tracking_index += size_mission_2;
-
-	tracking_index += size_mission_3;
-	tracking_index += size_reserve;
-
-	if(input.substr(tracking_index,size_end) != data_end) {
-		cout << "END Not Match" << endl;
-		cout << input << endl;
+	if(msg_community_str != data_community_id) {
+		cout << "Community Unknown From : " << msg_community_str << endl;
 		return;
 	}
-	ProcessMission(misstion_type,task_sequence,mission_command_1,mission_command_2);
+
+
+	if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+		token = input_duplicate.substr(0, pos);
+		// cout << "ID token " << token << endl;
+		msg_id_int = stoi(token);
+		input_duplicate.erase(0, pos + delimiter.length());
+	} else {
+		cout << "Couldn't Find Delimiter for ID" << endl;
+		return;
+	}
+	if(msg_id_int != id_number_) {
+		cout << "Robot ID Not Match MyID/Received: " << id_number_ << "/" << msg_id_int << endl;
+		return;
+	}
+
+	if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+		msg_status_str = input_duplicate.substr(0, pos);
+		input_duplicate.erase(0, pos + delimiter.length());
+	} else {
+		cout << "Couldn't Find Delimiter for Status" << endl;
+		return;
+	}
+	if(msg_status_str != data_status) {
+		cout << "System Status : " << msg_status_str << endl;
+		return;
+	}
+
+
+	if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+		token = input_duplicate.substr(0, pos);
+		// cout << "Sequence token " << token << endl;
+		msg_sequence_int = stoi(token);
+		input_duplicate.erase(0, pos + delimiter.length());
+	} else {
+		cout << "Couldn't Find Delimiter for Sequence" << endl;
+		return;
+	}
+
+	if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+		msg_type_str = input_duplicate.substr(0, pos);
+		input_duplicate.erase(0, pos + delimiter.length());
+	} else {
+		cout << "Couldn't Find Delimiter for Message Type" << endl;
+		return;
+	}
+	if(msg_type_str != data_type) {
+		cout << "Unknown Message Type : " << msg_type_str << endl;
+		return;
+	}
+
+	if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+		msg_task_str = input_duplicate.substr(0, pos);
+		input_duplicate.erase(0, pos + delimiter.length());
+	} else {
+		cout << "Couldn't Find Delimiter for Task Type" << endl;
+		return;
+	}
+
+	if(msg_task_str == data_goto) {
+		if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+			msg_1_str = input_duplicate.substr(0, pos);
+			input_duplicate.erase(0, pos + delimiter.length());
+		} else {
+			cout << "Couldn't Find Delimiter for Goto Message 1" << endl;
+			return;
+		}
+		if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+			msg_2_str = input_duplicate.substr(0, pos);
+			input_duplicate.erase(0, pos + delimiter.length());
+		} else {
+			cout << "Couldn't Find Delimiter for Goto Message 2" << endl;
+			return;
+		}
+	}
+	else if (msg_task_str == data_loading) {
+		if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+			msg_1_str = input_duplicate.substr(0, pos);
+			input_duplicate.erase(0, pos + delimiter.length());
+		} else {
+			cout << "Couldn't Find Delimiter for Loading Message" << endl;
+			return;
+		}
+	} 
+	else if (msg_task_str == data_unloading) {
+		if ((pos = input_duplicate.find(delimiter)) != std::string::npos) {
+			msg_1_str = input_duplicate.substr(0, pos);
+			input_duplicate.erase(0, pos + delimiter.length());
+		} else {
+			cout << "Couldn't Find Delimiter for Unloading Message" << endl;
+			return;
+		}
+	} 
+	else if (msg_task_str == data_picking) {
+	} 
+	else {
+		cout << "Unknown Task type : " << msg_task_str << endl;
+		return;
+	}
+
+	msg_end_str = input_duplicate; 
+	if(msg_end_str != data_end) {
+		cout << "END Not Match msg_end/end : " << msg_end_str << "/" << data_end << endl;
+		return;
+	}
+
+
+	ProcessMission(msg_task_str,to_string(msg_sequence_int),msg_1_str,msg_2_str);
 
 	// cout << robot_id_ << " StationCallback" << endl;
 }
@@ -382,111 +580,83 @@ void MessageManager::ProcessMission(string Type,string Seq,string Command_1,stri
 	robot_act_ = Type;
 	robot_seq_ = Seq;
 
-	if(Action == 1) {
+	if(Action == 2) {
 		geometry_msgs::PoseStamped goal_info;
 		goal_info.header.stamp = ros::Time::now();
 		goal_info.header.frame_id = "/map";
-		int int_sign_x = stoi(Command_1.substr(0,1));
-		int x_in_cm = ((int_sign_x * 2) - 1) * stoi(Command_1.substr(1,7));
-		int int_sign_y = stoi(Command_2.substr(0,1));
-		int y_in_cm = ((int_sign_y * 2) - 1) * stoi(Command_2.substr(1,7));
+		int x_in_cm = stoi(Command_1);
+		int y_in_cm = stoi(Command_2);
 
 		goal_info.pose.position.x = static_cast<double>(x_in_cm)/100;
     goal_info.pose.position.y = static_cast<double>(y_in_cm)/100;
     goal_pub.publish(goal_info);
   }
 	std_msgs::Int32 action_int;
-	action_int.data = stoi(Type);
+	action_int.data = Action;
 	action_pub.publish(action_int);
 	
 	UpdateTaskInfo();
-	// cout << robot_id_ << " ProcessMission " << stoi(Type) << endl;
 }
 
 
 
-void MessageManager::UpdateRealtimeInfo(ros::Time& Timer,double Freq) {
+void MessageManager::UpdateTaskInfo(string Input) {
+	string delimiter = "$";
 
-	if((ros::Time::now() - Timer).toSec() < Freq) return;
-	Timer = ros::Time::now();
+  string head_str = "GPMAPD";
+  string source_str = "robot";
+  string community_str = community_id_;
+  string id_str = to_string(id_number_);
+  string status_str = "ok";
+  string seq_str = robot_seq_;
+  string type_str = "task";
+  string task_str = robot_act_;
+  string end_str = "HE";
+ 
+  string msg_1_str = Input;
 
-	int size_coordinate = 8;
-	int size_yaw = 4;
 
+  int length_raw = head_str.size() + source_str.size() + community_str.size() +
+                   id_str.size() + status_str.size() +
+                   seq_str.size() + type_str.size() + 
+                   task_str.size() + msg_1_str.size() +
+                   end_str.size() + 10 * delimiter.size();
+  length_raw += static_cast<int>(log10(static_cast<double>(length_raw)));
+  length_raw ++;
+	if(to_string(length_raw).size() != to_string(length_raw-1).size()) length_raw++;
+  string length_str = to_string(length_raw);
+
+  string output = head_str + delimiter + 
+                length_str + delimiter + 
+                source_str + delimiter + 
+                community_str + delimiter + 
+                id_str + delimiter + 
+                status_str + delimiter + 
+                seq_str + delimiter + 
+                type_str + delimiter + 
+                task_str + delimiter + 
+                msg_1_str + delimiter + 
+                end_str;
+
+  std_msgs::String topic_data;
+	topic_data.data = output;
+	center_pub.publish(topic_data);
+	// cout << robot_id_ << " UpdateTaskInfo" << endl;
+}
+
+bool MessageManager::UpdateVehicleLocation() {
 	tf::StampedTransform stampedtransform;
   try {
-    listener_map_to_base.lookupTransform("/map", robot_id_ + "/base_link",  
+    listener_map_to_base.lookupTransform("/map","/base_link",  
                              ros::Time(0), stampedtransform);
   }
   catch (tf::TransformException ex) {
-  	cout << "Unable Get Transform from /map to /" << robot_id_ << "/base_link" << endl;
-    return;
+  	cout << "Waiting For Transform in MessageManager Node" << endl;
+    return false;
   }
-  int robot_x_cm = stampedtransform.getOrigin().x() * 100;
-  int robot_y_cm = stampedtransform.getOrigin().y() * 100;
-  int robot_yaw  = tf::getYaw(stampedtransform.getRotation()) * 180/PI;
-
-  string robot_x_str = FillInt2String(robot_x_cm,size_coordinate,0);
-  string robot_y_str = FillInt2String(robot_y_cm,size_coordinate,0);
-  string robot_yaw_str = FillInt2String(robot_yaw,size_yaw,0);
-
-  int size_head          = 6;
-	int size_length        = 2;
-	int size_source        = 2;
-	int size_message_type  = 2;
-	int size_robot_id      = 2;
-	int size_system_status = 2;
-	int size_sequence      = 4;
-
-	int size_coordinate_x  = size_coordinate;
-	int size_coordinate_y  = size_coordinate;
-	int size_coordinate_z  = size_coordinate;
-	int size_heading       = size_yaw;
-	int size_speed         = 4;
-	int size_battery       = 2;
-	int size_environment   = 2;
-	int size_reserve       = 6;
-	int size_end           = 2;
-
-	string data_head          = "GPMAPD";
-	string data_length        = "58";
-	string data_source        = "00";
-	string data_message_type  = "01";
-	string data_robot_id      = FillInt2String(id_number_,size_robot_id,1);
-	string data_system_status = "01";
-	string data_sequence      = robot_seq_;
-
-	string data_x             = robot_x_str;
-	string data_y             = robot_y_str;
-	string data_z             = "XXXXXXXX";
-	string data_yaw           = robot_yaw_str;
-	string data_speed         = FillInt2String(robot_speed_,size_speed,0);
-	string data_battery       = "99";
-	string data_environment   = "00";
-	string data_reserve       = "XXXXXX";
-	string data_end           = "HE";
-
-	string output_overall = data_head; 
-	output_overall += data_length;
-	output_overall += data_source;
-	output_overall += data_message_type;
-	output_overall += data_robot_id;
-	output_overall += data_system_status;
-	output_overall += data_sequence;
-
-	output_overall += data_x;
-	output_overall += data_y;
-	output_overall += data_z;
-	output_overall += data_yaw;
-	output_overall += data_speed;
-	output_overall += data_battery;
-	output_overall += data_environment;
-	output_overall += data_reserve;
-	output_overall += data_end;
-
-	std_msgs::String topic_data;
-	topic_data.data = output_overall;
-	heart_pub.publish(topic_data);
-	// cout << robot_id_ << " UpdateRealtimeInfo" << endl;
+  robot_x_cm_ = stampedtransform.getOrigin().x() * 100;
+ 	robot_y_cm_ = stampedtransform.getOrigin().y() * 100;
+  robot_yaw_  = tf::getYaw(stampedtransform.getRotation()) * 100;
+  // cout << robot_id_ << "update x y yaw : " << robot_x_cm_ << "," << robot_y_cm_ << "," << robot_yaw_ << endl;
+  return true;
 }
-

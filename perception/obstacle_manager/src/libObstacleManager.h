@@ -19,6 +19,7 @@
 #include <geometry_msgs/Point32.h>
 #include <geometry_msgs/PointStamped.h>
 #include <nav_msgs/Odometry.h>
+#include <std_msgs/String.h>
 
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/MapMetaData.h>
@@ -36,8 +37,9 @@ using std::cout;
 using std::endl;
 using std::isnan;
 using std::string;
+using std::to_string;
 
-const int ROS_RATE_HZ = 100;
+const int ROS_RATE_HZ = 20;
 const double PI = 3.14159265359;
 
 class ObstacleManager
@@ -56,6 +58,7 @@ private:
 
   /** Publishers **/
   ros::Publisher map_obs_pub;
+  ros::Publisher scan_str_pub;
 
   /** Subscribers **/
   ros::Subscriber map_sub;
@@ -65,6 +68,7 @@ private:
   /** Parameters **/
   tf::TransformListener map_base_listener;
   string robot_id_;
+  string community_id_;
 
   /** Flags **/
   bool isMapSave_;

@@ -4,6 +4,7 @@ MissionControl::MissionControl():pn("~") {
   pn.param<string>("config_folder", config_folder_, "");
   cout << "config_folder :" << config_folder_ << endl;
   n.param<string>("robot_id", robot_id_, "");
+  n.param<string>("community_id", community_id_, "2");
 
   joy_sub = n.subscribe("joy",10, &MissionControl::JoyCallback,this);
   goal_sub = n.subscribe("goal",10, &MissionControl::GoalCallback,this);
@@ -38,6 +39,7 @@ MissionControl::MissionControl():pn("~") {
   reset_sub = n.subscribe("/reset_control",1,&MissionControl::ResetCallback,this);
   action_sub = n.subscribe("action_index",1,&MissionControl::ActionCallback,this);
   action_state_pub = n.advertise<std_msgs::Int32>("action_state",1);
+  plan_str_pub = n.advertise<std_msgs::String>("from_robot_path",1);
 
 }
 MissionControl::~MissionControl(){
@@ -184,6 +186,11 @@ void MissionControl::Execute() {
 
 // ABCD EFGH IJKL MNOP QRST UVWX YZ
 int MissionControl::DecisionMaker() {
+  if((ros::Time::now() - last_timer_).toSec() < 0.1) {
+    lte_cmd_.linear.x = 0;
+    lte_cmd_.angular.z = 0;
+  }
+
   if(isJoyControl_) return static_cast<int>(AutoState::JOY);
   if(isLTEControl_) return static_cast<int>(AutoState::LTE);
   if(isAction_) return static_cast<int>(AutoState::ACTION);
@@ -278,10 +285,14 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
   
   int global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter_);
   global_sub_goal_ = global_path_pointcloud_.points[global_goal_index];
+
+  // cout << global_path_pointcloud_.points.size() << "/" << global_goal_index << endl;
+  // cout << "global_sub_goal_ : " << global_sub_goal_.x << "," << global_sub_goal_.y << endl; 
   // geometry_msgs::Point32 destination = global_path_pointcloud_.points.back();
 
   geometry_msgs::Point32 global_goal_in_local;
   ConvertPoint(global_sub_goal_,global_goal_in_local,map_to_base_);
+  // cout << "global_goal_in_local : " << global_goal_in_local.x << "," << global_goal_in_local.y << endl; 
 
   sensor_msgs::PointCloud temp_pointcloud;
   MyRouter_.ModifyRoutePoint(global_goal_in_local,temp_pointcloud,obstacle_in_base_);
@@ -631,6 +642,7 @@ bool MissionControl::CheckRouteEndState(geometry_msgs::Point32 Input) {
 
 bool MissionControl::CheckNavigationState() {
   if(isReachCurrentGoal_) return false;
+  if(global_path_pointcloud_.points.size() <= 0) return false;
   double reach_goal_distance = 2;
   geometry_msgs::Point32 goal_local;
   ConvertPoint(goal_in_map_,goal_local,map_to_base_);
@@ -639,9 +651,9 @@ bool MissionControl::CheckNavigationState() {
     isReachCurrentGoal_ = true;
     global_path_pointcloud_.points.clear();
     ClearAutoMissionState();
+    // cout << "Goal Reached" << endl;
     return false;
   }
-
   return true;
 }
 
@@ -653,11 +665,69 @@ void MissionControl::ComputeGlobalPlan(geometry_msgs::Point32& Goal) {
   MyRouter_.RoutingAnalyze(Goal,vehicle_in_map_,map_folder,map_number_);
   global_path_pointcloud_ = MyRouter_.path_pointcloud();
   isReachCurrentGoal_ = false;
-  if(global_path_pointcloud_.points.size() <= 0) global_path_pointcloud_.points.push_back(goal_in_map_);
+  if(global_path_pointcloud_.points.size() <= 0) {
+    global_path_pointcloud_.points.push_back(goal_in_map_);
+  } else {
+    if(MyRouter_.path().size() > 0) SendMqttRoute(MyRouter_.path());
+  }
 
-  cout << "Path Planned" << endl;
+
+  // cout << "Path Planned" << endl;
 }
 
+
+void MissionControl::SendMqttRoute(vector<int> Input) {
+    string delimiter = "$";
+    string id_delimiter = "#";
+
+    string head_str = "GPMAPD";
+    string source_str = "robot";
+    string community_str = community_id_;
+    string id_str = robot_id_.substr(6,2);
+    string status_str = "ok";
+    string seq_str = "1";
+    string type_str = "path";
+    string task_str = "path";
+    string end_str = "HE";
+
+    string msg_1_str;
+    if(Input.size() > 0) msg_1_str += to_string(Input[0]);
+    if(Input.size() > 1) {
+      for (int i = 1; i < Input.size(); ++i) {
+        msg_1_str += id_delimiter;
+        msg_1_str += to_string(Input[i]);
+      }
+    }
+
+    int length_raw = head_str.size() + source_str.size() + community_str.size() +
+                     id_str.size() + status_str.size() +
+                     seq_str.size() + type_str.size() + 
+                     task_str.size() + msg_1_str.size() +
+                     end_str.size() + 10 * delimiter.size();
+    length_raw += static_cast<int>(log10(static_cast<double>(length_raw)));
+    length_raw ++;
+    if(to_string(length_raw).size() != to_string(length_raw-1).size())
+
+    if(length_raw == 100 || length_raw == 100) length_raw++;
+    string length_str = to_string(length_raw);
+
+    string output = head_str + delimiter + 
+                    length_str + delimiter + 
+                    source_str + delimiter + 
+                    community_str + delimiter + 
+                    id_str + delimiter + 
+                    status_str + delimiter + 
+                    seq_str + delimiter + 
+                    type_str + delimiter + 
+                    task_str + delimiter + 
+                    msg_1_str + delimiter + 
+                    end_str;
+
+    // cout << robot_id_ << " Path Mqtt : " << output << endl;
+    std_msgs::String output_msg;
+    output_msg.data = output;
+    plan_str_pub.publish(output_msg);
+}
 
 void MissionControl::ConvertPoint(geometry_msgs::Point32 Input,geometry_msgs::Point32& Output,tf::Transform Transform) {
   double transform_m[4][4];
@@ -949,7 +1019,7 @@ bool MissionControl::ReadConfig() {
 
 bool MissionControl::UpdateVehicleLocation() {
   try {
-    listener_map_to_base.lookupTransform("/map", robot_id_ + "/base_link",  
+    listener_map_to_base.lookupTransform("/map", "/base_link",  
                              ros::Time(0), stampedtransform);
   }
   catch (tf::TransformException ex) {
@@ -966,7 +1036,7 @@ bool MissionControl::UpdateVehicleLocation() {
   geometry_msgs::TransformStamped temp_trans;
   temp_trans.header.stamp = ros::Time::now();
   temp_trans.header.frame_id = "/map";
-  temp_trans.child_frame_id = robot_id_ + "/base_link";
+  temp_trans.child_frame_id = "/base_link";
 
   temp_trans.transform.translation.x = stampedtransform.getOrigin().x();
   temp_trans.transform.translation.y = stampedtransform.getOrigin().y();
@@ -1011,7 +1081,7 @@ bool MissionControl::UpdateVehicleLocation() {
   marker.mesh_resource = "package://config/cfg/model.dae";
 
 
-  infoer.header.frame_id = robot_id_ + "/base_link";
+  infoer.header.frame_id = "/base_link";
   infoer.header.stamp = ros::Time::now();
   infoer.id = 0;
   infoer.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
@@ -1105,10 +1175,14 @@ void MissionControl::ControlCallback(const std_msgs::String::ConstPtr& Input) {
       if(msg_1_str == lock_on) {
         isLTEControl_ = true;
         cout << robot_id_ << " Control On" << endl;
+        lte_cmd_.linear.x = 0;
+        lte_cmd_.angular.z = 0;
       }
       else if (msg_1_str == lock_off) {
         isLTEControl_ = false;
         cout << robot_id_ << " Control Off" << endl;
+        lte_cmd_.linear.x = 0;
+        lte_cmd_.angular.z = 0;
       }
     }
     return;    
@@ -1122,10 +1196,14 @@ void MissionControl::ControlCallback(const std_msgs::String::ConstPtr& Input) {
       if(msg_1_str == lock_on) {
         isLTELock_ = true;
         cout << robot_id_ << " Lock On" << endl;
+        lte_cmd_.linear.x = 0;
+        lte_cmd_.angular.z = 0;
       }
       else if (msg_1_str == lock_off) {
         isLTELock_ = false;
         cout << robot_id_ << " Lock Off" << endl;
+        lte_cmd_.linear.x = 0;
+        lte_cmd_.angular.z = 0;
       }
     }
     return;    
@@ -1156,7 +1234,7 @@ void MissionControl::ControlCallback(const std_msgs::String::ConstPtr& Input) {
     lte_cmd_.linear.x = linear_speed;
     lte_cmd_.angular.z = angular_speed;
     return;    
-  }
+  }  
 }
 
 int MissionControl::SuperviseDecision(int mission_state){

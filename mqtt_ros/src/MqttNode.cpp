@@ -8,29 +8,32 @@ int main(int argc, char ** argv) {
     ros::NodeHandle n;
   	ros::NodeHandle pn("~");
 
-  	string robot_id,host_address,mqtt2bot_namespace,bot2mqtt_namespace;
+  	string community_id,robot_id,host_address,mqtt2bot_namespace,bot2mqtt_namespace;
   	int port_num;
 
-    vector<string> mqtt_topics(6);
+    vector<string> mqtt_topics(7);
 
-  	n.param<string>("robot_id", robot_id, "robot_3");
+  	n.param<string>("robot_id", robot_id, "robot_12");
+    n.param<string>("community_id", community_id, "2");
+
   	pn.param<string>("host_address",host_address,"121.40.153.189");
-  	pn.param<string>("mqtt_command_topic",mqtt_topics[0],"task");
-    pn.param<string>("mqtt_control_topic",mqtt_topics[1],"control");
+    
+  	pn.param<string>("mqtt_command_topic",mqtt_topics[0],"dispatch/task");
+    pn.param<string>("mqtt_control_topic",mqtt_topics[1],"control/basic");
 
-    pn.param<string>("mqtt_heartbeat_topic",mqtt_topics[2],"status");
-    pn.param<string>("mqtt_return_topic",mqtt_topics[3],"task");
-
-    pn.param<string>("mqtt_return_topic",mqtt_topics[4],"navi");
-    pn.param<string>("mqtt_return_topic",mqtt_topics[5],"lidar");
+    pn.param<string>("mqtt_heartbeat_topic",mqtt_topics[2],"dispatch/status");
+    pn.param<string>("mqtt_return_topic",mqtt_topics[3],"dispatch/task");
+    pn.param<string>("mqtt_info_topic",mqtt_topics[4],"navigation/info");
+    pn.param<string>("mqtt_navi_topic",mqtt_topics[5],"navigation/path");
+    pn.param<string>("mqtt_lidar_topic",mqtt_topics[6],"navigation/lidar");
   	pn.param<int>("port_num", port_num, 1883);
 
 
-    if(robot_id.size() == 7){
-      robot_id = robot_id.substr(0,6) + "0" + robot_id.substr(6,1);
-    }
-
-    MqttROS MyControl(robot_id,host_address,mqtt_topics,port_num);
+    std::size_t pos = robot_id.find("_");
+    robot_id = robot_id.substr(pos+1);
+    robot_id = to_string(stoi(robot_id));
+    
+    MqttROS MyControl(robot_id,host_address,mqtt_topics,port_num,community_id);
 
     MyControl.Manager();
 
