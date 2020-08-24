@@ -186,14 +186,16 @@ void MissionControl::Execute() {
 
 // ABCD EFGH IJKL MNOP QRST UVWX YZ
 int MissionControl::DecisionMaker() {
-  if((ros::Time::now() - last_timer_).toSec() < 0.1) {
-    lte_cmd_.linear.x = 0;
-    lte_cmd_.angular.z = 0;
-  }
-
   if(isJoyControl_) return static_cast<int>(AutoState::JOY);
-  if(isLTEControl_) return static_cast<int>(AutoState::LTE);
   if(isAction_) return static_cast<int>(AutoState::ACTION);
+  if(isLTEControl_) {
+    if((ros::Time::now() - lte_last_timer_).toSec() > 0.1) {
+      lte_cmd_.linear.x = 0;
+      lte_cmd_.angular.z = 0;
+      // cout << "LTE Control Timeout : " << (ros::Time::now() - lte_last_timer_).toSec() << endl;
+    }
+    return static_cast<int>(AutoState::LTE);
+  }
   if(checkMissionStage()){ 
     if(!MySuperviser_.GetAutoMissionState())
       return static_cast<int>(AutoState::NARROW);
@@ -205,7 +207,7 @@ int MissionControl::DecisionMaker() {
 }
 
 void MissionControl::ApplyAction() {
-  double action_time = 2;
+  double action_time = 5;
   if((ros::Time::now() - action_start_timer_).toSec() > action_time) {
     std_msgs::Int32 action_state;
     action_state.data = current_action_index_;
@@ -1143,7 +1145,7 @@ void MissionControl::CmdCallback(const geometry_msgs::Twist::ConstPtr& Input) {
 }
 
 void MissionControl::ControlCallback(const std_msgs::String::ConstPtr& Input) {
-  last_timer_ = ros::Time::now();
+  lte_last_timer_ = ros::Time::now();
   string input_duplicate = Input->data;
   string delimiter = "$";
   string token;

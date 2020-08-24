@@ -177,6 +177,7 @@ private:
 
   int map_number_;
   ros::Time last_timer_;
+  ros::Time lte_last_timer_;
 
   tf::StampedTransform stampedtransform;
 
