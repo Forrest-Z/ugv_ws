@@ -2,9 +2,9 @@ max_linear_velocity 1.2
 max_rotation_velocity 0.8
 
 max_linear_acceleration 0.015
-max_rotation_acceleration 0.01
+max_rotation_acceleration 0.05
 
-max_translational_velocity 1.9
+max_translational_velocity 2
 min_translational_velocity 0.1
 
 controller_linear_scale 1
@@ -28,6 +28,6 @@ buffer_radius 1
 back_safe_radius 0.5
 front_safe_radius 2
 revolute_safe_radius 0.3
-danger_assist_radius 0.5
+danger_assist_radius 0.8
 
 spline_search_grid 4

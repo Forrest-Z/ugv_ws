@@ -110,7 +110,7 @@ geometry_msgs::Twist Executing::ApplyNarrowP(geometry_msgs::Twist Input_cmd){
 
 geometry_msgs::Twist Executing::ApplyNarrowD1(geometry_msgs::Twist Input_cmd){
     geometry_msgs::Twist raw_cmd;
-    if(Input_cmd.linear.x > 1) Input_cmd.linear.x = 2;
+    if(Input_cmd.linear.x > max_linear_velocity_/2) Input_cmd.linear.x = max_linear_velocity_/2;
     raw_cmd.linear.x = Input_cmd.linear.x;
     raw_cmd.angular.z = Input_cmd.angular.z;
     return raw_cmd;

@@ -583,10 +583,6 @@ geometry_msgs::Twist MissionControl::PursuitRRTPathCommand() {
   RRT_refind_ = MySuperviser_.NarrowPlannerRestart(obstacle_in_base_,RRT_check_local,MyPlanner_.costmap_local(),MyTools_.cmd_vel()); //路径上有无障碍物
   
   int init_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter_); //global_sub_goal 是否发生变化
-  // for(int k = 0; k < global_path_pointcloud_.points.size(); k++) {
-  //   cout << "global_path_pointcloud_ : " << global_path_pointcloud_.points[k].x << " , " << global_path_pointcloud_.points[k].y << endl;
-  // }
-  // cout << "init_index ：" << init_index << endl;
   static int last_index = init_index;
   if(last_index != init_index) {
     RRT_refind_ = true;
@@ -746,17 +742,25 @@ void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel,int mission_stat
   if(fabs(Cmd_vel.angular.z) > fabs(max_rotation_velocity_)) Cmd_vel.angular.z = ComputeSign(Cmd_vel.angular.z) * max_rotation_velocity_;
   if(fabs(Cmd_vel.angular.z) < min_translational_velocity_) Cmd_vel.angular.z = 0;
 
-  // Acceleration Limit
-  if((Cmd_vel.linear.x * last_cmd_vel.linear.x) < 0 || Cmd_vel.linear.x == 0) Cmd_vel.linear.x = 0;
+  // Linear acceleration Limit
+  if((Cmd_vel.linear.x * last_cmd_vel.linear.x) < 0) Cmd_vel.linear.x = 0;
   else if(Cmd_vel.linear.x > 0 && Cmd_vel.linear.x < last_cmd_vel.linear.x) {Cmd_vel.linear.x = last_cmd_vel.linear.x - max_linear_acceleration_;}
   else if(fabs(fabs(Cmd_vel.linear.x) - fabs(last_cmd_vel.linear.x)) < max_linear_acceleration_) {Cmd_vel.linear.x = Cmd_vel.linear.x;}
   else if(Cmd_vel.linear.x > last_cmd_vel.linear.x) Cmd_vel.linear.x = last_cmd_vel.linear.x + max_linear_acceleration_;
   else if(Cmd_vel.linear.x < last_cmd_vel.linear.x) Cmd_vel.linear.x = last_cmd_vel.linear.x - max_linear_acceleration_;
 
+  // Angular acceleration limit
+  if((Cmd_vel.angular.z * last_cmd_vel.angular.z) < 0 || Cmd_vel.angular.z == 0) Cmd_vel.angular.z = 0;
+  else if(Cmd_vel.angular.z > 0 && Cmd_vel.angular.z < last_cmd_vel.angular.z) {Cmd_vel.angular.z = last_cmd_vel.angular.z - max_rotation_acceleration_;}
+  else if(fabs(fabs(Cmd_vel.angular.z) - fabs(last_cmd_vel.angular.z)) < max_rotation_acceleration_) {Cmd_vel.angular.z = Cmd_vel.angular.z;}
+  else if(Cmd_vel.angular.z > last_cmd_vel.angular.z) Cmd_vel.angular.z = last_cmd_vel.angular.z + max_rotation_acceleration_;
+  else if(Cmd_vel.angular.z < last_cmd_vel.angular.z) Cmd_vel.angular.z = last_cmd_vel.angular.z - max_rotation_acceleration_;
+
   double velocity_rotation_ratio = max_translational_velocity_ / max_rotation_velocity_;
   double max_moving_rotation_velocity = max_rotation_velocity_ * (velocity_rotation_ratio - fabs(Cmd_vel.angular.z / max_rotation_velocity_));
   if(fabs(Cmd_vel.linear.x) > fabs(max_moving_rotation_velocity)) Cmd_vel.linear.x = ComputeSign(Cmd_vel.linear.x) * max_moving_rotation_velocity;
 
+  // mission state limit
   if(fabs(last_origin_vel.linear.x) < fabs(last_cmd_vel.linear.x)) {
     if(mission_state == static_cast<int>(AutoState::JOY)) {
       if(isJOYscram_) {

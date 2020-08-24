@@ -1,6 +1,6 @@
 resolution 0.05
 origin 0 0
-width 4261
-height 3477
-ratio 0.287604
+width 1400
+height 700
+ratio 1.28571
 
