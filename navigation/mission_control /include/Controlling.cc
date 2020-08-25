@@ -22,7 +22,7 @@
  *     double rotation_scale_       - scale for convert distance to rotation speed        *
  ******************************************************************************************/
 void Controlling::ComputePurePursuitCommand(geometry_msgs::Point32 Goal_Route, geometry_msgs::Point32 Goal_Plan,geometry_msgs::Twist& Pp_command) {
-  double u_turn_speed_scale = 0.01; 
+  double u_turn_speed_scale = 0; 
   double u_turn_rotation_scale = 0.8;
   double rotation_threshold = 0.6;
 

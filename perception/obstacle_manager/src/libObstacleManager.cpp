@@ -8,7 +8,7 @@ ObstacleManager::ObstacleManager():pn("~") {
   scan_sub = n.subscribe("scan",1, &ObstacleManager::SacnCallback,this);
   rviz_click_sub = n.subscribe("/clicked_point",1, &ObstacleManager::ClickpointCallback,this);
 
-  map_obs_pub = n.advertise<sensor_msgs::PointCloud> ("map_obs_points", 1);
+  map_obs_pub = n.advertise<sensor_msgs::PointCloud> ("/map_obs_points", 1);
   scan_str_pub = n.advertise<std_msgs::String> ("from_robot_lidar", 1);
 
   isMapSave_ = false;
@@ -34,7 +34,6 @@ void ObstacleManager::Mission() {
   publishMapObstacle();
   publishScanObstacle();
   publishRvizObstacle();
-
   pointcloud_base_.header.frame_id = "/base_link";
   map_obs_pub.publish(pointcloud_base_);
   pointcloud_base_.points.clear();

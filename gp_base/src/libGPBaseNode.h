@@ -42,7 +42,7 @@ using std::vector;
 using std::to_string;
 using std::list;
 
-const int ROS_RATE_HZ   = 10;
+const int ROS_RATE_HZ   = 5;
 const double PI = 3.14159265359;
 
 const int MAX_16BIT = 65535;

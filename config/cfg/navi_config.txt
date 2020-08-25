@@ -4,7 +4,7 @@ max_rotation_velocity 0.8
 max_linear_acceleration 0.015
 max_rotation_acceleration 0.05
 
-max_translational_velocity 2
+max_translational_velocity 4
 min_translational_velocity 0.1
 
 controller_linear_scale 1

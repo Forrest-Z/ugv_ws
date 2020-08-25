@@ -542,10 +542,11 @@ int Supervising::AstarSuperviseDecision(sensor_msgs::PointCloud obstacle_in_base
             if(danger){
                 return static_cast<int>(AUTO::P);  
             }else if(!plan_state){
-                if(!buffer){
+
+                if(!front_safe){
                     return static_cast<int>(AUTO::D1); 
-                }else if(buffer){
-                    return static_cast<int>(AUTO::P); 
+                }else if(front_safe){
+                    return static_cast<int>(AUTO::AUTO); 
                 }
             }else if(danger_assist){
                 return static_cast<int>(AUTO::D2); 
@@ -646,8 +647,10 @@ int Supervising::AstarSuperviseDecision(sensor_msgs::PointCloud obstacle_in_base
                 }else if(revolute_safe){
                     return static_cast<int>(AUTO::P);
                 }
-            }else if(!plan_state){    
-                return static_cast<int>(AUTO::D1);               
+            }else if(!plan_state){  
+                if(!front_safe)  
+                    return static_cast<int>(AUTO::D1);   
+                else return static_cast<int>(AUTO::AUTO);          
             }else{
                 return static_cast<int>(AUTO::AUTO);
             }           

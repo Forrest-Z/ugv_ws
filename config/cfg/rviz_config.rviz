@@ -9,15 +9,15 @@ Panels:
         - /Map1/Position1
         - /Robot_11
         - /Map4
-      Splitter Ratio: 0.4722222089767456
-    Tree Height: 627
+      Splitter Ratio: 0.472222209
+    Tree Height: 674
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
     Expanded:
       - /2D Nav Goal1
     Name: Tool Properties
-    Splitter Ratio: 0.5886790156364441
+    Splitter Ratio: 0.588679016
   - Class: rviz/Views
     Expanded:
       - /Current View1
@@ -28,8 +28,6 @@ Panels:
     Name: Time
     SyncMode: 0
     SyncSource: Predict_Path
-Preferences:
-  PromptSaveOnExit: true
 Toolbars:
   toolButtonStyle: 2
 Visualization Manager:
@@ -68,7 +66,7 @@ Visualization Manager:
       Unreliable: false
       Use Timestamp: false
       Value: true
-    - Alpha: 0.699999988079071
+    - Alpha: 0.699999988
       Class: rviz/Map
       Color Scheme: costmap
       Draw Behind: false
@@ -78,7 +76,7 @@ Visualization Manager:
       Unreliable: false
       Use Timestamp: false
       Value: true
-    - Alpha: 0.699999988079071
+    - Alpha: 0.699999988
       Class: rviz/Map
       Color Scheme: costmap
       Draw Behind: false
@@ -129,7 +127,7 @@ Visualization Manager:
           Queue Size: 10
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.10000000149011612
+          Size (m): 0.100000001
           Style: Points
           Topic: /map_obs_points
           Unreliable: false
@@ -159,7 +157,7 @@ Visualization Manager:
           Queue Size: 10
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.05000000074505806
+          Size (m): 0.0500000007
           Style: Flat Squares
           Topic: /pred_path
           Unreliable: false
@@ -189,7 +187,7 @@ Visualization Manager:
           Queue Size: 10
           Selectable: true
           Size (Pixels): 12
-          Size (m): 0.4000000059604645
+          Size (m): 0.400000006
           Style: Spheres
           Topic: /global_path
           Unreliable: false
@@ -219,7 +217,7 @@ Visualization Manager:
           Queue Size: 10
           Selectable: true
           Size (Pixels): 12
-          Size (m): 0.10000000894069672
+          Size (m): 0.100000009
           Style: Spheres
           Topic: /trace_back
           Unreliable: false
@@ -249,7 +247,7 @@ Visualization Manager:
           Queue Size: 10
           Selectable: true
           Size (Pixels): 12
-          Size (m): 0.30000001192092896
+          Size (m): 0.300000012
           Style: Spheres
           Topic: /global_goal
           Unreliable: false
@@ -279,18 +277,18 @@ Visualization Manager:
           Queue Size: 1
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.05000000074505806
+          Size (m): 0.0500000007
           Style: Flat Squares
           Topic: /local_safe
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
           Value: true
-        - Alpha: 0.8999999761581421
+        - Alpha: 0.899999976
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
-            Max Value: 4.00943660736084
-            Min Value: 3.9999899864196777
+            Max Value: 4.00943661
+            Min Value: 3.99998999
             Value: true
           Axis: Z
           Channel Name: intensity
@@ -309,7 +307,7 @@ Visualization Manager:
           Queue Size: 10
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.10000000149011612
+          Size (m): 0.100000001
           Style: Spheres
           Topic: /local_best
           Unreliable: false
@@ -318,7 +316,7 @@ Visualization Manager:
           Value: true
       Enabled: true
       Name: Robot_1
-    - Alpha: 0.4000000059604645
+    - Alpha: 0.400000006
       Class: rviz/Map
       Color Scheme: map
       Draw Behind: false
@@ -333,11 +331,11 @@ Visualization Manager:
       Class: rviz/Path
       Color: 25; 255; 0
       Enabled: true
-      Head Diameter: 0.30000001192092896
-      Head Length: 0.20000000298023224
-      Length: 0.30000001192092896
+      Head Diameter: 0.300000012
+      Head Length: 0.200000003
+      Length: 0.300000012
       Line Style: Billboards
-      Line Width: 0.05000000074505806
+      Line Width: 0.0500000007
       Name: Path
       Offset:
         X: 0
@@ -345,9 +343,9 @@ Visualization Manager:
         Z: 0
       Pose Color: 255; 85; 255
       Pose Style: None
-      Radius: 0.029999999329447746
-      Shaft Diameter: 0.10000000149011612
-      Shaft Length: 0.10000000149011612
+      Radius: 0.0299999993
+      Shaft Diameter: 0.100000001
+      Shaft Length: 0.100000001
       Topic: /RRT_path
       Unreliable: false
       Value: true
@@ -356,11 +354,11 @@ Visualization Manager:
       Class: rviz/Path
       Color: 170; 0; 0
       Enabled: true
-      Head Diameter: 0.30000001192092896
-      Head Length: 0.20000000298023224
-      Length: 0.30000001192092896
+      Head Diameter: 0.300000012
+      Head Length: 0.200000003
+      Length: 0.300000012
       Line Style: Billboards
-      Line Width: 0.05000000074505806
+      Line Width: 0.0500000007
       Name: Path
       Offset:
         X: 0
@@ -368,9 +366,9 @@ Visualization Manager:
         Z: 0
       Pose Color: 255; 85; 255
       Pose Style: None
-      Radius: 0.029999999329447746
-      Shaft Diameter: 0.10000000149011612
-      Shaft Length: 0.10000000149011612
+      Radius: 0.0299999993
+      Shaft Diameter: 0.100000001
+      Shaft Length: 0.100000001
       Topic: /RRT_bezier_path
       Unreliable: false
       Value: true
@@ -397,7 +395,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.05000000074505806
+      Size (m): 0.0500000007
       Style: Flat Squares
       Topic: /RRT_tree
       Unreliable: false
@@ -427,7 +425,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.05000000074505806
+      Size (m): 0.0500000007
       Style: Flat Squares
       Topic: /RRT_pointcloud
       Unreliable: false
@@ -457,7 +455,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.05000000074505806
+      Size (m): 0.0500000007
       Style: Flat Squares
       Topic: /Astar_pointcloud
       Unreliable: false
@@ -465,28 +463,28 @@ Visualization Manager:
       Use rainbow: true
       Value: true
     - Alpha: 1
-      Arrow Length: 0.30000001192092896
-      Axes Length: 0.30000001192092896
-      Axes Radius: 0.009999999776482582
+      Arrow Length: 0.300000012
+      Axes Length: 0.300000012
+      Axes Radius: 0.00999999978
       Class: rviz/PoseArray
       Color: 255; 25; 0
       Enabled: true
-      Head Length: 0.07000000029802322
-      Head Radius: 0.029999999329447746
+      Head Length: 0.0700000003
+      Head Radius: 0.0299999993
       Name: PoseArray
-      Shaft Length: 0.23000000417232513
-      Shaft Radius: 0.009999999776482582
+      Shaft Length: 0.230000004
+      Shaft Radius: 0.00999999978
       Shape: Arrow (Flat)
       Topic: /particlecloud
       Unreliable: false
       Value: true
-    - Alpha: 0.699999988079071
+    - Alpha: 0.699999988
       Class: rviz/Map
       Color Scheme: costmap
       Draw Behind: false
       Enabled: true
       Name: Map
-      Topic: /map_show
+      Topic: /map_navi
       Unreliable: false
       Use Timestamp: false
       Value: true
@@ -505,10 +503,7 @@ Visualization Manager:
     - Class: rviz/FocusCamera
     - Class: rviz/Measure
     - Class: rviz/SetInitialPose
-      Theta std deviation: 0.2617993950843811
       Topic: /initialpose
-      X std deviation: 0.5
-      Y std deviation: 0.5
     - Class: rviz/SetGoal
       Topic: /goal
     - Class: rviz/PublishPoint
@@ -517,37 +512,37 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: 3.125000238418579
+      Angle: 3.12500024
       Class: rviz/TopDownOrtho
       Enable Stereo Rendering:
-        Stereo Eye Separation: 0.05999999865889549
+        Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Invert Z Axis: false
       Name: Current View
-      Near Clip Distance: 0.009999999776482582
-      Scale: -6.961694240570068
+      Near Clip Distance: 0.00999999978
+      Scale: -8.21821117
       Target Frame: base_link
       Value: TopDownOrtho (rviz)
-      X: -5.171519756317139
-      Y: 0.10873578488826752
+      X: -20.3322105
+      Y: 4.34939671
     Saved: ~
 Window Geometry:
   Displays:
-    collapsed: true
-  Height: 1025
-  Hide Left Dock: true
+    collapsed: false
+  Height: 1056
+  Hide Left Dock: false
   Hide Right Dock: true
-  QMainWindow State: 000000ff00000000fd00000004000000000000016a000003a7fc0200000008fb0000001200530065006c0065006300740069006f006e0000000028000001ba0000005c00fffffffb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb0000001e0054006f006f006c002000500072006f0070006500720074006900650073000000003d000000a30000005c00fffffffb000000100044006900730070006c00610079007300000000e6000002fe000000c900fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f000003a7fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003d000003a7000000a400fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000003a60000003efc0100000002fb0000000800540069006d00650000000000000003a6000002eb00fffffffb0000000800540069006d00650100000000000004500000000000000000000003a3000003a700000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd00000004000000000000016a000003dafc0200000008fb0000001200530065006c0065006300740069006f006e0000000028000001ba0000006100fffffffb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000028000000a30000006100fffffffb000000100044006900730070006c00610079007301000000d100000331000000d700fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f000003a7fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003d000003a7000000ad00fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000003a60000003efc0100000002fb0000000800540069006d00650000000000000003a60000030000fffffffb0000000800540069006d00650100000000000004500000000000000000000005cf000003da00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:
     collapsed: false
   Tool Properties:
-    collapsed: true
+    collapsed: false
   Views:
     collapsed: true
-  Width: 931
-  X: 989
-  Y: 27
+  Width: 1855
+  X: 65
+  Y: 24

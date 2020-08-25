@@ -50,7 +50,7 @@ void MessageManager::Execute() {
   ros::Time heartbeat_timer = ros::Time::now();
   ros::Time realtime_timer = ros::Time::now();
   double heartbeat_pause = 1;
-  double realtime_pause = 0.1;
+  double realtime_pause = 0;
   while (ros::ok()) {
   	ros::spinOnce();
     loop_rate.sleep();

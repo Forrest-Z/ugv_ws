@@ -22,12 +22,12 @@
 
   <node pkg="rviz" type="rviz" name="rviz_navi_sim" output="screen" args="-d $(find config)/cfg/rviz_config.rviz" />
 
-  <param name="initX" type="double" value="90.158" />
+  <!-- <param name="initX" type="double" value="90.158" />
   <param name="initY" type="double" value="-118.117" />
   <param name="initYaw" type="double" value="-1.57" />
 
   <node pkg="rviz_manager" type="rviz_manager_node" name="rviz_manager_node" output="screen"/>
 
-  <node pkg="tf" type="static_transform_publisher" name="fake_local_map_odom_sim" args="0 0 0 1.57 0 0 /map /odom 100" />
+  <node pkg="tf" type="static_transform_publisher" name="fake_local_map_odom_sim" args="0 0 0 1.57 0 0 /map /odom 100" /> -->
 
 </launch>
