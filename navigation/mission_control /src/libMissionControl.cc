@@ -307,6 +307,10 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
     }
   }
 
+  double rotation_threshold = 0.6;
+  double faceing_angle = atan2(global_goal_in_local.y,global_goal_in_local.x);
+
+  
   int path_lookahead_index;
   geometry_msgs::Twist controller_cmd;
 
@@ -335,6 +339,8 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
     path_lookahead_index = MyPlanner_.path_best().points.size()/lookahead_local_scale_;
     plan_state_ = true;
   }
+
+  if(fabs(faceing_angle) > rotation_threshold) plan_state_ = true;
 
   local_sub_goal_ = MyPlanner_.path_best().points[path_lookahead_index];
   MyController_.ComputePurePursuitCommand(global_goal_in_local,local_sub_goal_,controller_cmd);
@@ -536,6 +542,11 @@ geometry_msgs::Twist MissionControl::PursuitAstarPathCommand() {
     vehicle_run_state_pub.publish(vehicle_run_state_3rd_);
     return controller_cmd; 
   }
+
+  double rotation_threshold = 0.6;
+  double faceing_angle = atan2(Astar_sub_goal_local.y,Astar_sub_goal_local.x);
+
+  
   int path_lookahead_index;
   double search_range = MyPlanner_.map_window_radius();
   double search_range_min = 2;
@@ -561,6 +572,8 @@ geometry_msgs::Twist MissionControl::PursuitAstarPathCommand() {
     path_lookahead_index = MyPlanner_.path_best().points.size()/lookahead_local_scale_;
     plan_state_ = true;
   }
+
+  if(fabs(faceing_angle) > rotation_threshold) plan_state_ = true;
 
   local_sub_goal_ = MyPlanner_.path_best().points[path_lookahead_index];
   MyController_.ComputePurePursuitCommand(Astar_sub_goal_local,local_sub_goal_,controller_cmd);

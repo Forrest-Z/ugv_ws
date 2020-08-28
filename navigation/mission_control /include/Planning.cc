@@ -667,7 +667,8 @@ void Planning::SetAstarLocalCostmap(nav_msgs::OccupancyGrid& Costmap,sensor_msgs
     signed char obstacle_occupancy = 50;
     int costmap_size = Costmap.info.width * Costmap.info.height;
     for (int i = 0; i < Obstacle.points.size(); ++i) {
-        if(hypot(Obstacle.points[i].x,Obstacle.points[i].y) > Astar_local_map_window_radius_) continue;
+        if(fabs(Obstacle.points[i].x) >= Astar_local_map_window_radius_ || 
+          fabs(Obstacle.points[i].y) >= Astar_local_map_window_radius_) continue;
         if(hypot(Obstacle.points[i].x,Obstacle.points[i].y) < 0.2) continue;
         int obstacle_in_map = ConvertCartesianToLocalOccupany(Costmap,Obstacle.points[i]);
 		    geometry_msgs::Point32 ptr = ConvertCartesianToAstarArray(Obstacle.points[i]);
@@ -780,8 +781,13 @@ AstarPoint *Planning::findAstarPath(AstarPoint &startPoint, AstarPoint &endPoint
 		return NULL;
 	}
 	Astar_open_list_.push_back(new AstarPoint(startPoint.x,startPoint.y)); 
-
+  int Astar_depth_search = 0;
+  
 	while (!Astar_open_list_.empty()){
+    Astar_depth_search++;
+    // cout << "Astar search num : " << Astar_depth_search << endl;
+    if(Astar_depth_search >= Astar_depth_limit_) return NULL;
+
 		auto curPoint = getAstarLeastFpoint(); 
 		Astar_open_list_.remove(curPoint); 
 		Astar_close_list_.push_back(curPoint);

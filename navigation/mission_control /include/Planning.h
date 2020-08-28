@@ -233,6 +233,7 @@ private:
 	const double Astar_cost_1 = 0.4; //直移一格消耗
 	const double Astar_cost_2 = 0.56; //斜移一格消耗
 	const int INFINITE = 1000;
+	const int Astar_depth_limit_ = 2000;
 
 	int Astar_plan_num_;
     double Astar_local_map_window_radius_;

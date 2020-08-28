@@ -376,10 +376,12 @@ private:
       cout << "Update Costmap Failed" << endl;
       return false;
     }
+
     if(!MyPlanner_.UpdateAstarCostmap(obstacle_in_base_)) {
       cout << "Update Astar Costmap Failed" << endl;
       return false;
     }
+
     local_costmap_pub.publish(MyPlanner_.costmap_local());
     if(!CheckNavigationState()) {
       return false;

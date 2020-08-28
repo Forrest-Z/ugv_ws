@@ -12,9 +12,9 @@ controller_rotation_scale 2
 
 vehicle_radius 0.3
 
-Astar_local_map_window_radius 25
+Astar_local_map_window_radius 30
 Astar_local_costmap_resolution 0.5
-RRT_iteration 5000
+RRT_iteration 1000
 RRT_extend_step 0.2
 RRT_search_plan_num 1
 RRT_expand_size 3
