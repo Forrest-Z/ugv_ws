@@ -170,6 +170,9 @@ bool Planning::SelectBestPath(vector<vector<sensor_msgs::PointCloud>> Path_set_2
     }
   }
 
+  double goal_plan_yaw = atan2(Goal.y,Goal.x);
+  if(fabs(goal_plan_yaw) > path_swap_range_/2) return false;
+
   if(candidate_path_index.size() != 1) {
     double min_distance = DBL_MAX;
     for (int i = 0; i < candidate_path_index.size(); ++i) {
@@ -188,7 +191,6 @@ bool Planning::SelectBestPath(vector<vector<sensor_msgs::PointCloud>> Path_set_2
       }
     }
   }
-
   last_index = max_index;
   path_best_ = Path_set_2d[max_index][max_size/2];
   return true;
@@ -672,7 +674,9 @@ void Planning::SetAstarLocalCostmap(nav_msgs::OccupancyGrid& Costmap,sensor_msgs
         if(hypot(Obstacle.points[i].x,Obstacle.points[i].y) < 0.2) continue;
         int obstacle_in_map = ConvertCartesianToLocalOccupany(Costmap,Obstacle.points[i]);
 		    geometry_msgs::Point32 ptr = ConvertCartesianToAstarArray(Obstacle.points[i]);
-		    Astar_costmap_array_[ptr.x][ptr.y] = obstacle_occupancy;
+        // printf("ptr : %d , %d",static_cast<int>(ptr.x),static_cast<int>(ptr.y));
+        if(static_cast<int>(ptr.x) < Costmap.info.width && static_cast<int>(ptr.x) < Costmap.info.height)
+		      Astar_costmap_array_[static_cast<int>(ptr.x)][static_cast<int>(ptr.y)] = obstacle_occupancy;
         if (obstacle_in_map < 0 || obstacle_in_map > costmap_size) continue;
         Costmap.data[obstacle_in_map] = obstacle_occupancy;
     }
@@ -1059,7 +1063,7 @@ nav_msgs::Path Planning::getRRTPlan(const geometry_msgs::Point32 start, const ge
   for(int search_times = 0;search_times < RRT_search_plan_num_;search_times++) {
     RRTInitialRoot(start);
 
-    if(BuildRRT(goal)) {
+    if(BuildRRT(start,goal)) {
       ROS_INFO("RRT plan was found !");
       SetRRTPath();
       SetRRTTree();
@@ -1076,12 +1080,14 @@ nav_msgs::Path Planning::getRRTPlan(const geometry_msgs::Point32 start, const ge
   return RRT_Curve_path_;
 }
 
-bool Planning::BuildRRT(geometry_msgs::Point32 goal) {
+bool Planning::BuildRRT(geometry_msgs::Point32 start,geometry_msgs::Point32 goal) {
   for(int i = 0; i < RRT_iteration_; i++){
     RRTProbSample(goal);
     for(int j = 0; j < RRT_current_sampling_.size(); j++){
       if(RRTExtendNearestNode(RRT_current_sampling_[j],goal))
         return true;
+      else if(RRTEndAhead(start,goal,RRT_nodes_.back())) 
+        return false;
     } 
   }
   return false;
@@ -1132,24 +1138,24 @@ bool Planning::RRTExtendNearestNode(RRTPointCell random,geometry_msgs::Point32 g
     double path_length = DBL_MAX;
     for(int i = 0; i < RRT_nodes_.size(); i++)
     {
-        if(hypot(RRT_nodes_[i]->cell.x - random.x, RRT_nodes_[i]->cell.y - random.y) <= path_length)
-        {
-            path_length = hypot(RRT_nodes_[i]->cell.x - random.x, RRT_nodes_[i]->cell.y - random.y);
-            j = i;
-        }
+      if(hypot(RRT_nodes_[i]->cell.x - random.x, RRT_nodes_[i]->cell.y - random.y) <= path_length)
+      {
+        path_length = hypot(RRT_nodes_[i]->cell.x - random.x, RRT_nodes_[i]->cell.y - random.y);
+        j = i;
+      }
     }
 
     RRTTreeNode* node = new RRTTreeNode;
     if(RRTExtendSingleStep(RRT_nodes_[j],node,random,goal))
     {
-        node->father = RRT_nodes_[j];
-        RRT_nodes_[j]->children.push_back(node);
-        RRT_nodes_.push_back(node);
-        if(RRTGoalReached(node,goal))
-        {
-            RRT_goal_node_ = node;
-            return true;
-        }
+      node->father = RRT_nodes_[j];
+      RRT_nodes_[j]->children.push_back(node);
+      RRT_nodes_.push_back(node);
+      if(RRTGoalReached(node,goal))
+      {
+          RRT_goal_node_ = node;
+          return true;
+      }
     }
     return false;
 }
@@ -1184,14 +1190,12 @@ void Planning::RRTProbSample(geometry_msgs::Point32 goal) {
 }
  
 void Planning::RRTAddGoalOrientNode(geometry_msgs::Point32 goal) {
-    RRT_current_sampling_.clear();
-    for(int i = 0;i < RRT_sample_num_;i++) {
-        RRTPointCell p;
-        //这里我们可以将撒的点直接设在终点，也可以在终点附近有一个高斯分布
-        p.x = goal.x;// + (RRT_rd_() % 200 - 100) * 0.2;
-        p.y = goal.y;// + (RRT_rd_() % 200 - 100) * 0.2;
-        RRT_current_sampling_.push_back(p);
-    }
+  RRT_current_sampling_.clear();
+  RRTPointCell p;
+  //这里我们可以将撒的点直接设在终点，也可以在终点附近有一个高斯分布
+  p.x = goal.x;// + (RRT_rd_() % 200 - 100) * 0.2;
+  p.y = goal.y;// + (RRT_rd_() % 200 - 100) * 0.2;
+  RRT_current_sampling_.push_back(p);
 }
  
 void Planning::RRTAddRandomNode() {
@@ -1310,3 +1314,45 @@ nav_msgs::Path Planning::ComputeBSplineCurve(nav_msgs::Path path) {
 
     return temp_path;
 }
+
+bool Planning::RRTEndAhead(geometry_msgs::Point32 start_point,geometry_msgs::Point32 goal_point,RRTTreeNode* grow_point) {
+  static int index;
+  bool end_ahead;
+  if(history_grow_projection_que_.empty()) history_grow_projection_que_.push(-9999);
+
+  double start_grow_length = hypot(grow_point->cell.y - start_point.y,grow_point->cell.x - start_point.x);
+  double start_goal_length = hypot(goal_point.y - start_point.y,goal_point.x - start_point.x);
+  double grow_goal_length = hypot(goal_point.y - grow_point->cell.y,goal_point.x - grow_point->cell.x);
+
+  double costheta = (pow(start_grow_length,2) + pow(start_goal_length,2) - pow(grow_goal_length,2)) / (2 * start_grow_length * start_goal_length);
+
+  // 生长点在起始点与终点连线上的投影，正负表方向
+  double grow_projection_distance = start_grow_length * costheta;
+
+  // 查看priority_que，并重新push
+  // vector<double> temp_que;
+  // while(!history_grow_projection_que_.empty()) {
+  //   temp_que.push_back(history_grow_projection_que_.top());
+  //   cout << history_grow_projection_que_.top() << " , ";
+  //   history_grow_projection_que_.pop(); 
+  // }
+  // cout << endl;
+  // for(int i = 0; i < temp_que.size(); i++) {
+  //   history_grow_projection_que_.push(temp_que[i]);
+  // }
+
+  if(grow_projection_distance <= history_grow_projection_que_.top()) index++;
+  else index = 0;
+
+  if(index >= 100) {
+    end_ahead = true;
+    ClearHistoryGrowQue();
+  }
+  else end_ahead = false;
+  history_grow_projection_que_.push(grow_projection_distance);
+
+  return end_ahead;
+
+} 
+
+

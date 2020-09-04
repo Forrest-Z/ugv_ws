@@ -107,6 +107,7 @@ private:
   double max_rotation_velocity_;
   double max_linear_acceleration_;
   double max_rotation_acceleration_;
+  double temp_max_linear_acceleration_;
 
   double max_translational_velocity_;
   double min_translational_velocity_;
@@ -376,12 +377,12 @@ private:
       cout << "Update Costmap Failed" << endl;
       return false;
     }
-
+    // printf("11111111111\n");
     if(!MyPlanner_.UpdateAstarCostmap(obstacle_in_base_)) {
       cout << "Update Astar Costmap Failed" << endl;
       return false;
     }
-
+    // printf("2222222222222\n");
     local_costmap_pub.publish(MyPlanner_.costmap_local());
     if(!CheckNavigationState()) {
       return false;

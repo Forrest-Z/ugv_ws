@@ -98,11 +98,13 @@ bool MissionControl::Initialization() {
   MyController_.set_speed_scale(controller_linear_scale_);
   MyController_.set_rotation_scale(controller_rotation_scale_);
   MyExecuter_.SetMaxLinearVel(max_linear_velocity_);
+  MyController_.setMaxLinearAcceleration(max_linear_acceleration_);
   
   global_path_pointcloud_.points.clear();
 
   narrow_command_stage_ = 0;
   lookahead_RRT_scale_ = 0.9;
+  temp_max_linear_acceleration_ = max_linear_acceleration_;
 
   RRT_refind_ = false;
 
@@ -284,7 +286,7 @@ void MissionControl::ApplyNarrowControl(int mission_state) {
 }
 
 geometry_msgs::Twist MissionControl::getAutoCommand() {
-  
+  ros::Time last_auto_time = ros::Time::now();
   int global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter_);
   global_sub_goal_ = global_path_pointcloud_.points[global_goal_index];
 
@@ -341,6 +343,8 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
   }
 
   if(fabs(faceing_angle) > rotation_threshold) plan_state_ = true;
+  ros::Time now_auto_time = ros::Time::now();
+  cout << "spline plan search time : " << (now_auto_time.nsec - last_auto_time.nsec) * pow(10,-6) << "ms" << endl;
 
   local_sub_goal_ = MyPlanner_.path_best().points[path_lookahead_index];
   MyController_.ComputePurePursuitCommand(global_goal_in_local,local_sub_goal_,controller_cmd);
@@ -351,8 +355,15 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
 geometry_msgs::Twist MissionControl::getNarrowCommand() {
   //切换规划器时 narrow_command_stage_ 重新复位为0 ,需要在上层决策器中重置。
   if(narrow_command_stage_ == 0) {
+    ros::Time last_Astar_time = ros::Time::now();
     sensor_msgs::PointCloud Astar_pointcloud_local = NarrowAstarPathfind();
+    ros::Time now_Astar_time = ros::Time::now();
+    cout << "Astar plan time : " << (now_Astar_time.nsec - last_Astar_time.nsec) * pow(10,-6) << "ms" << endl;
+
+    ros::Time last_RRT_time = ros::Time::now();
     sensor_msgs::PointCloud RRT_pointcloud_local = NarrowRRTPathfind();
+    ros::Time now_RRT_time = ros::Time::now();
+    cout << "RRT plan time : " << (now_RRT_time.nsec - last_RRT_time.nsec) * pow(10,-6) << "ms" << endl;
     Astar_pointcloud_global_.points.clear();
     for(int i = Astar_pointcloud_local.points.size()-1; i >= 0; i--) {
       if(i == 0 || i % 5 == 0 || i == Astar_pointcloud_local.points.size()-1) {
@@ -386,7 +397,11 @@ geometry_msgs::Twist MissionControl::getNarrowCommand() {
     if(isAstarPathfind_) controller_cmd = PursuitAstarPathCommand();
     else {
       if(RRT_refind_) {
+        ros::Time last_RRT_time = ros::Time::now();
         sensor_msgs::PointCloud RRT_pointcloud_local = NarrowRRTPathfind();
+        ros::Time now_RRT_time = ros::Time::now();
+        cout << "RRT plan time : " << (now_RRT_time.nsec - last_RRT_time.nsec) * pow(10,-6) << "ms" << endl;
+
         RRT_pointcloud_global_.points.clear();
         for(int j = 0; j < RRT_pointcloud_local.points.size(); j++) {
           geometry_msgs::Point32 temp_RRT_point_global;
@@ -815,6 +830,11 @@ int MissionControl::FindCurrentGoalRoute(sensor_msgs::PointCloud Path,geometry_m
 }
 
 void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel,int mission_state) {
+  if(mission_state == static_cast<int>(AutoState::AUTO))
+    MyController_.getMaxLinearAcceleration(max_linear_acceleration_);
+  else
+    max_linear_acceleration_ = temp_max_linear_acceleration_;
+
   static geometry_msgs::Twist last_cmd_vel;
   static geometry_msgs::Twist last_run_vel;
   static geometry_msgs::Twist last_origin_vel;

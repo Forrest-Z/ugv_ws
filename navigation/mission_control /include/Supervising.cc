@@ -181,15 +181,15 @@ void Supervising::AutoObstaclePercept(sensor_msgs::PointCloud obstacle_in_base, 
     else if(first_quadrant_num == fourth_quadrant_num) back_turn = 0;
     
     
-    cout << "danger_num :" << danger_num << endl;
-    cout << "route_outside_num :" << route_outside_num << endl;
-    cout << "predict_outside_num :" << predict_outside_num << endl;
-    cout << "buffer_num :" << buffer_num << endl;
-    cout << "front_safe_num :" << front_safe_num << endl;
-    cout << "first_quadrant_num :" << first_quadrant_num << endl;
-    cout << "fourth_quadrant_num :" << fourth_quadrant_num << endl;
-    cout << "revolute_safe_num :" << revolute_safe_num << endl;
-    cout << "danger_assist_num :" << danger_assist_num << endl;
+    // cout << "danger_num :" << danger_num << endl;
+    // cout << "route_outside_num :" << route_outside_num << endl;
+    // cout << "predict_outside_num :" << predict_outside_num << endl;
+    // cout << "buffer_num :" << buffer_num << endl;
+    // cout << "front_safe_num :" << front_safe_num << endl;
+    // cout << "first_quadrant_num :" << first_quadrant_num << endl;
+    // cout << "fourth_quadrant_num :" << fourth_quadrant_num << endl;
+    // cout << "revolute_safe_num :" << revolute_safe_num << endl;
+    // cout << "danger_assist_num :" << danger_assist_num << endl;
 
     auto_area_state_[0] = danger_num;
     auto_area_state_[1] = danger_assist_num;
@@ -264,14 +264,14 @@ int Supervising::AutoSuperviseDecision(sensor_msgs::PointCloud obstacle_in_base,
         attempt_times++;
     }
 
-    cout << "===================================" << endl;
-    // cout << "Input_cmd_linear_queue[" << Input_cmd_linear_queue[0] << "," << Input_cmd_linear_queue[1] << "," << Input_cmd_linear_queue[2]<< ","  
-    //                                                                                         << Input_cmd_linear_queue[3] << "]" << endl;
-    // cout << "Input_cmd_angular_queue[" << Input_cmd_angular_queue[0] << "," << Input_cmd_angular_queue[1] << "," << Input_cmd_angular_queue[2]<< ","  
-    //                                                                                         << Input_cmd_angular_queue[3] << "]" << endl;                                                                                        
-    cout << "index_ :" << index_ << endl;
-    cout << "attempt_times :" << attempt_times << endl;
-    cout << "traceback_index :" << traceback_index << endl;
+    // cout << "===================================" << endl;
+    // // cout << "Input_cmd_linear_queue[" << Input_cmd_linear_queue[0] << "," << Input_cmd_linear_queue[1] << "," << Input_cmd_linear_queue[2]<< ","  
+    // //                                                                                         << Input_cmd_linear_queue[3] << "]" << endl;
+    // // cout << "Input_cmd_angular_queue[" << Input_cmd_angular_queue[0] << "," << Input_cmd_angular_queue[1] << "," << Input_cmd_angular_queue[2]<< ","  
+    // //                                                                                         << Input_cmd_angular_queue[3] << "]" << endl;                                                                                        
+    // cout << "index_ :" << index_ << endl;
+    // cout << "attempt_times :" << attempt_times << endl;
+    // cout << "traceback_index :" << traceback_index << endl;
 
     AutoObstaclePercept(obstacle_in_base,Input_cmd);
 
@@ -479,14 +479,14 @@ int Supervising::AstarSuperviseDecision(sensor_msgs::PointCloud obstacle_in_base
         attempt_times++;
     }
 
-    cout << "===================================" << endl;
-    // cout << "Input_cmd_linear_queue[" << Input_cmd_linear_queue[0] << "," << Input_cmd_linear_queue[1] << "," << Input_cmd_linear_queue[2]<< ","  
-    //                                                                                         << Input_cmd_linear_queue[3] << "]" << endl;
-    // cout << "Input_cmd_angular_queue[" << Input_cmd_angular_queue[0] << "," << Input_cmd_angular_queue[1] << "," << Input_cmd_angular_queue[2]<< ","  
-    //                                                                                         << Input_cmd_angular_queue[3] << "]" << endl;                                                                                        
-    cout << "index_ :" << index_ << endl;
-    cout << "attempt_times :" << attempt_times << endl;
-    cout << "traceback_index :" << traceback_index << endl;
+    // cout << "===================================" << endl;
+    // // cout << "Input_cmd_linear_queue[" << Input_cmd_linear_queue[0] << "," << Input_cmd_linear_queue[1] << "," << Input_cmd_linear_queue[2]<< ","  
+    // //                                                                                         << Input_cmd_linear_queue[3] << "]" << endl;
+    // // cout << "Input_cmd_angular_queue[" << Input_cmd_angular_queue[0] << "," << Input_cmd_angular_queue[1] << "," << Input_cmd_angular_queue[2]<< ","  
+    // //                                                                                         << Input_cmd_angular_queue[3] << "]" << endl;                                                                                        
+    // cout << "index_ :" << index_ << endl;
+    // cout << "attempt_times :" << attempt_times << endl;
+    // cout << "traceback_index :" << traceback_index << endl;
 
     AutoObstaclePercept(obstacle_in_base,Input_cmd);
 
@@ -702,9 +702,9 @@ void Supervising::NarrowObstaclePercept(sensor_msgs::PointCloud obstacle_in_base
     else if(narrow_first_quadrant_num < narrow_fourth_quadrant_num) local_turn = 2;
     else local_turn = 0;
        
-    cout << "narrow_danger_num :" << narrow_danger_num << endl;
-    cout << "narrow_first_quadrant_num :" << narrow_first_quadrant_num << endl;
-    cout << "narrow_fourth_quadrant_num :" << narrow_fourth_quadrant_num << endl;
+    // cout << "narrow_danger_num :" << narrow_danger_num << endl;
+    // cout << "narrow_first_quadrant_num :" << narrow_first_quadrant_num << endl;
+    // cout << "narrow_fourth_quadrant_num :" << narrow_fourth_quadrant_num << endl;
 
     danger_obstacle_state_ = narrow_danger;
 

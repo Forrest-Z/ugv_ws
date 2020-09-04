@@ -20,6 +20,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <tf/transform_datatypes.h>
 #include <random>
+#include <queue>
 
 using std::string;
 using std::cout;
@@ -27,6 +28,7 @@ using std::endl;
 using std::vector;
 using std::list;
 using std::random_device;
+using std::priority_queue;
 
 
 struct CandidatePixel {
@@ -75,7 +77,7 @@ public:
 		RRT_iteration_ 						= 5000;
 		RRT_sample_num_ 					= 5;
 		RRT_extend_step_ 					= 0.2;
-		RRT_threhold_ 						= 0.5;
+		RRT_threhold_ 						= 1;
 		RRT_probability_ 					= 0.8;
 		RRT_search_plan_num_ 				= 1;
 		RRT_expand_size_ 					= 2;
@@ -155,7 +157,7 @@ public:
 	nav_msgs::Path getRRTPlan(const geometry_msgs::Point32 start, const geometry_msgs::Point32 goal);
 	void RRTExpandCostmap(nav_msgs::OccupancyGrid &Grid);
 	void RRTInitialRoot(const geometry_msgs::Point32 start);
-	bool BuildRRT(geometry_msgs::Point32 goal);
+	bool BuildRRT(geometry_msgs::Point32 start,geometry_msgs::Point32 goal);
 	bool RRTExtendNearestNode(RRTPointCell random,geometry_msgs::Point32 goal);
 	bool RRTExtendSingleStep(const RRTTreeNode* rrtnode, RRTTreeNode* &node, const RRTPointCell random, geometry_msgs::Point32 goal);
 	void RRTProbSample(geometry_msgs::Point32 goal);
@@ -164,6 +166,7 @@ public:
 	bool RRTGoalReached(const RRTTreeNode* nearestNode, geometry_msgs::Point32 goal);
 	void SetRRTPath();
 	void SetRRTTree();
+	bool RRTEndAhead(geometry_msgs::Point32 start_point,geometry_msgs::Point32 goal_point,RRTTreeNode* grow_point);
 	nav_msgs::Path getRRTPath() {return RRT_path_;}
 	nav_msgs::Path getRRTCurvePath() {return RRT_Curve_path_;}
 	vector<nav_msgs::Path> getRRTPathQue() {return RRT_path_que_;}
@@ -233,7 +236,7 @@ private:
 	const double Astar_cost_1 = 0.4; //直移一格消耗
 	const double Astar_cost_2 = 0.56; //斜移一格消耗
 	const int INFINITE = 1000;
-	const int Astar_depth_limit_ = 2000;
+	const int Astar_depth_limit_ = 5000;
 
 	int Astar_plan_num_;
     double Astar_local_map_window_radius_;
@@ -267,6 +270,7 @@ private:
 	RRTTreeNode* RRT_goal_node_;//终点位置
 
 	nav_msgs::OccupancyGrid RRT_costmap_local_;
+	priority_queue<double> history_grow_projection_que_;
 
 	/* rrt elements */
 	double RRT_threhold_, RRT_probability_;//判断到终点的容忍度，以及向终点方向拉扯的撒点概率
@@ -287,20 +291,27 @@ private:
 	int RRT_expand_size_;
 
 	inline void RRTClear() {
+		ClearHistoryGrowQue();
 		for(int i = 0; i < RRT_nodes_.size(); i++) {
-        	delete RRT_nodes_[i];
-        	RRT_nodes_[i] = NULL;
-    	}
-  	}
+			delete RRT_nodes_[i];
+			RRT_nodes_[i] = NULL;
+		}
+  }
 
   	inline int ComputeFactorial(int n) {
     	if(n == 0) return 1;
     	int n_factorial = 1;
     	for(int i = 1; i <= n; i++) {
-      		n_factorial = n_factorial * i;
+				n_factorial = n_factorial * i;
     	}
     	return n_factorial;
   	}
+	inline void ClearHistoryGrowQue() {
+		priority_queue<double> empty_que;
+		std::swap(history_grow_projection_que_,empty_que);
+	}
+
+
 
 };
 #endif
