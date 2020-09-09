@@ -104,6 +104,8 @@ bool MissionControl::Initialization() {
 
   narrow_command_stage_ = 0;
   lookahead_RRT_scale_ = 0.9;
+  auto_state_global_ = 0;
+  relocation_stage_ = 0;
   temp_max_linear_acceleration_ = max_linear_acceleration_;
 
   RRT_refind_ = false;
@@ -175,6 +177,16 @@ void MissionControl::Execute() {
       vehicle_run_state_1st_.data = "step1: mission_state was ACTION.";
       ApplyAction();
       continue; 
+    }
+    else if(mission_state == static_cast<int>(AutoState::RELOCATION)) {
+      vehicle_run_state_1st_.data = "step1: mission_state was RELOCATION.";
+      ApplyRelocationControl(mission_state);
+      continue; 
+    }
+    else if(mission_state == static_cast<int>(AutoState::NOMAP)) {
+      vehicle_run_state_1st_.data = "step1: mission_state was NOMAP.";
+      ApplyNomapControl(mission_state);
+      continue; 
     } 
     else {
       cout << "Unknown Mission State" << endl;
@@ -199,10 +211,14 @@ int MissionControl::DecisionMaker() {
     return static_cast<int>(AutoState::LTE);
   }
   if(checkMissionStage()){ 
-    if(!MySuperviser_.GetAutoMissionState())
-      return static_cast<int>(AutoState::NARROW);
-    else 
-      return static_cast<int>(AutoState::AUTO);
+    if(auto_state_global_ == 1) return static_cast<int>(AutoState::NOMAP);
+    else if(auto_state_global_ == 2) return static_cast<int>(AutoState::RELOCATION);
+    else {
+      if(!MySuperviser_.GetAutoMissionState())
+        return static_cast<int>(AutoState::NARROW);
+      else 
+        return static_cast<int>(AutoState::AUTO);
+    }
   } 
 
   return static_cast<int>(AutoState::STOP);
@@ -260,6 +276,7 @@ void MissionControl::ApplyStopControl(int mission_state) {
 }
 
 void MissionControl::ApplyAutoControl(int mission_state) {
+  relocation_stage_ = 0;
   geometry_msgs::Twist safe_cmd;
   if(!setAutoCoefficient(1)) return;
   if(!updateState()) return;
@@ -276,7 +293,36 @@ void MissionControl::ApplyNarrowControl(int mission_state) {
   geometry_msgs::Twist safe_cmd;
   if(!setAutoCoefficient(1)) return;
   if(!updateState()) return;
+  if(!updateNarrowState()) return;
   geometry_msgs::Twist raw_cmd = getNarrowCommand();
+  auto supervise_state = SuperviseDecision(mission_state);
+  raw_cmd = ExecuteDecision(raw_cmd,mission_state,supervise_state);
+  checkCommandSafety(raw_cmd,safe_cmd,mission_state);
+  createCommandInfo(safe_cmd);
+  publishCommand();
+  publishInfo();
+}
+
+void MissionControl::ApplyRelocationControl(int mission_state) {
+  if(RelocationDelay()) return;
+  geometry_msgs::Twist safe_cmd;
+  if(!setAutoCoefficient(1)) return;
+  if(!updateState()) return;
+  geometry_msgs::Twist raw_cmd = getAutoCommand();
+  auto supervise_state = SuperviseDecision(mission_state);
+  raw_cmd = ExecuteDecision(raw_cmd,mission_state,supervise_state);
+  checkCommandSafety(raw_cmd,safe_cmd,mission_state);
+  createCommandInfo(safe_cmd);
+  publishCommand();
+  publishInfo();
+}
+
+void MissionControl::ApplyNomapControl(int mission_state) {
+  geometry_msgs::Twist safe_cmd;
+  RemoveMapObstacle(obstacle_in_base_);
+  if(!setAutoCoefficient(1)) return;
+  if(!updateState()) return;
+  geometry_msgs::Twist raw_cmd = getAutoCommand();
   auto supervise_state = SuperviseDecision(mission_state);
   raw_cmd = ExecuteDecision(raw_cmd,mission_state,supervise_state);
   checkCommandSafety(raw_cmd,safe_cmd,mission_state);
@@ -287,8 +333,11 @@ void MissionControl::ApplyNarrowControl(int mission_state) {
 
 geometry_msgs::Twist MissionControl::getAutoCommand() {
   ros::Time last_auto_time = ros::Time::now();
+
   int global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter_);
   global_sub_goal_ = global_path_pointcloud_.points[global_goal_index];
+
+  auto_state_global_ = global_sub_goal_.z;
 
   // cout << global_path_pointcloud_.points.size() << "/" << global_goal_index << endl;
   // cout << "global_sub_goal_ : " << global_sub_goal_.x << "," << global_sub_goal_.y << endl; 
@@ -417,6 +466,12 @@ geometry_msgs::Twist MissionControl::getNarrowCommand() {
     }    
   }
   return controller_cmd;
+}
+
+bool MissionControl::RelocationDelay() {
+  relocation_stage_++;
+  if(relocation_stage_ <= 100) return true;
+  else return false;
 }
 
 void MissionControl::CheckNarrowToAutoState() {
@@ -1274,22 +1329,28 @@ void MissionControl::ControlCallback(const std_msgs::String::ConstPtr& Input) {
 
 int MissionControl::SuperviseDecision(int mission_state){
     int raw_state;
-    if(mission_state == static_cast<int>(AutoState::AUTO)){
+    if(mission_state == static_cast<int>(AutoState::AUTO) || mission_state == static_cast<int>(AutoState::RELOCATION)){
       MySuperviser_.GenerateTracebackRoute(global_sub_goal_,vehicle_in_map_);   //1
       raw_state = MySuperviser_.AutoSuperviseDecision(obstacle_in_base_,vehicle_in_map_,MyTools_.cmd_vel(),plan_state_,wait_plan_state_); //2
-    }else if(mission_state == static_cast<int>(AutoState::NARROW)) {
+    }
+    else if(mission_state == static_cast<int>(AutoState::NARROW)) {
       if(!isAstarPathfind_) raw_state = MySuperviser_.NarrowSuperviseDecision(obstacle_in_base_,MyTools_.cmd_vel());
       else {
         MySuperviser_.GenerateTracebackRoute(global_sub_goal_,vehicle_in_map_);
         raw_state = MySuperviser_.AstarSuperviseDecision(obstacle_in_base_,vehicle_in_map_,MyTools_.cmd_vel(),plan_state_,wait_plan_state_); 
       }
-    }       
+    }  
+    else if(mission_state == static_cast<int>(AutoState::NOMAP)) {
+      raw_state = MySuperviser_.AutoSuperviseDecision(obstacle_in_base_,vehicle_in_map_,MyTools_.cmd_vel(),plan_state_,wait_plan_state_);
+    }
+
     return raw_state;
 }
 
 geometry_msgs::Twist MissionControl::ExecuteDecision(geometry_msgs::Twist Input,int mission_state,int supervise_state){
   geometry_msgs::Twist raw_cmd;
-  if(mission_state == static_cast<int>(AutoState::AUTO))
+  if(mission_state == static_cast<int>(AutoState::AUTO) || mission_state == static_cast<int>(AutoState::NOMAP) 
+                                                  || mission_state == static_cast<int>(AutoState::RELOCATION))
   {
     if(supervise_state == static_cast<int>(AUTO::P)){
         raw_cmd = MyExecuter_.ApplyAutoP(Input);

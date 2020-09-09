@@ -17,6 +17,7 @@
 #include <visualization_msgs/Marker.h>
 #include <string>
 #include "time.h"
+#include <unistd.h>
 
 using std::to_string;
 using std::string;
@@ -193,6 +194,7 @@ private:
   int current_action_index_;
   string robot_id_;
   string community_id_;
+  int auto_state_global_;
 
   /** Functions **/
   void ApplyAutoControl(ros::Time& Timer,double& Duration_Limit);
@@ -216,10 +218,31 @@ private:
 
   void ApplyAutoControl(int mission_state);
   void ApplySlowControl();
+  void ApplyNarrowControl(int mission_state);
+  void ApplyRelocationControl(int mission_state);
+  void ApplyNomapControl(int mission_state);
 
 
   int DecisionMaker();
   int SuperviseDecision(int mission_state);
+
+  void RemoveMapObstacle(sensor_msgs::PointCloud &obstacle) {
+    sensor_msgs::PointCloud temp_obstacle;
+    geometry_msgs::Point32 temp_point;
+    
+    for(int i = 0; i < obstacle.points.size(); i++) {
+      if(obstacle.points[i].z != 10) {
+        temp_point.x = obstacle.points[i].x;
+        temp_point.y = obstacle.points[i].y;
+        temp_point.z = obstacle.points[i].z;
+        temp_obstacle.points.push_back(temp_point);
+      }
+    }
+
+    obstacle.points.clear();
+    obstacle.points = temp_obstacle.points;
+  }
+
   geometry_msgs::Twist ExecuteDecision(geometry_msgs::Twist Input,int mission_state,int supervise_state);
   geometry_msgs::Twist TracebackRoute(vector<geometry_msgs::Point32> Input);
   bool CheckTracebackState(geometry_msgs::Point32 Input);
@@ -264,10 +287,10 @@ private:
     return true;
   }
 
-
   geometry_msgs::Twist getAutoCommand();
+  bool RelocationDelay();
 
-
+  int relocation_stage_;
 
   void checkCommandSafety(geometry_msgs::Twist raw,geometry_msgs::Twist& safe,int mission_state) {
     safe = raw;
@@ -377,14 +400,17 @@ private:
       cout << "Update Costmap Failed" << endl;
       return false;
     }
-    // printf("11111111111\n");
-    if(!MyPlanner_.UpdateAstarCostmap(obstacle_in_base_)) {
-      cout << "Update Astar Costmap Failed" << endl;
-      return false;
-    }
-    // printf("2222222222222\n");
+    
     local_costmap_pub.publish(MyPlanner_.costmap_local());
     if(!CheckNavigationState()) {
+      return false;
+    }
+    return true;
+  }
+
+  bool updateNarrowState() {
+    if(!MyPlanner_.UpdateAstarCostmap(obstacle_in_base_)) {
+      cout << "Update Astar Costmap Failed" << endl;
       return false;
     }
     return true;
@@ -416,6 +442,7 @@ private:
   inline void ClearAutoMissionState() {
     MySuperviser_.SetAutoMissionState(true);
     ClearNarrowMissionState();
+    auto_state_global_ = 0;
   }
   inline void ClearNarrowMissionState() {
     narrow_command_stage_ = 0;
@@ -431,6 +458,7 @@ private:
   void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& Input) {
     goal_in_map_.x = Input->pose.position.x;
     goal_in_map_.y = Input->pose.position.y;
+    goal_in_map_.z = Input->pose.position.z;
     ComputeGlobalPlan(goal_in_map_);
     ClearAutoMissionState();
   }
@@ -468,8 +496,6 @@ private:
     }
   }
   //========== 增加Astar 与 RRT =======================
-
-  void ApplyNarrowControl(int mission_state);
   geometry_msgs::Twist getNarrowCommand();
   sensor_msgs::PointCloud NarrowAstarPathfind();
   sensor_msgs::PointCloud NarrowRRTPathfind();

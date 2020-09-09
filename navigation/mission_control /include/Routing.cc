@@ -218,6 +218,7 @@ void Routing::SetPathtoPointcloud(geometry_msgs::Point32 Goal) {
 	      geometry_msgs::Point32 point_mid;
 	      point_mid.x = last_point.x + j * points_gap * cos(points_angle);
 	      point_mid.y = last_point.y + j * points_gap * sin(points_angle);
+				point_mid.z = last_point.z;
 	      pointcloud.points.push_back(point_mid);
 	    }
     } 
@@ -257,10 +258,11 @@ void Routing::SetPathtoPointcloud(geometry_msgs::Point32 Goal) {
 
 	      point_mid.x = (1-tt)*((1-tt)*point_1.x+tt*point_2.x) + tt*((1-tt)*point_2.x + tt*point_3.x);
 	      point_mid.y = (1-tt)*((1-tt)*point_1.y+tt*point_2.y) + tt*((1-tt)*point_2.y + tt*point_3.y);
+				point_mid.z = point_2.z;
 	      pointcloud_curve.points.push_back(point_mid);
 
     	}
-    	pointcloud.points.erase(pointcloud.points.begin()+i,pointcloud.points.begin()+i+3);
+    	pointcloud.points.erase(pointcloud.points.begin()+i,pointcloud.points.begin()+i+2);
     	pointcloud.points.insert(pointcloud.points.begin()+i,pointcloud_curve.points.begin(),pointcloud_curve.points.end());
     	i+=pointcloud_curve.points.size();
     	continue;
@@ -272,7 +274,6 @@ void Routing::SetPathtoPointcloud(geometry_msgs::Point32 Goal) {
   	if(std::isnan(pointcloud.points[i].x) || (std::isnan(pointcloud.points[i].y))) {
   		pointcloud.points.erase(pointcloud.points.begin()+i);
   	}
-  }
 
   path_pointcloud_ = pointcloud;
 }

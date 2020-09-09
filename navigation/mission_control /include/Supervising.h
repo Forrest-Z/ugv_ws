@@ -21,6 +21,8 @@ enum class AutoState
   BACK,
   NARROW,
   ACTION,
+  RELOCATION,
+  NOMAP,
 };
 
 enum class AUTO

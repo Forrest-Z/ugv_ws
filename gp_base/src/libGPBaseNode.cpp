@@ -241,7 +241,8 @@ bool GPBase::checkDataHead(vector<unsigned char> input) {
 void GPBase::publishOdom() {
   double x = base_odom_.pose.pose.position.x;
   double y = base_odom_.pose.pose.position.y;
-  double th = tf::getYaw(base_odom_.pose.pose.orientation);
+  // double th = tf::getYaw(base_odom_.pose.pose.orientation);
+  double th = 0;
 
   double vx = base_twist_.linear.x;
   double vy = 0;
