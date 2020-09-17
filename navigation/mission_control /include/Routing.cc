@@ -274,8 +274,18 @@ void Routing::SetPathtoPointcloud(geometry_msgs::Point32 Goal) {
   	if(std::isnan(pointcloud.points[i].x) || (std::isnan(pointcloud.points[i].y))) {
   		pointcloud.points.erase(pointcloud.points.begin()+i);
   	}
+		
+		if(i - 1 >= 0) 
+		if(fabs(pointcloud.points[i].x-pointcloud.points[i-1].x) < 0.001 && fabs(pointcloud.points[i].y-pointcloud.points[i-1].y) < 0.001) {
+			pointcloud.points.erase(pointcloud.points.begin()+i);
+		}
+		// cout << "( " << pointcloud.points[i].x << ", " << pointcloud.points[i].y << " )";
+
+  }
+	// cout << endl;
 
   path_pointcloud_ = pointcloud;
+
 }
 
 

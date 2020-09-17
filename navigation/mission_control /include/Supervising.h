@@ -23,6 +23,7 @@ enum class AutoState
   ACTION,
   RELOCATION,
   NOMAP,
+  WAIT,
 };
 
 enum class AUTO

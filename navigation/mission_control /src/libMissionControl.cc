@@ -38,6 +38,8 @@ MissionControl::MissionControl():pn("~") {
   
   reset_sub = n.subscribe("/reset_control",1,&MissionControl::ResetCallback,this);
   action_sub = n.subscribe("action_index",1,&MissionControl::ActionCallback,this);
+  planner_manual_sub = n.subscribe("/planner_manual_set",1,&MissionControl::PlannerManualCallback,this);
+
   action_state_pub = n.advertise<std_msgs::Int32>("action_state",1);
   plan_str_pub = n.advertise<std_msgs::String>("from_robot_path",1);
 
@@ -93,6 +95,7 @@ bool MissionControl::Initialization() {
   isReachCurrentGoal_ = false;
 
   isJOYscram_ = false;
+  planner_manual_state_ = false;
   map_number_ = 1;
 
   MyController_.set_speed_scale(controller_linear_scale_);
@@ -187,7 +190,12 @@ void MissionControl::Execute() {
       vehicle_run_state_1st_.data = "step1: mission_state was NOMAP.";
       ApplyNomapControl(mission_state);
       continue; 
-    } 
+    }
+    else if(mission_state == static_cast<int>(AutoState::WAIT)) {
+      vehicle_run_state_1st_.data = "step1: mission_state was WAIT.";
+      ApplyWaitControl(mission_state);
+      continue; 
+    }  
     else {
       cout << "Unknown Mission State" << endl;
       continue;
@@ -211,15 +219,24 @@ int MissionControl::DecisionMaker() {
     return static_cast<int>(AutoState::LTE);
   }
   if(checkMissionStage()){ 
-    if(auto_state_global_ == 1) return static_cast<int>(AutoState::NOMAP);
-    else if(auto_state_global_ == 2) return static_cast<int>(AutoState::RELOCATION);
-    else {
-      if(!MySuperviser_.GetAutoMissionState())
-        return static_cast<int>(AutoState::NARROW);
-      else 
-        return static_cast<int>(AutoState::AUTO);
+    if(planner_manual_state_) {
+      if(planner_manual_ == "AUTO") return static_cast<int>(AutoState::AUTO);
+      if(planner_manual_ == "NARROW") return static_cast<int>(AutoState::NARROW);
+      if(planner_manual_ == "NOMAP") return static_cast<int>(AutoState::NOMAP);
+      if(planner_manual_ == "RELOCATION") return static_cast<int>(AutoState::RELOCATION);
+      if(planner_manual_ == "WAIT") return static_cast<int>(AutoState::WAIT);
     }
-  } 
+    else {
+      // if(auto_state_global_ == 1) return static_cast<int>(AutoState::NOMAP);
+      // else if(auto_state_global_ == 2) return static_cast<int>(AutoState::RELOCATION);
+      // else {
+        if(!MySuperviser_.GetAutoMissionState())
+          return static_cast<int>(AutoState::NARROW);
+        else 
+          return static_cast<int>(AutoState::AUTO);
+      }
+    // } 
+    }
 
   return static_cast<int>(AutoState::STOP);
 }
@@ -331,6 +348,17 @@ void MissionControl::ApplyNomapControl(int mission_state) {
   publishInfo();
 }
 
+void MissionControl::ApplyWaitControl(int mission_state) {
+  geometry_msgs::Twist safe_cmd;
+  geometry_msgs::Twist raw_cmd;
+  ZeroCommand(raw_cmd);
+  checkCommandSafety(raw_cmd,safe_cmd,mission_state);
+  createCommandInfo(safe_cmd);
+  publishCommand();
+  if(!updateState()) return;
+  return;
+}
+
 geometry_msgs::Twist MissionControl::getAutoCommand() {
   ros::Time last_auto_time = ros::Time::now();
 
@@ -366,10 +394,10 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
   geometry_msgs::Twist controller_cmd;
 
   // double search_range = MyPlanner_.map_window_radius();
-  double search_range = 6;
-  double search_range_min = 4;
+  double search_range = 4;
+  double search_range_min = 2.5;
   double iteration_scale = 0.8;
-  double wait_range = 4;
+  double wait_range = 3;
   wait_plan_state_ = true;
   while(search_range > search_range_min) {
     if(!MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_,search_range)) {
@@ -393,7 +421,7 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
 
   if(fabs(faceing_angle) > rotation_threshold) plan_state_ = true;
   ros::Time now_auto_time = ros::Time::now();
-  cout << "spline plan search time : " << (now_auto_time.nsec - last_auto_time.nsec) * pow(10,-6) << "ms" << endl;
+  if(plan_state_) cout << "spline plan search time : " << (now_auto_time.nsec - last_auto_time.nsec) * pow(10,-6) << "ms" << endl;
 
   local_sub_goal_ = MyPlanner_.path_best().points[path_lookahead_index];
   MyController_.ComputePurePursuitCommand(global_goal_in_local,local_sub_goal_,controller_cmd);
@@ -680,6 +708,7 @@ geometry_msgs::Twist MissionControl::PursuitRRTPathCommand() {
   
   int init_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter_); //global_sub_goal 是否发生变化
   static int last_index = init_index;
+  cout << "init_index :" << init_index << endl;
   if(last_index != init_index) {
     RRT_refind_ = true;
     CheckNarrowToAutoState(); //RRT每到达一个目标点判断一次是否可以转为AUTO

@@ -62,7 +62,7 @@ class Planning
 public:
 	Planning(){
 		map_window_radius_     				= 8;
-		path_swap_range_       				= 0.8;
+		path_swap_range_       				= 1.2;
 		path_vertical_step_    				= 0.2;
 
 		splines_joints_num_    				= 3;
@@ -214,6 +214,7 @@ private:
 	void SetLocalCostmap(nav_msgs::OccupancyGrid& Costmap,sensor_msgs::PointCloud Obstacle);
 	void ComputeSafePath(vector<vector<sensor_msgs::PointCloud>> Input_2d,vector<vector<sensor_msgs::PointCloud>>& Output_2d,vector<sensor_msgs::PointCloud>& Output,nav_msgs::OccupancyGrid Costmap);
 	bool DetectObstcaleGrid(sensor_msgs::PointCloud Path,nav_msgs::OccupancyGrid Costmap,int Addition);
+	bool DetectPointObstcaleGrid(geometry_msgs::Point32 Point,nav_msgs::OccupancyGrid Costmap);
 
 	/** Inline Function **/ 
 

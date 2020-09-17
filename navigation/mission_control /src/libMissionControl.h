@@ -71,11 +71,9 @@ private:
   ros::Subscriber control_sub;  
   ros::Subscriber map_number_sub;
 
-  
   ros::Subscriber reset_sub;
   ros::Subscriber action_sub;
-  ros::Publisher action_state_pub;
-  ros::Publisher plan_str_pub;
+  ros::Subscriber planner_manual_sub;
 
   /** Publishers **/
   ros::Publisher cmd_vel_pub;
@@ -97,6 +95,9 @@ private:
   ros::Publisher traceback_pub;
   ros::Publisher auto_supervise_state_pub;
   ros::Publisher vehicle_run_state_pub;
+
+  ros::Publisher action_state_pub;
+  ros::Publisher plan_str_pub;
 
   /** ROS Components **/
   tf::TransformListener listener_map_to_base;
@@ -187,6 +188,8 @@ private:
 
   bool plan_state_;
   bool wait_plan_state_;
+  bool planner_manual_state_;
+  string planner_manual_;
 
   bool isJOYscram_;
 
@@ -221,6 +224,7 @@ private:
   void ApplyNarrowControl(int mission_state);
   void ApplyRelocationControl(int mission_state);
   void ApplyNomapControl(int mission_state);
+  void ApplyWaitControl(int mission_state);
 
 
   int DecisionMaker();
@@ -495,6 +499,17 @@ private:
       isAction_ = false;
     }
   }
+
+  void PlannerManualCallback(const std_msgs::String::ConstPtr& Input) {
+    if(Input->data != "WAIT" && Input->data != "AUTO" && Input->data != "NARROW" 
+      && Input->data != "NOMAP" && Input->data != "RELOCATION" && Input->data != "Q") return;
+
+    planner_manual_ = Input->data;
+    planner_manual_state_ = true;
+
+    if(planner_manual_ == "Q") planner_manual_state_ = false;
+  }
+
   //========== 增加Astar 与 RRT =======================
   geometry_msgs::Twist getNarrowCommand();
   sensor_msgs::PointCloud NarrowAstarPathfind();

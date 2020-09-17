@@ -271,7 +271,7 @@ void Planning::GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output) {
   double shrink_scale = temp_splines_joints_num * 2;
   double radius_unit = path_window_radius_ / temp_splines_joints_num;
 
-  vector<int> level_nums = {5,5,3}; //{9,9,7};
+  vector<int> level_nums = {5,3,3}; //{9,9,7};
   vector<double> level_unit(temp_splines_joints_num,0);
   vector<sensor_msgs::PointCloud> temp_vector(level_nums[0]);
 
@@ -290,18 +290,21 @@ void Planning::GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output) {
     temp_joint.x = radius_unit * 0.5 * cos(level_0_angle);
     temp_joint.y = radius_unit * 0.5 * sin(level_0_angle); // 由radius_unit*1 -> radius_unit*0.5, 缩短第一个节点距离
     temp_joint.z = i+1;
+    if(!DetectPointObstcaleGrid(temp_joint,costmap_local_)) continue;
     temp_level.points.push_back(temp_joint);
     for (int j = 0; j < level_nums[1]; ++j) {
       double level_1_angle = level_0_angle - ((level_nums[1] - 1) * level_unit[1]/2) + j * level_unit[1];
-      temp_joint.x = radius_unit * 2 * cos(level_1_angle);
-      temp_joint.y = radius_unit * 2 * sin(level_1_angle);
+      temp_joint.x = radius_unit * 1.5 * cos(level_1_angle);
+      temp_joint.y = radius_unit * 1.5 * sin(level_1_angle);
       temp_joint.z = i+1 + (j+1) * 10;
+      if(!DetectPointObstcaleGrid(temp_joint,costmap_local_)) continue;
       temp_level.points.push_back(temp_joint);
       for (int k = 0; k < level_nums[2]; ++k) {
         double level_2_angle = level_1_angle - ((level_nums[2] - 1) * level_unit[2]/2) + k * level_unit[2];
         temp_joint.x = radius_unit * 3 * cos(level_2_angle);
         temp_joint.y = radius_unit * 3 * sin(level_2_angle);
         temp_joint.z = i+1 + (j+1) * 10 + (k+1) * 100;
+        if(!DetectPointObstcaleGrid(temp_joint,costmap_local_)) continue;
         temp_level.points.push_back(temp_joint);
       }
     }
@@ -656,6 +659,12 @@ void Planning::ComputeStraight(sensor_msgs::PointCloud& Output,geometry_msgs::Po
 
 }
 
+bool Planning::DetectPointObstcaleGrid(geometry_msgs::Point32 Point,nav_msgs::OccupancyGrid Costmap) {
+  signed char safety_threshold = 10;
+  int path_point_index = ConvertCartesianToLocalOccupany(Costmap,Point);
+  if(!CheckGrid(Costmap,path_point_index,safety_threshold)) return false;
+  return true;
+}
 
 //================== Astar Pathfind ========================
 
