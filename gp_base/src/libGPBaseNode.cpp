@@ -7,6 +7,7 @@ GPBase::GPBase():pn("~")
 
   odom_pub = n.advertise<nav_msgs::Odometry>("/wheel_odom", 1);
   battery_pub = n.advertise<geometry_msgs::Point32>("/battery_info", 1);
+  cmd_pub = n.advertise<geometry_msgs::Twist>("/gp_base_cmd", 1);
 
   cmd_sub = n.subscribe("/husky_velocity_controller/cmd_vel",1, &GPBase::cmd_callback,this);
 
@@ -70,8 +71,6 @@ void GPBase::Mission() {
   
   sendBaseData();
   readBaseData();
-
-  publishOdom();
   // return;
 
   // if (port_) {
@@ -102,11 +101,19 @@ void GPBase::sendBaseData() {
   int rpm_right = ms2rpm(speed_right);
 
   if(linear_speed != 0 || angular_speed != 0){
+    cout << "Send" << endl;
     cout << "Linear  Speed : " << linear_speed << endl;
     cout << "Angular Speed : " << angular_speed << endl;
     // cout << "Speed   Left  : " << speed_left << endl;
     // cout << "Speed   Right : " << speed_right << endl;    
   }
+
+  geometry_msgs::Twist gp_base_cmd_vel;
+  gp_base_cmd_vel.linear.x = speed_left;
+  gp_base_cmd_vel.linear.y = speed_right;
+
+  cmd_pub.publish(gp_base_cmd_vel);
+
 
   vector<unsigned char> motor_left = num2hex(rpm_left);
   vector<unsigned char> motor_right = num2hex(rpm_right);
@@ -122,9 +129,9 @@ void GPBase::sendBaseData() {
   output.insert(output.end(), check.begin(), check.end());
   output.insert(output.end(), footer.begin(), footer.end());
 
-  //boost::asio::write(*port_.get(),boost::asio::buffer(output),boost::asio::transfer_all(),error_code_);
-  boost::asio::async_write(*port_.get(),boost::asio::buffer(output),boost::asio::transfer_all(),
-    boost::bind(&GPBase::async_write_handler,this,_1,_2));
+  boost::asio::write(*port_.get(),boost::asio::buffer(output),boost::asio::transfer_all(),error_code_);
+  //boost::asio::async_write(*port_.get(),boost::asio::buffer(output),boost::asio::transfer_all(),
+    //boost::bind(&GPBase::async_write_handler,this,_1,_2));
   // printf("send ");
   // for (int i = 0; i < output.size(); ++i) {
   //   printf("%x ",output[i]);
@@ -133,7 +140,7 @@ void GPBase::sendBaseData() {
 }
 
 void GPBase::readBaseData() {
-  int char_size = 38;
+  int char_size = 100; //38;
   vector<unsigned char> output(char_size);
   size_t len = port_->read_some(boost::asio::buffer(output),error_code_);
   // port_->async_read_some(boost::asio::buffer(output),boost::bind(&GPBase::read_some_handler,this,_1,port_));
@@ -157,6 +164,13 @@ void GPBase::readBaseData() {
   //   printf("%x ",output[i]);
   // }
   // printf("\n");
+  cout << "read size :" << len << endl;
+  cout << "Base upload raw :" ;
+  for(int i = 0;i < len;++i) {
+  printf("%d : %x ",i,output[i]);
+  }
+  cout << endl;
+  
   if(!checkDataHead(output)) return;
   
   geometry_msgs::Point32 msg_battery;
@@ -181,12 +195,13 @@ void GPBase::readBaseData() {
   double linear_speed = -(ms_right + ms_left)/2;
   double angular_speed = (ms_right - ms_left)/WHELL_BASE_M; 
 
-  // if(linear_speed != 0 || angular_speed != 0){
-  //   cout << "rpm_left : " << rpm_left << endl;
-  //   cout << "rpm_right : " << rpm_right << endl;  
-  //   cout << "linear_speed : " << linear_speed << endl;
-  //   cout << "angular_speed : " << angular_speed << endl;    
-  // }
+  if(linear_speed != 0 || angular_speed != 0){
+     // cout << "rpm_left : " << rpm_left << endl;
+     // cout << "rpm_right : " << rpm_right << endl;  
+     cout << "Read" << endl;
+     cout << "linear_speed : " << linear_speed << endl;
+     cout << "angular_speed : " << angular_speed << endl;    
+   }
   base_twist_.linear.x = linear_speed;
   base_twist_.angular.z = angular_speed;
 
@@ -200,7 +215,7 @@ void GPBase::readBaseData() {
   addBatteryHistory(current_time_left);
   msg_battery.z = checkBatteryAverage();
   battery_pub.publish(msg_battery);
-
+  publishOdom();
 }
 
 
@@ -241,8 +256,7 @@ bool GPBase::checkDataHead(vector<unsigned char> input) {
 void GPBase::publishOdom() {
   double x = base_odom_.pose.pose.position.x;
   double y = base_odom_.pose.pose.position.y;
-  // double th = tf::getYaw(base_odom_.pose.pose.orientation);
-  double th = 0;
+  double th = tf::getYaw(base_odom_.pose.pose.orientation);
 
   double vx = base_twist_.linear.x;
   double vy = 0;

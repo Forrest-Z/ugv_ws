@@ -75,6 +75,8 @@ private:
   /** Publishers **/
   ros::Publisher odom_pub;
   ros::Publisher battery_pub;
+  ros::Publisher cmd_pub;
+
 
 
   /** Subscribers **/
