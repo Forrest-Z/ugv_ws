@@ -79,7 +79,10 @@ void ObstacleManager::publishMapObstacle() {
   sensor_msgs::PointCloud pointcloud_map;
 
   pointcloud_map.header.frame_id = "/map";
-  
+
+  if(static_map_.data.empty()) return;
+
+
   double window_size = 45;
 
   int search_unit = window_size/static_map_info_.resolution;
