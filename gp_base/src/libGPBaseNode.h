@@ -97,6 +97,7 @@ private:
   /** Flags **/
   bool isGetFirstData_;
   bool isCmdUpdate_;
+  bool isZeroCommand_;
 
 
   /** Variables **/
@@ -112,6 +113,10 @@ private:
   bool checkDataHead(vector<unsigned char> input);
   void publishOdom();
   void debugFunction();
+
+  void reconnectBasePort();
+  bool disconnectBasePort();
+  bool connectBasePort();
 
   vector<unsigned char> num2hex(int Input);
   int hex2num(vector<unsigned char> Input);
