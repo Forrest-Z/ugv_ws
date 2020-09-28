@@ -5,7 +5,9 @@ ObstacleManager::ObstacleManager():pn("~") {
   n.param<string>("community_id", community_id_, "2");
 
   map_sub = n.subscribe("/map",1, &ObstacleManager::MapCallback,this);
-  scan_sub = n.subscribe("scan",1, &ObstacleManager::SacnCallback,this);
+  scan_sub = n.subscribe("/scan",1, &ObstacleManager::SacnCallback,this);
+  lidar_sub = n.subscribe("/rslidar_points",1, &ObstacleManager::LidarCallback,this);
+
   rviz_click_sub = n.subscribe("/clicked_point",1, &ObstacleManager::ClickpointCallback,this);
 
   map_obs_pub = n.advertise<sensor_msgs::PointCloud> ("/map_obs_points", 1);
@@ -33,6 +35,7 @@ void ObstacleManager::Manager() {
 void ObstacleManager::Mission() {
   publishMapObstacle();
   publishScanObstacle();
+  publishLidarObstacle();
   publishRvizObstacle();
   pointcloud_base_.header.frame_id = "/base_link";
   map_obs_pub.publish(pointcloud_base_);
@@ -153,6 +156,26 @@ void ObstacleManager::publishMapObstacle() {
   }
 }
 
+void ObstacleManager::publishLidarObstacle() {
+  double max_height = 10;
+  double min_height = -2;
+
+  double max_range = 10;
+
+  for (sensor_msgs::PointCloud2ConstIterator<float>
+          iter_x(pointcloud_lidar_, "x"), iter_y(pointcloud_lidar_, "y"), iter_z(pointcloud_lidar_, "z");
+          iter_x != iter_x.end();
+          ++iter_x, ++iter_y, ++iter_z) { 
+    if (isnan(*iter_x) || isnan(*iter_y) || isnan(*iter_z)) continue;
+    if (hypot(*iter_x, *iter_y) > max_range) continue;
+    geometry_msgs::Point32 point;
+    point.x = *iter_x;
+    point.y = *iter_y;
+    point.z = 1;
+    pointcloud_base_.points.push_back(point);
+  }
+}
+
 
 void ObstacleManager::publishScanObstacle() {
   if(pointcloud_scan_.points.size()==0) return;
@@ -210,6 +233,10 @@ void ObstacleManager::publishRvizObstacle() {
     }
   }
 
+}
+
+void ObstacleManager::LidarCallback(const sensor_msgs::PointCloud2::ConstPtr& input) {
+  pointcloud_lidar_ = *input;
 }
 
 

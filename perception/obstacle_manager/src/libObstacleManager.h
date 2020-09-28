@@ -32,6 +32,7 @@
 #include <pcl_ros/transforms.h>
 #include <pcl_conversions/pcl_conversions.h>
 
+
 using std::vector;
 using std::cout;
 using std::endl;
@@ -63,6 +64,7 @@ private:
   /** Subscribers **/
   ros::Subscriber map_sub;
   ros::Subscriber scan_sub;
+  ros::Subscriber lidar_sub;
   ros::Subscriber rviz_click_sub;
 
   /** Parameters **/
@@ -79,6 +81,7 @@ private:
   geometry_msgs::Point32 robot_in_map_;
   sensor_msgs::PointCloud pointcloud_base_;
   sensor_msgs::PointCloud pointcloud_scan_;
+  sensor_msgs::PointCloud2 pointcloud_lidar_;
   sensor_msgs::PointCloud pointcloud_rviz_;
 
   tf::Transform map_to_base_;
@@ -88,10 +91,13 @@ private:
   bool updateVehicleInMap();
   void publishMapObstacle();
   void publishScanObstacle();
+  void publishLidarObstacle();
   void publishRvizObstacle();
 
   void MapCallback(const nav_msgs::OccupancyGrid::ConstPtr& input);
   void SacnCallback(const sensor_msgs::LaserScan::ConstPtr& input);
+  void LidarCallback(const sensor_msgs::PointCloud2::ConstPtr& input);
+
   void ClickpointCallback(const geometry_msgs::PointStamped::ConstPtr& input);
 
   
