@@ -162,6 +162,8 @@ void ObstacleManager::publishLidarObstacle() {
 
   double max_range = 10;
 
+  if(pointcloud_lidar_.data.empty()) return;
+
   for (sensor_msgs::PointCloud2ConstIterator<float>
           iter_x(pointcloud_lidar_, "x"), iter_y(pointcloud_lidar_, "y"), iter_z(pointcloud_lidar_, "z");
           iter_x != iter_x.end();

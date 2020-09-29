@@ -432,23 +432,23 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
 geometry_msgs::Twist MissionControl::getNarrowCommand() {
   //切换规划器时 narrow_command_stage_ 重新复位为0 ,需要在上层决策器中重置。
   if(narrow_command_stage_ == 0) {
-    ros::Time last_Astar_time = ros::Time::now();
-    sensor_msgs::PointCloud Astar_pointcloud_local = NarrowAstarPathfind();
-    ros::Time now_Astar_time = ros::Time::now();
-    cout << "Astar plan time : " << (now_Astar_time.nsec - last_Astar_time.nsec) * pow(10,-6) << "ms" << endl;
+    // ros::Time last_Astar_time = ros::Time::now();
+    // sensor_msgs::PointCloud Astar_pointcloud_local = NarrowAstarPathfind();
+    // ros::Time now_Astar_time = ros::Time::now();
+    // cout << "Astar plan time : " << (now_Astar_time.nsec - last_Astar_time.nsec) * pow(10,-6) << "ms" << endl;
 
     ros::Time last_RRT_time = ros::Time::now();
     sensor_msgs::PointCloud RRT_pointcloud_local = NarrowRRTPathfind();
     ros::Time now_RRT_time = ros::Time::now();
     cout << "RRT plan time : " << (now_RRT_time.nsec - last_RRT_time.nsec) * pow(10,-6) << "ms" << endl;
-    Astar_pointcloud_global_.points.clear();
-    for(int i = Astar_pointcloud_local.points.size()-1; i >= 0; i--) {
-      if(i == 0 || i % 5 == 0 || i == Astar_pointcloud_local.points.size()-1) {
-        geometry_msgs::Point32 temp_Astar_point_global;
-        ConvertPoint(Astar_pointcloud_local.points[i],temp_Astar_point_global,base_to_map_);
-        Astar_pointcloud_global_.points.push_back(temp_Astar_point_global);
-      }
-    }
+    // Astar_pointcloud_global_.points.clear();
+    // for(int i = Astar_pointcloud_local.points.size()-1; i >= 0; i--) {
+    //   if(i == 0 || i % 5 == 0 || i == Astar_pointcloud_local.points.size()-1) {
+    //     geometry_msgs::Point32 temp_Astar_point_global;
+    //     ConvertPoint(Astar_pointcloud_local.points[i],temp_Astar_point_global,base_to_map_);
+    //     Astar_pointcloud_global_.points.push_back(temp_Astar_point_global);
+    //   }
+    // }
 
     RRT_pointcloud_global_.points.clear();
     for(int j = 0; j < RRT_pointcloud_local.points.size(); j++) {
@@ -460,10 +460,11 @@ geometry_msgs::Twist MissionControl::getNarrowCommand() {
     }
 
     //决策Astar or RRT ？ 
-    isAstarPathfind_ = NarrowSubPlannerDecision();
+    // isAstarPathfind_ = NarrowSubPlannerDecision();
+    isAstarPathfind_ = false;
     narrow_command_stage_++;
     if(isAstarPathfind_) {
-      vehicle_run_state_2nd_.data = "step2: NARROW sub planner was Astar, " + string("Astar size was ") + to_string(Astar_pointcloud_local.points.size());
+      // vehicle_run_state_2nd_.data = "step2: NARROW sub planner was Astar, " + string("Astar size was ") + to_string(Astar_pointcloud_local.points.size());
     }else {
       vehicle_run_state_2nd_.data = "step2: NARROW sub planner was RRT, " + string("RRT size was ") + to_string(RRT_pointcloud_local.points.size());
     }

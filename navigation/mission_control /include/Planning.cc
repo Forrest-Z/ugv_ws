@@ -33,14 +33,18 @@ bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::Po
   if(path_window_radius_ <= 0) return false;
   if(path_window_radius_ > map_window_radius_) return false;
 
-  if(!UpdateCostmap(Obstacle)) return false;
   path_result = CheckIdealPath(Goal);
 
   if(!path_result){
-    GenerateSplinesJoints(joints_set);
-    GenerateSplinesPath(path_set,joints_set,path_set_2d);
-    ComputeSafePath(path_set_2d,safe_set_2d,path_safe_set_,costmap_local_);
-    path_result = SelectBestPath(safe_set_2d,Goal);
+    double goal_plan_yaw = atan2(Goal.y,Goal.x);
+    if(fabs(goal_plan_yaw) > path_swap_range_/2) 
+      path_result = false;
+    else {
+      GenerateSplinesJoints(joints_set);
+      GenerateSplinesPath(path_set,joints_set,path_set_2d);
+      ComputeSafePath(path_set_2d,safe_set_2d,path_safe_set_,costmap_local_);
+      path_result = SelectBestPath(safe_set_2d,Goal);
+    }
   }
   path_all_set_ = path_set;
   mtx_radius_.unlock();
@@ -169,9 +173,6 @@ bool Planning::SelectBestPath(vector<vector<sensor_msgs::PointCloud>> Path_set_2
       if(i == last_index) isLastEnable = true;
     }
   }
-
-  double goal_plan_yaw = atan2(Goal.y,Goal.x);
-  if(fabs(goal_plan_yaw) > path_swap_range_/2) return false;
 
   if(candidate_path_index.size() != 1) {
     double min_distance = DBL_MAX;
@@ -368,6 +369,7 @@ bool Planning::DetectObstcaleGrid(sensor_msgs::PointCloud Path,nav_msgs::Occupan
   signed char safety_threshold = 10;
   int grid_size = Costmap.info.width * Costmap.info.height; 
   for (int i = 0; i < Path.points.size(); ++i) {
+    if(i % 3 != 0) continue;
     int path_point_index = ConvertCartesianToLocalOccupany(Costmap,Path.points[i]);
     if(path_point_index < 0) continue;
     if(Costmap.data[path_point_index] > safety_threshold) return false;
