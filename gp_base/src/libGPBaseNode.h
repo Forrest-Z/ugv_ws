@@ -47,10 +47,10 @@ const double PI = 3.14159265359;
 
 const int MAX_16BIT = 65535;
 
-const double WHEEL_RADIUS_M = 0.165/2;
-const double WHELL_BASE_M = 0.59;
+const double WHEEL_RADIUS_M = 0.17/2;
+const double WHELL_BASE_M = 0.4;
 
-const double speed_scale = 102/19;
+const double speed_scale = 8/1;//102/19;
 
 const int HISTORY_SIZE  = 20;
 
@@ -97,7 +97,6 @@ private:
   /** Flags **/
   bool isGetFirstData_;
   bool isCmdUpdate_;
-  bool isZeroCommand_;
 
 
   /** Variables **/
@@ -106,17 +105,13 @@ private:
   nav_msgs::Odometry base_odom_;
 
   list<float> battery_history_;
-
+  bool isZeroLinear_;
   /** Functions **/
   void sendBaseData();
   void readBaseData();
   bool checkDataHead(vector<unsigned char> input);
   void publishOdom();
   void debugFunction();
-
-  void reconnectBasePort();
-  bool disconnectBasePort();
-  bool connectBasePort();
 
   vector<unsigned char> num2hex(int Input);
   int hex2num(vector<unsigned char> Input);

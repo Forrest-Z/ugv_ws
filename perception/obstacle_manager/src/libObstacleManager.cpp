@@ -157,8 +157,8 @@ void ObstacleManager::publishMapObstacle() {
 }
 
 void ObstacleManager::publishLidarObstacle() {
-  double max_height = 10;
-  double min_height = -2;
+  double max_height = 0.2;
+  double min_height = -0.1;
 
   double max_range = 10;
 
@@ -169,6 +169,7 @@ void ObstacleManager::publishLidarObstacle() {
           iter_x != iter_x.end();
           ++iter_x, ++iter_y, ++iter_z) { 
     if (isnan(*iter_x) || isnan(*iter_y) || isnan(*iter_z)) continue;
+    if (*iter_z > max_height || *iter_z < min_height) continue;
     if (hypot(*iter_x, *iter_y) > max_range) continue;
     geometry_msgs::Point32 point;
     point.x = *iter_x;
@@ -238,7 +239,18 @@ void ObstacleManager::publishRvizObstacle() {
 }
 
 void ObstacleManager::LidarCallback(const sensor_msgs::PointCloud2::ConstPtr& input) {
-  pointcloud_lidar_ = *input;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZI>());
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZI>());
+  sensor_msgs::PointCloud2 temp_pointcloud2;
+
+  pcl::VoxelGrid<pcl::PointXYZI> sor;
+  pcl::fromROSMsg(*input,*cloud); 
+  sor.setInputCloud (cloud);
+  sor.setLeafSize (0.1f, 0.1f, 0.1f);
+  sor.filter (*cloud_filtered);
+  pcl::toROSMsg(*cloud_filtered,temp_pointcloud2);
+  
+  pointcloud_lidar_ = temp_pointcloud2;
 }
 
 

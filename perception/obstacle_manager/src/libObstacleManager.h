@@ -39,6 +39,7 @@ using std::endl;
 using std::isnan;
 using std::string;
 using std::to_string;
+using PointT = pcl::PointXYZI;
 
 const int ROS_RATE_HZ = 20;
 const double PI = 3.14159265359;

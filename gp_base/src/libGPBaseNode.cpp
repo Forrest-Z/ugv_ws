@@ -32,24 +32,14 @@ GPBase::~GPBase(){
 void GPBase::Manager() {
   ros::Rate loop_rate(ROS_RATE_HZ);
 
-  // port_ = serial_port_ptr(new boost::asio::serial_port(io_service_));
-  // port_->open(port_name_, error_code_);
-  // if (error_code_) {
-  //   ROS_INFO_STREAM("error : port_->open() failed...port_name=" << port_name_ << ", e=" << error_code_.message().c_str());
-  //   return;
-  // }
-  // port_->set_option(boost::asio::serial_port_base::baud_rate(baud_rate_));
-
-
-  while(!connectBasePort()){
-    cout << "Connect to Base Port Retry In 1 second" << endl;
-    if (port_) {
-      port_->cancel();
-      port_->close();
-      port_.reset();
-    }
-    sleep(1);
+  port_ = serial_port_ptr(new boost::asio::serial_port(io_service_));
+  port_->open(port_name_, error_code_);
+  if (error_code_) {
+    ROS_INFO_STREAM("error : port_->open() failed...port_name=" << port_name_ << ", e=" << error_code_.message().c_str());
+    return;
   }
+  port_->set_option(boost::asio::serial_port_base::baud_rate(baud_rate_));
+
   
   while (ros::ok()) {
     Mission();
@@ -66,41 +56,30 @@ void GPBase::Manager() {
   io_service_.reset();   
 }
 
-bool GPBase::disconnectBasePort() {
-  if (port_) {
-    port_->cancel();
-    port_->close();
-    port_.reset();
-  }
-  return true;
-}
-
-bool GPBase::connectBasePort() {
-  port_ = serial_port_ptr(new boost::asio::serial_port(io_service_));
-  port_->open(port_name_, error_code_);
-  if (error_code_) {
-    ROS_INFO_STREAM("error : port_->open() failed...port_name=" << port_name_ << ", e=" << error_code_.message().c_str());
-    return false;
-  }
-  port_->set_option(boost::asio::serial_port_base::baud_rate(baud_rate_));
-  return true;
-}
-
-void GPBase::reconnectBasePort() {
-  cout << "Reconnect Base Port" << endl;
-  int retry_count = 0;
-  int retry_threshold = 5;
-  disconnectBasePort();
-  while(!connectBasePort() && (retry_count < retry_threshold) ){
-    cout << "Retry In 1 second" << endl;
-    retry_count++;
-    sleep(1);
-  }
-}
-
 void GPBase::Mission() {
+  // if(!port_->is_open()){
+  //   cout << "Reopen port" << endl;
+  //   port_ = serial_port_ptr(new boost::asio::serial_port(io_service_));
+  //   port_->open(port_name_, error_code_);
+  //   if (error_code_) {
+  //     ROS_INFO_STREAM("error : port_->open() failed...port_name=" << port_name_ << ", e=" << error_code_.message().c_str());
+  //     sleep(1);   
+  //     return;
+  //   }
+  //   port_->set_option(boost::asio::serial_port_base::baud_rate(baud_rate_));
+  // }
+  
   sendBaseData();
   readBaseData();
+  // return;
+
+  // if (port_) {
+  //   port_->cancel();
+  //   port_->close();
+  //   port_.reset();
+  // }
+  // io_service_.stop();
+  // io_service_.reset();
 }
 
 void GPBase::debugFunction() {
@@ -108,22 +87,18 @@ void GPBase::debugFunction() {
 
 
 void GPBase::sendBaseData() {
-  cout << "sendBaseData" << endl;
   double linear_speed = cmd_vel_.linear.x;
   double angular_speed = cmd_vel_.angular.z;
   double speed_left = (2 * linear_speed - WHELL_BASE_M * angular_speed)/2;
   double speed_right = (2 * linear_speed + WHELL_BASE_M * angular_speed)/2;
 
   if(!isCmdUpdate_){
-    // return;
     speed_left = 0;
     speed_right = 0;
   }
   isCmdUpdate_ = false;
   int rpm_left = ms2rpm(speed_left);
   int rpm_right = ms2rpm(speed_right);
-
-  (linear_speed == 0) ? isZeroCommand_ = true : isZeroCommand_ = false;
 
   if(linear_speed != 0 || angular_speed != 0){
     cout << "Send" << endl;
@@ -132,12 +107,13 @@ void GPBase::sendBaseData() {
     cout << "Speed   Left  : " << rpm_left << endl;
     cout << "Speed   Right : " << rpm_right << endl;    
   }
-
+  (linear_speed == 0) ? isZeroLinear_ = true : isZeroLinear_ = false;
   geometry_msgs::Twist gp_base_cmd_vel;
-  gp_base_cmd_vel.linear.x = linear_speed;
-  gp_base_cmd_vel.angular.z = angular_speed;
+  gp_base_cmd_vel.linear.x = speed_left;
+  gp_base_cmd_vel.linear.y = speed_right;
 
   cmd_pub.publish(gp_base_cmd_vel);
+
 
   vector<unsigned char> motor_left = num2hex(rpm_left);
   vector<unsigned char> motor_right = num2hex(rpm_right);
@@ -153,9 +129,9 @@ void GPBase::sendBaseData() {
   output.insert(output.end(), check.begin(), check.end());
   output.insert(output.end(), footer.begin(), footer.end());
 
-  // boost::asio::write(*port_.get(),boost::asio::buffer(output),boost::asio::transfer_all(),error_code_);
-  boost::asio::async_write(*port_.get(),boost::asio::buffer(output),boost::asio::transfer_all(),
-    boost::bind(&GPBase::async_write_handler,this,_1,_2));
+  boost::asio::write(*port_.get(),boost::asio::buffer(output),boost::asio::transfer_all(),error_code_);
+  //boost::asio::async_write(*port_.get(),boost::asio::buffer(output),boost::asio::transfer_all(),
+    //boost::bind(&GPBase::async_write_handler,this,_1,_2));
   // printf("send ");
   // for (int i = 0; i < output.size(); ++i) {
   //   printf("%x ",output[i]);
@@ -164,26 +140,37 @@ void GPBase::sendBaseData() {
 }
 
 void GPBase::readBaseData() {
-  cout << "readBaseData" << endl;
-  int char_size = 38; //38;
+  int char_size = 100; //38;
   vector<unsigned char> output(char_size);
   size_t len = port_->read_some(boost::asio::buffer(output),error_code_);
   // port_->async_read_some(boost::asio::buffer(output),boost::bind(&GPBase::read_some_handler,this,_1,port_));
   // port_->async_read_some(boost::asio::buffer(output),read_some_handler);
+  // if (error_code_) {
+  //   ROS_INFO_STREAM("error read some " << port_name_ << ", e=" << error_code_.message().c_str()); 
 
-
+  //   port_ = serial_port_ptr(new boost::asio::serial_port(io_service_));
+  //   port_->open(port_name_, error_code_);
+  //   if (error_code_) {
+  //     ROS_INFO_STREAM("error : port_->open() failed...port_name=" << port_name_ << ", e=" << error_code_.message().c_str());
+  //     sleep(1);   
+  //     return;
+  //   }
+  //   port_->set_option(boost::asio::serial_port_base::baud_rate(baud_rate_));
+    
+  //   return;
+  // }
+  // printf("read ");
+  // for (int i = 0; i < output.size(); ++i) {
+  //   printf("%x ",output[i]);
+  // }
+  // printf("\n");
   cout << "read size :" << len << endl;
   cout << "Base upload raw :" ;
   for(int i = 0;i < len;++i) {
   printf("%d : %x ",i,output[i]);
   }
   cout << endl;
-
-  if(len == 0) {
-    reconnectBasePort();
-    return;
-  }
-
+  
   if(!checkDataHead(output)) return;
   
   geometry_msgs::Point32 msg_battery;
@@ -205,18 +192,18 @@ void GPBase::readBaseData() {
   double ms_left = rpm2ms(rpm_left);
   double ms_right = rpm2ms(rpm_right);
 
-  double linear_speed = -(ms_right + ms_left)/2;
+  double linear_speed = (ms_right + ms_left)/2;
   double angular_speed = (ms_right - ms_left)/WHELL_BASE_M; 
-
-  if(isZeroCommand_) linear_speed = 0;
-
-  if(linear_speed != 0 || angular_speed != 0){
-    cout << "Read" << endl;
-    cout << "linear_speed : " << linear_speed << endl;
-    cout << "angular_speed : " << angular_speed << endl; 
-    cout << "Speed   Left  : " << rpm_left << endl;
-    cout << "Speed   Right : " << rpm_right << endl;   
+  
+  if(linear_speed != 0 || angular_speed != 0){ 
+     cout << "Read" << endl;
+     cout << "linear_speed : " << linear_speed << endl;
+     cout << "angular_speed : " << angular_speed << endl;  
+     cout << "rpm_left : " << rpm_left << endl;
+     cout << "rpm_right : " << rpm_right << endl;   
    }
+  //if(isZeroLinear_) linear_speed = 0;
+
   base_twist_.linear.x = linear_speed;
   base_twist_.angular.z = angular_speed;
 
