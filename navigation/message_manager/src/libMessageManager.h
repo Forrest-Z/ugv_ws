@@ -8,6 +8,10 @@
 #include <vector>
 #include <time.h>
 
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
+
 #include <sensor_msgs/PointCloud.h>
 #include <geometry_msgs/Point32.h>
 #include <std_msgs/Int32.h>
@@ -29,6 +33,13 @@ using std::to_string;
 
 const double PI = 3.14159265359;
 
+struct ExceptionInfo {
+  string id;
+  string module;
+  string parts;
+  string state;
+};
+
 class MessageManager
 {
 public:
@@ -47,14 +58,17 @@ private:
 
   ros::Subscriber cmd_sub;
   ros::Subscriber reset_sub;
+  ros::Subscriber action_state_sub;
+  ros::Subscriber exp_sub;
+
   ros::Subscriber station_sub;
   ros::Subscriber control_sub;
-  ros::Subscriber action_state_sub;
 
   ros::Publisher command_pub;
   ros::Publisher center_pub;
   ros::Publisher heart_pub;
   ros::Publisher info_pub;
+  ros::Publisher exp_pub;
 
   ros::Publisher goal_pub;
   ros::Publisher action_pub;
@@ -76,23 +90,36 @@ private:
   int robot_rotation_;
   string robot_seq_;
   string robot_act_;
+ 
+  string task_id_;
 
   string last_input_raw_;
   string last_input_sequence_;
   string last_input_control_;
   string last_input_control_sequence_;
+
+  string battery_state_;
+  string charge_state_;
+  string masterlock_state_;
+  string deadlock_state_;
+  string environment_state_;
+
+  vector<ExceptionInfo> exception_list_;
   
   ros::Time run_timer_;
   /** Functions **/
   void ControlCallback(const std_msgs::String::ConstPtr& Input);
   void StationCallback(const std_msgs::String::ConstPtr& Input);
   void RecallCallback(const std_msgs::String::ConstPtr& Input);
+  void ExceptionCallback(const std_msgs::String::ConstPtr& Input);
   void ProcessMission(string Type,string Seq,string Command_1,string Command_2);
   void UpdateHeartbeat(ros::Time& Timer,double Pause);
   void UpdateRealtimeInfo(ros::Time& Timer,double Pause);
   void UpdateTaskInfo(string Input = "start");
 
   bool UpdateVehicleLocation();
+
+  void UpdateException(ExceptionInfo Input,ExceptionInfo& Output);
 
   void ActionStateCallback(const std_msgs::Int32::ConstPtr& Input) {
     // cout << robot_id_ << " ActionStateCallback" << endl;
@@ -134,12 +161,14 @@ private:
 
 
   int FindMissionType(string Input) {
-    string data_goto = "goto";
+    string data_goto      = "goto";
     string data_picking   = "picking";
     string data_loading   = "loading";
-    string data_unloading   = "unloading";
+    string data_unloading = "unloading";
+    string data_still     = "still";
 
     if(Input == data_goto) return 2;
+    else if(Input == data_still) return 3;
     else if(Input == data_picking || Input == data_loading || Input == data_unloading) return 1;
     return -1;
   }

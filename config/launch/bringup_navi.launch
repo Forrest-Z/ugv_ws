@@ -1,19 +1,23 @@
 <?xml version="1.0"?>
 <launch>
+  <param name="robot_id" type="string" value="robot_41"/>
+  <param name="community_id" type="string" value="4"/>
   <node pkg="joy" type="joy_node" name="joystick"/> 
+  <node pkg="mission_control" type="mission_control_node" name="mission_control_node_1" output="screen"  cwd="node">
+    <param name="config_folder" type="string" value="$(find config)" />
+  </node>
 
-  <node pkg="mission_control" type="mission_control_node" name="mission_control_node" output="screen"  cwd="node"/>
+  <node pkg="obstacle_manager" type="obstacle_manager_node" name="obstacle_manager_node"/>
 
-  <node pkg="obstacle_manager" type="obstacle_manager_node" name="obstacle_manager_node" />
+  <node pkg="map_server" type="map_server" name="map_server_node_navi" args="$(find config)/map/1.yaml" output="screen">
+  </node>
 
-  <node pkg="map_server" type="map_server" name="map_server_node_1" args="$(find config)/map/1.yaml" output="screen">
+   <node pkg="map_server" type="map_server" name="map_server_node_show" args="$(find config)/map/show.yaml" output="screen">
+    <remap from="map" to="map_navi"/>
   </node>
 
   <node pkg="rviz" type="rviz" name="rviz_navi" output="screen" args="-d $(find config)/cfg/rviz_config.rviz" />
 
-   <node pkg="map_server" type="map_server" name="map_server_node_2" args="$(find config)/map/3.yaml" output="screen">
-    <remap from="map" to="map_show"/>
-  </node>
-
-
+  <node pkg="message_manager" type="message_manager_node" name="message_manager_node" output="screen"/>
+  <node pkg="mqtt_ros" type="mqtt_ros_node" name="mqtt_ros_node" output="screen"/>
 </launch>

@@ -11,10 +11,10 @@ int main(int argc, char ** argv) {
   	string community_id,robot_id,host_address,mqtt2bot_namespace,bot2mqtt_namespace;
   	int port_num;
 
-    vector<string> mqtt_topics(7);
+    vector<string> mqtt_topics(8);
 
   	n.param<string>("robot_id", robot_id, "robot_12");
-    n.param<string>("community_id", community_id, "2");
+    n.param<string>("community_id", community_id, "1");
 
   	pn.param<string>("host_address",host_address,"121.40.153.189");
     
@@ -26,6 +26,8 @@ int main(int argc, char ** argv) {
     pn.param<string>("mqtt_info_topic",mqtt_topics[4],"navigation/info");
     pn.param<string>("mqtt_navi_topic",mqtt_topics[5],"navigation/path");
     pn.param<string>("mqtt_lidar_topic",mqtt_topics[6],"navigation/lidar");
+    pn.param<string>("mqtt_exception_topic",mqtt_topics[7],"special/exception");
+
   	pn.param<int>("port_num", port_num, 1883);
 
 

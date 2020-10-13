@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
-  <param name="robot_id" type="string" value="robot_12"/>
-  <param name="community_id" type="string" value="2"/>
+  <param name="robot_id" type="string" value="robot_41"/>
+  <param name="community_id" type="string" value="4"/>
   <node pkg="joy" type="joy_node" name="joystick"/> 
   <node pkg="mission_control" type="mission_control_node" name="mission_control_node_1" output="screen"  cwd="node">
     <param name="config_folder" type="string" value="$(find config)" />

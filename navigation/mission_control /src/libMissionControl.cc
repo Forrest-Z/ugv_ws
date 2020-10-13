@@ -800,7 +800,7 @@ void MissionControl::SendMqttRoute(vector<int> Input) {
     string community_str = community_id_;
     string id_str = robot_id_.substr(6,2);
     string status_str = "ok";
-    string seq_str = "1";
+    string time_str = to_string(ros::Time::now().toNSec()).substr(0,13);
     string type_str = "path";
     string task_str = "path";
     string end_str = "HE";
@@ -816,7 +816,7 @@ void MissionControl::SendMqttRoute(vector<int> Input) {
 
     int length_raw = head_str.size() + source_str.size() + community_str.size() +
                      id_str.size() + status_str.size() +
-                     seq_str.size() + type_str.size() + 
+                     time_str.size() + type_str.size() + 
                      task_str.size() + msg_1_str.size() +
                      end_str.size() + 10 * delimiter.size();
     length_raw += static_cast<int>(log10(static_cast<double>(length_raw)));
@@ -832,7 +832,7 @@ void MissionControl::SendMqttRoute(vector<int> Input) {
                     community_str + delimiter + 
                     id_str + delimiter + 
                     status_str + delimiter + 
-                    seq_str + delimiter + 
+                    time_str + delimiter + 
                     type_str + delimiter + 
                     task_str + delimiter + 
                     msg_1_str + delimiter + 

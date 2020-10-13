@@ -35,7 +35,7 @@ public:
   myMqtt(const char* id, const char* host, int port,int keepalive,string robot_id,string building_id):
     mosquittopp(id)
   {
-    max_payload_ = 100;
+    max_payload_ = 300;
     mosqpp::lib_init();
     connect_async(host, port, keepalive);
     loop_start();
@@ -127,10 +127,13 @@ private:
   /** Subscribers **/
   ros::Subscriber return_sub;
   ros::Subscriber heartbeat_sub;
+
   ros::Subscriber scan_str_sub;
-  ros::Subscriber joy_sub;
-  ros::Subscriber info_sub;
+  ros::Subscriber info_str_sub;
   ros::Subscriber plan_str_sub;
+  ros::Subscriber exp_str_sub;
+
+
   /** Variables **/
   string mqtt_command_topic_;
   string mqtt_control_topic_;
@@ -140,7 +143,8 @@ private:
   string mqtt_info_topic_;
   string mqtt_scan_topic_;
   string mqtt_path_topic_;
-
+  string mqtt_exp_topic_;
+  
   bool isManualControl_;
   string mqtt_command_str_;
 
@@ -161,13 +165,15 @@ private:
 
     // cout << "mqtt_task_topic    : " << mqtt_task_topic << endl;
     // cout << "mqtt_control_topic : " << mqtt_control_topic << endl;
-    cout << robot_id_ << " Received topic : " << message->topic << endl;
+    cout << "robot_" << robot_id_ << " Received topic : " << message->topic << endl;
 
     if(!strcmp(message->topic, mqtt_task_topic.c_str()))
     {
       memset(buf, 0, payload_size * sizeof(char));
       memcpy(buf, message->payload, max_payload_ * sizeof(char));
-      cout  << robot_id_  << "Task Received: " << buf << endl;
+
+      string message_str = buf;
+      cout << "robot_" << robot_id_ << " Task Received: " << buf << endl;
       std_msgs::String temp_str;
       temp_str.data = buf;
       command_pub.publish(temp_str);
@@ -177,6 +183,7 @@ private:
     {
       memset(buf, 0, payload_size * sizeof(char));
       memcpy(buf, message->payload, max_payload_ * sizeof(char));
+      // ROS_INFO("Timer");
       cout << robot_id_ << " Control Received: "<< buf << endl;
       std_msgs::String temp_str;
       temp_str.data = buf;
@@ -195,7 +202,7 @@ private:
     string message_str = Input->data;
     string mqtt_topic = "robot/" + community_id_ + "/" + robot_id_ + "/upload/" + mqtt_return_topic_;
     publish(NULL, mqtt_topic.c_str(), strlen(message_str.c_str()), message_str.c_str(), 2, false);
-    cout << robot_id_ << " Return Topic : " << mqtt_topic << " - data : " << message_str <<endl;
+    cout << "robot_" << robot_id_ << " Return Topic : " << mqtt_topic << " - data : " << message_str <<endl;
   }
 
   void HeartbeatCallback(const std_msgs::String::ConstPtr& Input) {
@@ -203,7 +210,7 @@ private:
     string message_str = Input->data;
     string mqtt_topic = "robot/" + community_id_ + "/" + robot_id_ + "/upload/" + mqtt_heartbeat_topic_;
     publish(NULL, mqtt_topic.c_str(), strlen(message_str.c_str()), message_str.c_str(), 0,false);
-    // cout << "Heartbeat Topic : " << mqtt_topic << " - data : " << message_str <<endl;
+    // cout << "robot_" << robot_id_  << "Heartbeat Topic : " << mqtt_topic << " - data : " << message_str <<endl;
   }
 
   void ScanCallback(const std_msgs::String::ConstPtr& Input) {
@@ -219,7 +226,7 @@ private:
     string message_str = Input->data;
     string mqtt_topic = "robot/" + community_id_ + "/" + robot_id_ + "/upload/" + mqtt_path_topic_;
     publish(NULL, mqtt_topic.c_str(), strlen(message_str.c_str()), message_str.c_str(), 2,false);
-    cout << robot_id_  << " Plan Topic : " << mqtt_topic << " - data : " << message_str <<endl;
+    cout << robot_id_  << "Plan Topic : " << mqtt_topic << " - data : " << message_str <<endl;
   }
 
   void InfoCallback(const std_msgs::String::ConstPtr& Input) {
@@ -230,6 +237,13 @@ private:
     // cout << "Info Topic : " << mqtt_topic << " - data : " << message_str <<endl;
   }
 
+  void ExpCallback(const std_msgs::String::ConstPtr& Input) {
+    if(!isMqttReady_) return;
+    string message_str = Input->data;
+    string mqtt_topic = "robot/" + community_id_ + "/" + robot_id_ + "/upload/" + mqtt_exp_topic_;
+    publish(NULL, mqtt_topic.c_str(), strlen(message_str.c_str()), message_str.c_str(), 2,false);
+    // cout << "Exception Topic : " << mqtt_topic << " - data : " << message_str <<endl;
+  }
 
 
 };

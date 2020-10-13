@@ -73,6 +73,8 @@ private:
   string robot_id_;
   string community_id_;
 
+  ros::Time mqtt_timer_;
+
   /** Flags **/
   bool isMapSave_;
   /** Variables **/

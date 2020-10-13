@@ -16,6 +16,7 @@ ObstacleManager::ObstacleManager():pn("~") {
   isMapSave_ = false;
 
   inflation_ = 1;
+  mqtt_timer_ = ros::Time::now();
 }
 
 
@@ -161,22 +162,118 @@ void ObstacleManager::publishLidarObstacle() {
   double min_height = -0.1;
 
   double max_range = 10;
+  double min_range = 0.1;
+
+  int ranges_size = 720;
 
   if(pointcloud_lidar_.data.empty()) return;
+
+  sensor_msgs::LaserScan scan_from_pointcloud;
+  scan_from_pointcloud.range_max = max_range;
+  scan_from_pointcloud.range_min = min_range;
+  scan_from_pointcloud.angle_min = -PI;
+  scan_from_pointcloud.angle_max = PI;
+  scan_from_pointcloud.angle_increment = (scan_from_pointcloud.angle_max-scan_from_pointcloud.angle_min)/ranges_size;
+  scan_from_pointcloud.ranges.assign(ranges_size, scan_from_pointcloud.range_max + 1);
 
   for (sensor_msgs::PointCloud2ConstIterator<float>
           iter_x(pointcloud_lidar_, "x"), iter_y(pointcloud_lidar_, "y"), iter_z(pointcloud_lidar_, "z");
           iter_x != iter_x.end();
           ++iter_x, ++iter_y, ++iter_z) { 
+    double range = hypot(*iter_x, *iter_y);
+    double angle = atan2(*iter_y, *iter_x);
     if (isnan(*iter_x) || isnan(*iter_y) || isnan(*iter_z)) continue;
     if (*iter_z > max_height || *iter_z < min_height) continue;
-    if (hypot(*iter_x, *iter_y) > max_range) continue;
+    if (range > max_range) continue;
     geometry_msgs::Point32 point;
     point.x = *iter_x;
     point.y = *iter_y;
     point.z = 1;
     pointcloud_base_.points.push_back(point);
+    
+    if (angle < scan_from_pointcloud.angle_min || angle > scan_from_pointcloud.angle_max) continue;
+    int index = (angle - scan_from_pointcloud.angle_min) / scan_from_pointcloud.angle_increment;
+    if (range < scan_from_pointcloud.ranges[index]) {
+      scan_from_pointcloud.ranges[index] = range;
+    }
   }
+
+
+
+  if((ros::Time::now() - mqtt_timer_).toSec() < 0.1) return;
+  mqtt_timer_ = ros::Time::now();
+  string delimiter = "$";
+  string range_delimiter = "#";
+
+  int id_int = stoi(robot_id_.substr(6,2));
+  int angle_size = scan_from_pointcloud.ranges.size();
+  int angle_min = static_cast<int>(scan_from_pointcloud.angle_min * 100);
+  int angle_max = static_cast<int>(scan_from_pointcloud.angle_max * 100);
+
+  string head_str = "GPMAPD";
+  string source_str = "robot";
+  string community_str = community_id_;
+  string id_str = to_string(id_int);
+  string status_str = "ok";
+  string time_str = to_string(ros::Time::now().toNSec()).substr(0,13);
+  string type_str = "lidar";
+  string task_str = "single";
+  string min_angle_str = to_string(angle_min);
+  string max_angle_str = to_string(angle_max);
+  string angle_size_str = to_string(angle_size);
+
+  string data_str;
+  if(scan_from_pointcloud.ranges[0] > scan_from_pointcloud.range_max) {
+    data_str +=  "nan";
+  } else if (scan_from_pointcloud.ranges[0] < scan_from_pointcloud.range_min) {
+    data_str +=  "0";
+  } else {
+    int ranges_2d = static_cast<int>(scan_from_pointcloud.ranges[0] * 100);
+    data_str +=  to_string(ranges_2d);
+  }
+
+  string end_str = "HE";
+
+  for (int i = 1; i < scan_from_pointcloud.ranges.size(); ++i) {
+    if(scan_from_pointcloud.ranges[i] > scan_from_pointcloud.range_max) {
+      data_str += range_delimiter + "nan";
+    } else if (scan_from_pointcloud.ranges[i] < scan_from_pointcloud.range_min) {
+      data_str += range_delimiter + "0";
+    } else {
+      int ranges_2d = static_cast<int>(scan_from_pointcloud.ranges[i] * 100);
+      data_str += range_delimiter + to_string(ranges_2d);
+    }
+
+  }
+  int length_raw = head_str.size() + source_str.size() + community_str.size() +
+                   id_str.size() + status_str.size() +
+                   time_str.size() + type_str.size() + 
+                   task_str.size() + min_angle_str.size() +
+                   max_angle_str.size() + angle_size_str.size() +
+                   data_str.size() + end_str.size() + 13 * delimiter.size();
+  length_raw += static_cast<int>(log10(static_cast<double>(length_raw)));
+  length_raw ++;
+  if(to_string(length_raw).size() != to_string(length_raw-1).size()) length_raw++;
+  string length_str = to_string(length_raw);
+
+  string output = head_str + delimiter + 
+                  length_str + delimiter + 
+                  source_str + delimiter + 
+                  community_str + delimiter + 
+                  id_str + delimiter + 
+                  status_str + delimiter + 
+                  time_str + delimiter + 
+                  type_str + delimiter + 
+                  task_str + delimiter + 
+                  min_angle_str + delimiter + 
+                  max_angle_str + delimiter +
+                  angle_size_str + delimiter + 
+                  data_str + delimiter + 
+                  end_str;
+
+  std_msgs::String output_msg;
+  output_msg.data = output;
+  scan_str_pub.publish(output_msg);
 }
 
 
@@ -259,100 +356,101 @@ void ObstacleManager::MapCallback(const nav_msgs::OccupancyGrid::ConstPtr& input
 
     static_map_ = *input;
     static_map_info_ = input->info;
+}
+
+
+void ObstacleManager::SacnCallback(const sensor_msgs::LaserScan::ConstPtr& input) {
+  projector.projectLaser(*input, pointcloud_scan_);
+  if((ros::Time::now() - mqtt_timer_).toSec() < 0.1) return;
+  mqtt_timer_ = ros::Time::now();
+
+  int id_int = stoi(robot_id_.substr(6,2));
+
+  int angle_size = input->ranges.size();
+  int angle_min = static_cast<int>(input->angle_min * 100);
+  int angle_max = static_cast<int>(input->angle_max * 100);
+
+  string delimiter = "$";
+  string range_delimiter = "#";
+
+  string head_str = "GPMAPD";
+  string source_str = "robot";
+  string community_str = community_id_;
+  string id_str = to_string(id_int);
+  string status_str = "ok";
+  string time_str = to_string(ros::Time::now().toNSec()).substr(0,13);
+  string type_str = "lidar";
+  string task_str = "single";
+  string min_angle_str = to_string(angle_min);
+  string max_angle_str = to_string(angle_max);
+  string angle_size_str = to_string(angle_size);
+
+  string data_str;
+  if(input->ranges[0] > input->range_max) {
+    data_str +=  "nan";
+  } else if (input->ranges[0] < input->range_min) {
+    data_str +=  "0";
+  } else {
+    int ranges_2d = static_cast<int>(input->ranges[0] * 100);
+    data_str +=  to_string(ranges_2d);
   }
 
-  
-  void ObstacleManager::SacnCallback(const sensor_msgs::LaserScan::ConstPtr& input) {
-    projector.projectLaser(*input, pointcloud_scan_);
+  string end_str = "HE";
 
-    int id_int = stoi(robot_id_.substr(6,2));
-
-    int angle_size = input->ranges.size();
-    int angle_min = static_cast<int>(input->angle_min * 100);
-    int angle_max = static_cast<int>(input->angle_max * 100);
-
-    string delimiter = "$";
-    string range_delimiter = "#";
-
-    string head_str = "GPMAPD";
-    string source_str = "robot";
-    string community_str = community_id_;
-    string id_str = to_string(id_int);
-    string status_str = "ok";
-    string seq_str = to_string(input->header.seq);
-    string type_str = "lidar";
-    string task_str = "single";
-    string min_angle_str = to_string(angle_min);
-    string max_angle_str = to_string(angle_max);
-    string angle_size_str = to_string(angle_size);
-
-    string data_str;
-    if(input->ranges[0] > input->range_max) {
-      data_str +=  "nan";
-    } else if (input->ranges[0] < input->range_min) {
-      data_str +=  "0";
+  for (int i = 1; i < input->ranges.size(); ++i) {
+    if(input->ranges[i] > input->range_max) {
+      data_str += range_delimiter + "nan";
+    } else if (input->ranges[i] < input->range_min) {
+      data_str += range_delimiter + "0";
     } else {
-      int ranges_2d = static_cast<int>(input->ranges[0] * 100);
-      data_str +=  to_string(ranges_2d);
-    }
-
-    string end_str = "HE";
-
-    for (int i = 1; i < input->ranges.size(); ++i) {
-      if(input->ranges[i] > input->range_max) {
-        data_str += range_delimiter + "nan";
-      } else if (input->ranges[i] < input->range_min) {
-        data_str += range_delimiter + "0";
-      } else {
-        int ranges_2d = static_cast<int>(input->ranges[i] * 100);
-        data_str += range_delimiter + to_string(ranges_2d);
-      }
-
-    }
-    int length_raw = head_str.size() + source_str.size() + community_str.size() +
-                     id_str.size() + status_str.size() +
-                     seq_str.size() + type_str.size() + 
-                     task_str.size() + min_angle_str.size() +
-                     max_angle_str.size() + angle_size_str.size() +
-                     data_str.size() + end_str.size() + 13 * delimiter.size();
-    length_raw += static_cast<int>(log10(static_cast<double>(length_raw)));
-    length_raw ++;
-    if(to_string(length_raw).size() != to_string(length_raw-1).size()) length_raw++;
-    string length_str = to_string(length_raw);
-
-    string output = head_str + delimiter + 
-                    length_str + delimiter + 
-                    source_str + delimiter + 
-                    community_str + delimiter + 
-                    id_str + delimiter + 
-                    status_str + delimiter + 
-                    seq_str + delimiter + 
-                    type_str + delimiter + 
-                    task_str + delimiter + 
-                    min_angle_str + delimiter + 
-                    max_angle_str + delimiter +
-                    angle_size_str + delimiter + 
-                    data_str + delimiter + 
-                    end_str;
-
-    std_msgs::String output_msg;
-    output_msg.data = output;
-    scan_str_pub.publish(output_msg);
-
-  }
-
-
-  void ObstacleManager::ClickpointCallback(const geometry_msgs::PointStamped::ConstPtr& input) {
-    geometry_msgs::Point32 point;
-    cout << "Click Point Received , current total " << pointcloud_rviz_.points.size()/32 << endl;
-    if(pointcloud_rviz_.points.size() > 320) {
-      pointcloud_rviz_.points.clear();
-    }
-    double obs_radius = 0.15; 
-    for (double i = 0; i < 2*PI; i+=0.2) {
-      point.x = input->point.x + obs_radius*cos(i);
-      point.y = input->point.y + obs_radius*sin(i);
-      pointcloud_rviz_.points.push_back(point);
+      int ranges_2d = static_cast<int>(input->ranges[i] * 100);
+      data_str += range_delimiter + to_string(ranges_2d);
     }
 
   }
+  int length_raw = head_str.size() + source_str.size() + community_str.size() +
+                   id_str.size() + status_str.size() +
+                   time_str.size() + type_str.size() + 
+                   task_str.size() + min_angle_str.size() +
+                   max_angle_str.size() + angle_size_str.size() +
+                   data_str.size() + end_str.size() + 13 * delimiter.size();
+  length_raw += static_cast<int>(log10(static_cast<double>(length_raw)));
+  length_raw ++;
+  if(to_string(length_raw).size() != to_string(length_raw-1).size()) length_raw++;
+  string length_str = to_string(length_raw);
+
+  string output = head_str + delimiter + 
+                  length_str + delimiter + 
+                  source_str + delimiter + 
+                  community_str + delimiter + 
+                  id_str + delimiter + 
+                  status_str + delimiter + 
+                  time_str + delimiter + 
+                  type_str + delimiter + 
+                  task_str + delimiter + 
+                  min_angle_str + delimiter + 
+                  max_angle_str + delimiter +
+                  angle_size_str + delimiter + 
+                  data_str + delimiter + 
+                  end_str;
+
+  std_msgs::String output_msg;
+  output_msg.data = output;
+  scan_str_pub.publish(output_msg);
+}
+
+
+void ObstacleManager::ClickpointCallback(const geometry_msgs::PointStamped::ConstPtr& input) {
+  geometry_msgs::Point32 point;
+  cout << "Click Point Received , current total " << pointcloud_rviz_.points.size()/32 << endl;
+  if(pointcloud_rviz_.points.size() > 320) {
+    pointcloud_rviz_.points.clear();
+  }
+  double obs_radius = 0.15; 
+  for (double i = 0; i < 2*PI; i+=0.2) {
+    point.x = input->point.x + obs_radius*cos(i);
+    point.y = input->point.y + obs_radius*sin(i);
+    pointcloud_rviz_.points.push_back(point);
+  }
+
+}
