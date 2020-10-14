@@ -61,6 +61,8 @@ private:
   /** Publishers **/
   ros::Publisher map_obs_pub;
   ros::Publisher scan_str_pub;
+  ros::Publisher convert_scan_pub;
+
 
   /** Subscribers **/
   ros::Subscriber map_sub;

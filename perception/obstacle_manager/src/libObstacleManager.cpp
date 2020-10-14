@@ -12,6 +12,7 @@ ObstacleManager::ObstacleManager():pn("~") {
 
   map_obs_pub = n.advertise<sensor_msgs::PointCloud> ("/map_obs_points", 1);
   scan_str_pub = n.advertise<std_msgs::String> ("from_robot_lidar", 1);
+  convert_scan_pub = n.advertise<sensor_msgs::LaserScan> ("lidar_scan", 1);
 
   isMapSave_ = false;
 
@@ -169,6 +170,8 @@ void ObstacleManager::publishLidarObstacle() {
   if(pointcloud_lidar_.data.empty()) return;
 
   sensor_msgs::LaserScan scan_from_pointcloud;
+  scan_from_pointcloud.header.stamp = ros::Time::now();
+  scan_from_pointcloud.header.frame_id = "/base_link";
   scan_from_pointcloud.range_max = max_range;
   scan_from_pointcloud.range_min = min_range;
   scan_from_pointcloud.angle_min = -PI;
@@ -198,7 +201,7 @@ void ObstacleManager::publishLidarObstacle() {
     }
   }
 
-
+  convert_scan_pub.publish(scan_from_pointcloud);
 
   if((ros::Time::now() - mqtt_timer_).toSec() < 0.1) return;
   mqtt_timer_ = ros::Time::now();
