@@ -178,7 +178,7 @@ void MissionControl::Execute() {
     } 
     else if(mission_state == static_cast<int>(AutoState::ACTION)) {
       vehicle_run_state_1st_.data = "step1: mission_state was ACTION.";
-      ApplyAction();
+      ApplyAction(mission_state);
       continue; 
     }
     else if(mission_state == static_cast<int>(AutoState::RELOCATION)) {
@@ -241,7 +241,7 @@ int MissionControl::DecisionMaker() {
   return static_cast<int>(AutoState::STOP);
 }
 
-void MissionControl::ApplyAction() {
+void MissionControl::ApplyAction(int mission_state) {
   double action_time = 5;
   if((ros::Time::now() - action_start_timer_).toSec() > action_time) {
     std_msgs::Int32 action_state;
@@ -249,6 +249,14 @@ void MissionControl::ApplyAction() {
     action_state_pub.publish(action_state);
     isAction_ = false;
   }
+
+  geometry_msgs::Twist safe_cmd;
+  geometry_msgs::Twist raw_cmd;
+  ZeroCommand(raw_cmd);
+  checkCommandSafety(raw_cmd,safe_cmd,mission_state);
+  createCommandInfo(safe_cmd);
+  publishCommand();
+
 }
 
 void MissionControl::ApplyJoyControl(int mission_state) {
@@ -924,7 +932,7 @@ void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel,int mission_stat
   static geometry_msgs::Twist last_run_vel;
   static geometry_msgs::Twist last_origin_vel;
   last_origin_vel = Cmd_vel;
-  if(mission_state != static_cast<int>(AutoState::STOP)) last_run_vel = Cmd_vel;
+  if(mission_state != static_cast<int>(AutoState::STOP) && mission_state != static_cast<int>(AutoState::ACTION)) last_run_vel = Cmd_vel;
 
 
   // Velocity Limit
@@ -963,7 +971,7 @@ void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel,int mission_stat
         }
       }
     }
-    else if(mission_state == static_cast<int>(AutoState::STOP)) {
+    else if(mission_state == static_cast<int>(AutoState::STOP) && mission_state == static_cast<int>(AutoState::ACTION)) {
       if(last_run_vel.linear.x == 0) Cmd_vel.linear.x = 0; 
       else {
         Cmd_vel.linear.x = last_cmd_vel.linear.x - 2 * max_linear_acceleration_;

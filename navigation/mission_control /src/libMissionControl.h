@@ -217,7 +217,7 @@ private:
   void ApplyStopControl(int mission_state);
   void ApplyBackwardControl();
 
-  void ApplyAction();
+  void ApplyAction(int mission_state);
 
   void ApplyAutoControl(int mission_state);
   void ApplySlowControl();

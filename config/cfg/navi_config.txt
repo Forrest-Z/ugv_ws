@@ -8,7 +8,7 @@ max_translational_velocity 4
 min_translational_velocity 0.1
 
 controller_linear_scale 1
-controller_rotation_scale 2
+controller_rotation_scale 1
 
 vehicle_radius 0.3
 
