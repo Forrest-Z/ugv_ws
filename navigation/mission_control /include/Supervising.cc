@@ -252,7 +252,7 @@ int Supervising::AutoSuperviseDecision(sensor_msgs::PointCloud obstacle_in_base,
     static vector<float> Input_cmd_angular_queue(4,0);
 
     double yaw_now = vehicle_in_map.z;
-    limit_danger_radius = 0.5 + Ka*Input_cmd.linear.x * Input_cmd.linear.x;
+    // limit_danger_radius = 0.5 + Ka*Input_cmd.linear.x * Input_cmd.linear.x; //扇形危险区与速度平方正相关
 
     Input_cmd_linear_queue.insert(Input_cmd_linear_queue.begin(),Input_cmd.linear.x);
     Input_cmd_linear_queue.pop_back();

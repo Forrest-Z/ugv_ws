@@ -502,12 +502,13 @@ private:
 
   void PlannerManualCallback(const std_msgs::String::ConstPtr& Input) {
     if(Input->data != "WAIT" && Input->data != "AUTO" && Input->data != "NARROW" 
-      && Input->data != "NOMAP" && Input->data != "RELOCATION" && Input->data != "Q") return;
+      && Input->data != "NOMAP" && Input->data != "RELOCATION" && Input->data != "STOP") {
+      planner_manual_state_ = false;
+      return;
+    } 
 
     planner_manual_ = Input->data;
     planner_manual_state_ = true;
-
-    if(planner_manual_ == "Q") planner_manual_state_ = false;
   }
 
   //========== 增加Astar 与 RRT =======================

@@ -189,7 +189,7 @@ void ObstacleManager::publishLidarObstacle() {
     if (*iter_z > max_height || *iter_z < min_height) continue;
     if (range > max_range) continue;
     geometry_msgs::Point32 point;
-    point.x = *iter_x;
+    point.x = *iter_x + 0.2;
     point.y = *iter_y;
     point.z = 1;
     pointcloud_base_.points.push_back(point);

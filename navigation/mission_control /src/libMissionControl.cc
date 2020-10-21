@@ -209,6 +209,14 @@ void MissionControl::Execute() {
 // ABCD EFGH IJKL MNOP QRST UVWX YZ
 int MissionControl::DecisionMaker() {
   if(isJoyControl_) return static_cast<int>(AutoState::JOY);
+  if(planner_manual_state_) {
+      if(planner_manual_ == "STOP") return static_cast<int>(AutoState::STOP);
+      else if(planner_manual_ == "AUTO") return static_cast<int>(AutoState::AUTO);
+      else if(planner_manual_ == "NARROW") return static_cast<int>(AutoState::NARROW);
+      else if(planner_manual_ == "NOMAP") return static_cast<int>(AutoState::NOMAP);
+      else if(planner_manual_ == "RELOCATION") return static_cast<int>(AutoState::RELOCATION);
+      else if(planner_manual_ == "WAIT") return static_cast<int>(AutoState::WAIT);
+  }
   if(isAction_) return static_cast<int>(AutoState::ACTION);
   if(isLTEControl_) {
     if((ros::Time::now() - lte_last_timer_).toSec() > 0.1) {
@@ -219,24 +227,15 @@ int MissionControl::DecisionMaker() {
     return static_cast<int>(AutoState::LTE);
   }
   if(checkMissionStage()){ 
-    if(planner_manual_state_) {
-      if(planner_manual_ == "AUTO") return static_cast<int>(AutoState::AUTO);
-      if(planner_manual_ == "NARROW") return static_cast<int>(AutoState::NARROW);
-      if(planner_manual_ == "NOMAP") return static_cast<int>(AutoState::NOMAP);
-      if(planner_manual_ == "RELOCATION") return static_cast<int>(AutoState::RELOCATION);
-      if(planner_manual_ == "WAIT") return static_cast<int>(AutoState::WAIT);
-    }
-    else {
-      // if(auto_state_global_ == 1) return static_cast<int>(AutoState::NOMAP);
-      // else if(auto_state_global_ == 2) return static_cast<int>(AutoState::RELOCATION);
-      // else {
-        if(!MySuperviser_.GetAutoMissionState())
-          return static_cast<int>(AutoState::NARROW);
-        else 
-          return static_cast<int>(AutoState::AUTO);
-      }
+    // if(auto_state_global_ == 1) return static_cast<int>(AutoState::NOMAP);
+    // else if(auto_state_global_ == 2) return static_cast<int>(AutoState::RELOCATION);
+    // else {
+      if(!MySuperviser_.GetAutoMissionState())
+        return static_cast<int>(AutoState::NARROW);
+      else 
+        return static_cast<int>(AutoState::AUTO);  
     // } 
-    }
+   }
 
   return static_cast<int>(AutoState::STOP);
 }
@@ -587,9 +586,9 @@ sensor_msgs::PointCloud MissionControl::NarrowAstarPathfind() {
 
 sensor_msgs::PointCloud MissionControl::NarrowRRTPathfind() {
   int global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter_);
-  cout << "global_goal_index :" << global_goal_index << endl;
+  // cout << "global_goal_index :" << global_goal_index << endl;
   global_sub_goal_ = global_path_pointcloud_.points[global_goal_index];
-  cout << "global_sub_goal_ : " << global_sub_goal_.x << " , " << global_sub_goal_.y << endl;
+  // cout << "global_sub_goal_ : " << global_sub_goal_.x << " , " << global_sub_goal_.y << endl;
   
   geometry_msgs::Point32 global_goal_in_local;
   ConvertPoint(global_sub_goal_,global_goal_in_local,map_to_base_);
@@ -705,9 +704,7 @@ geometry_msgs::Twist MissionControl::PursuitRRTPathCommand() {
   vector<geometry_msgs::Point32> RRT_check_local;
 
   path_lookahead_index = RRT_pointcloud_local.points.size() * lookahead_RRT_scale_;
-  for(int i = path_lookahead_index; i < RRT_pointcloud_local.points.size(); i--) {
-    if(hypot(RRT_pointcloud_local.points[i].x-RRT_pointcloud_local.points.front().x,
-        RRT_pointcloud_local.points[i].y-RRT_pointcloud_local.points.front().y) <= 2) continue;
+  for(int i = path_lookahead_index; i >= 0; i--) {
     RRT_check_local_point = RRT_pointcloud_local.points[i];
     RRT_check_local.push_back(RRT_check_local_point);
   }
@@ -932,7 +929,7 @@ void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel,int mission_stat
   static geometry_msgs::Twist last_run_vel;
   static geometry_msgs::Twist last_origin_vel;
   last_origin_vel = Cmd_vel;
-  if(mission_state != static_cast<int>(AutoState::STOP) && mission_state != static_cast<int>(AutoState::ACTION)) last_run_vel = Cmd_vel;
+  if(mission_state != static_cast<int>(AutoState::STOP) || mission_state != static_cast<int>(AutoState::ACTION)) last_run_vel = Cmd_vel;
 
 
   // Velocity Limit
@@ -971,7 +968,7 @@ void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel,int mission_stat
         }
       }
     }
-    else if(mission_state == static_cast<int>(AutoState::STOP) && mission_state == static_cast<int>(AutoState::ACTION)) {
+    else if(mission_state == static_cast<int>(AutoState::STOP) || mission_state == static_cast<int>(AutoState::ACTION)) {
       if(last_run_vel.linear.x == 0) Cmd_vel.linear.x = 0; 
       else {
         Cmd_vel.linear.x = last_cmd_vel.linear.x - 2 * max_linear_acceleration_;
@@ -983,7 +980,7 @@ void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel,int mission_stat
     }
   }
 
-  if(mission_state == static_cast<int>(AutoState::AUTO) && mission_state == static_cast<int>(AutoState::NARROW))
+  if(mission_state == static_cast<int>(AutoState::AUTO) || mission_state == static_cast<int>(AutoState::NARROW))
     if(MySuperviser_.DangerObstaclepPercept()) Cmd_vel.linear.x = 0;  
 
   last_cmd_vel = Cmd_vel; 

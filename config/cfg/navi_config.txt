@@ -19,9 +19,9 @@ RRT_extend_step 0.2
 RRT_search_plan_num 1
 RRT_expand_size 3
 
-limit_danger_radius 0.3
-min_danger_longth 0.3
-min_danger_width 0.2
+limit_danger_radius 0.35
+min_danger_longth 0.35
+min_danger_width 0.25
 limit_route_radius 5
 limit_predict_radius 10
 buffer_radius 1
