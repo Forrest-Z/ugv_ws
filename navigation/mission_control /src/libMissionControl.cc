@@ -3,7 +3,7 @@
 MissionControl::MissionControl():pn("~") {
   pn.param<string>("config_folder", config_folder_, "");
   cout << "config_folder :" << config_folder_ << endl;
-  n.param<string>("robot_id", robot_id_, "robot_0");
+  n.param<string>("robot_id", robot_id_, "robot_99");
   n.param<string>("community_id", community_id_, "2");
 
   joy_sub = n.subscribe("joy",10, &MissionControl::JoyCallback,this);

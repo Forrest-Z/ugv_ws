@@ -1,7 +1,7 @@
 #include "libObstacleManager.h"
 
 ObstacleManager::ObstacleManager():pn("~") { 
-  n.param<string>("robot_id", robot_id_, "");
+  n.param<string>("robot_id", robot_id_, "robot_99");
   n.param<string>("community_id", community_id_, "2");
 
   map_sub = n.subscribe("/map",1, &ObstacleManager::MapCallback,this);
