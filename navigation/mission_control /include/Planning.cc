@@ -1366,4 +1366,350 @@ bool Planning::RRTEndAhead(geometry_msgs::Point32 start_point,geometry_msgs::Poi
 
 } 
 
+// local multi-spline pathfind
+void Planning::InitSplineCurve(string Spline_folder,string Spline_name) {
+  vector<vector<sensor_msgs::PointCloud>> path_set_2d;
+  joints_set_.clear();
+  path_set_.clear();
+
+  InitLocalCostmap(costmap_local_);
+
+  GenerateSplinesJoints(joints_set_);
+  GenerateSplinesPath(path_set_,joints_set_,path_set_2d);
+  GenerateRevoluteSplinePath(path_set_);
+
+  if(!ReadAdjacentListTXT(Spline_folder,Spline_name)) return;
+}
+
+void Planning::GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output) {
+  Output.clear();
+  const int temp_splines_joints_num = 3;
+
+  double first_shrink_scale = temp_splines_joints_num * 0.95;
+  double second_shrink_scale = temp_splines_joints_num * 0.55;
+  double radius_unit = path_window_radius_ / temp_splines_joints_num;
+
+  vector<int> level_nums = {spline_1st_level_,spline_2nd_level_,spline_3rd_level_}; //{1,7,5};
+  vector<double> level_unit(temp_splines_joints_num,0);
+  vector<sensor_msgs::PointCloud> temp_vector(level_nums[0]);
+
+  if(level_nums[0] == 1) level_unit[0] = 0;
+  else level_unit[0] = path_swap_range_ / double(level_nums[0] - 1);
+
+  level_unit[1] = path_swap_range_ / (first_shrink_scale * double(level_nums[1] - 1));
+  level_unit[2] = level_unit[1] * double(level_nums[1] - 1) / (second_shrink_scale * double(level_nums[2] - 1));
+
+  sensor_msgs::PointCloud temp_level;
+  temp_level.header.frame_id = "/base_link";
+  temp_level.header.stamp = ros::Time::now();
+  geometry_msgs::Point32 temp_joint;
+
+  for (int i = 0; i < temp_vector.size(); ++i) {
+    double level_0_angle = 0;
+    temp_joint.x = radius_unit * 0.5* cos(level_0_angle);
+    temp_joint.y = radius_unit * 0.5 * sin(level_0_angle); // 由radius_unit*1 -> radius_unit*0.5, 缩短第一个节点距离
+    temp_joint.z = i+1;
+    temp_level.points.push_back(temp_joint);
+    for (int j = 0; j < level_nums[1]; ++j) {
+      double level_1_angle = level_0_angle - ((level_nums[1] - 1) * level_unit[1]/2) + j * level_unit[1];
+      temp_joint.x = radius_unit * 1.5 * cos(level_1_angle);
+      temp_joint.y = radius_unit * 1.5 * sin(level_1_angle);
+      temp_joint.z = i+1 + (j+1) * 10;
+      temp_level.points.push_back(temp_joint);
+      for (int k = 0; k < level_nums[2]; ++k) {
+        double level_2_angle = level_1_angle - ((level_nums[2] - 1) * level_unit[2]/2) + k * level_unit[2];
+        temp_joint.x = radius_unit * 3 * cos(level_2_angle);
+        temp_joint.y = radius_unit * 3 * sin(level_2_angle);
+        temp_joint.z = i+1 + (j+1) * 10 + (k+1) * 100;
+        temp_level.points.push_back(temp_joint);
+      }
+    }
+    temp_vector[i] = temp_level;
+    temp_level.points.clear();
+  }
+  Output = temp_vector;
+}
+
+void Planning::GenerateSplinesPath(vector<PathGroup>& Path_set,vector<sensor_msgs::PointCloud> Joints) {
+  Path_set.clear();
+  geometry_msgs::Point32 point_0;
+  geometry_msgs::Point32 point_1;
+  geometry_msgs::Point32 point_2;
+  geometry_msgs::Point32 point_3;
+
+  vector<vector<sensor_msgs::PointCloud>> temp_vector_2d(Joints.size());
+  sensor_msgs::PointCloud path_temp;
+  PathGroup path_group_temp;
+  path_temp.header.frame_id = "/base_link";
+  path_temp.header.stamp = ros::Time::now();
+  
+  for (int i = 0; i < Joints.size(); ++i) {
+    for (int j = 0; j < Joints[i].points.size(); ++j) {
+      if(int(std::log10(Joints[i].points[j].z)) == 0) point_1 = Joints[i].points[j];
+      if(int(std::log10(Joints[i].points[j].z)) == 1) point_2 = Joints[i].points[j];
+      if(int(std::log10(Joints[i].points[j].z)) == 2) point_3 = Joints[i].points[j];
+
+      if(ComputeDigit(point_1.z,1) == ComputeDigit(point_2.z,1) && ComputeDigit(point_1.z,1) == ComputeDigit(point_3.z,1) && ComputeDigit(point_2.z,2) == ComputeDigit(point_3.z,2)) {
+        point_0.x = point_1.x / 2;  
+        point_0.y = point_1.y / 2;  
+        ComputeSplines(path_temp,point_1,point_2,point_3,i);
+
+        path_group_temp.path_pointcloud = path_temp;
+        path_group_temp.path_pointcloud.channels.resize(1);
+        path_group_temp.path_pointcloud.channels[0].name = "path_id";
+        path_group_temp.path_pointcloud.channels[0].values.resize(path_temp.points.size(),1);
+        path_group_temp.path_id = id_num_;
+        id_num_++;
+        temp_vector_2d[i].push_back(path_temp);
+        Path_set.push_back(path_group_temp);
+      }
+    }
+  }
+}
+
+void Planning::GenerateRevoluteSplinePath(vector<PathGroup> &Path_set) {
+  double average_angle = 20.0/180*PI;
+  int single_num = spline_array_num_ / 2;
+  double shrink_rate = －single_num　＊　average_angle;
+  double z_height = 10;
+  vector<PathGroup> Path_set_init = Path_set;
+  double path_scale = 1000;
+
+  for(int index = 0;index < spline_array_num_;index++) {
+    double revolute_angle = PI*shrink_rate;
+    shrink_rate += average_angle;
+    if(index == spline_array_num_/2+1) continue;
+
+    for(int i = 0; i < Path_set_init.size(); i++) {
+      PathGroup Path_sub_path;
+      for(int j = 0; j < Path_set_init[i].path_pointcloud.points.size(); j++) {
+        geometry_msgs::Point32 temp_point;
+        double point_distance = hypot(Path_set_init[i].path_pointcloud.points[j].x,Path_set_init[i].path_pointcloud.points[j].y);
+        double costheta = Path_set_init[i].path_pointcloud.points[j].x / point_distance;
+        double sintheta = Path_set_init[i].path_pointcloud.points[j].y / point_distance;
+
+        temp_point.x = point_distance * (costheta*cos(revolute_angle)-sintheta*sin(revolute_angle));
+        temp_point.y = point_distance * (sintheta*cos(revolute_angle)+costheta*sin(revolute_angle));
+        temp_point.z = Path_set_init[i].path_pointcloud.points[j].z + z_height;           ;
+        Path_sub_path.path_pointcloud.points.push_back(temp_point);
+
+      }
+      double temp_path_id = Path_set[i].path_pointcloud.channels[0].values[0] + path_scale;
+      Path_sub_path.path_pointcloud.channels.resize(1);
+      Path_sub_path.path_pointcloud.channels[0].name = "path_id";
+      Path_sub_path.path_pointcloud.channels[0].values.resize(Path_sub_path.path_pointcloud.points.size(),1);
+      Path_sub_path.path_id = id_num_;
+      id_num_++;
+      Path_set.push_back(Path_sub_path);
+    }
+    z_height+=10;
+    path_scale+=1000;
+  }
+}
+
+bool Planning::ReadAdjacentListTXT(string Adjacent_list_folder,string Adjacent_list_name) {
+  map_to_path_.clear();
+
+  std::ifstream node_file;
+
+  std::string file_name_node;
+	file_name_node = Adjacent_list_folder + Adjacent_list_name + ".txt";
+
+  node_file.open(file_name_node);
+
+  if(!node_file.is_open()) {
+  	cout<<"Could not find Node File"<<endl;
+  	cout<<"File Not Exist At: "<<file_name_node<<endl;
+  	return false;
+  }
+
+  string str;
+  while (std::getline(node_file, str)) {
+    MapToPath sub_map_to_path;
+		std::stringstream ss(str);
+
+    bool map_enable = true;
+    int sub_path_id;
+
+    while(!ss.eof()) {
+      if(map_enable) ss >> sub_map_to_path.map_data_num;
+      else {
+        if(ss >> sub_path_id)
+          sub_map_to_path.path_id.push_back(sub_path_id);
+      }
+      map_enable = false;
+    }
+
+    map_to_path_.push_back(sub_map_to_path);
+	}
+	node_file.close();
+
+  // for(int m = 0; m < map_to_path_.size(); m++) {
+  //   cout << "------------------------------" << endl;
+  //   cout << "map_num : " << map_to_path_[m].map_data_num << endl;
+  //   cout << "path_id : ";
+  //   for(int n = 0; n < map_to_path_[m].path_id.size(); n++) {
+  //     cout <<  map_to_path_[m].path_id[n] << " , ";
+  //   }
+  //   cout << endl;
+  // }
+
+	return true;
+}
+
+void Planning::ComputeSafePath(nav_msgs::OccupancyGrid Cost_map) {
+  path_safe_set_.clear();
+  path_set_init_.clear();
+  path_set_init_ = path_set_;
+
+  vector<int> temp_path_id;
+
+  for(int i = 0; i < Cost_map.data.size(); i++) {
+    if(Cost_map.data[i] < 10) continue;
+    int single_path_id;
+    for(int j = 0; j < map_to_path_[i].path_id.size(); j++) {
+      single_path_id = map_to_path_[i].path_id[j];
+    
+      if(!CheckNodeRepeat(single_path_id,temp_path_id)) {
+        path_set_init_[single_path_id].path_pointcloud.channels[0].values.assign(path_set_init_[single_path_id].path_pointcloud.points.size(),-1);
+        temp_path_id.push_back(single_path_id);
+      }
+    } 
+  }
+
+  // cout << "------------------" << endl;
+  // for(int k = 0; k < temp_path_id.size(); k++) {
+  //   cout << temp_path_id[k] << " ";
+  // }
+  // cout << endl;
+  // vector<sensor_msgs::PointCloud> path_safe_set_2d(spline_array_num_);
+
+  for(int ii = 0; ii < path_set_.size(); ii++) {
+    PathGroup temp_path_group;
+    if(!CheckNodeRepeat(path_set_[ii].path_id,temp_path_id)) {
+      double path_group_id = path_set_[ii].path_id / (spline_2nd_level_*spline_3rd_level_);
+      // path_safe_set_2d[path_group_id].push_back(path_set_[ii].path_pointcloud);
+      temp_path_group.path_id = path_set_[ii].path_id;
+      temp_path_group.path_pointcloud = path_set_[ii].path_pointcloud;
+      path_safe_set_.push_back(temp_path_group);
+    }
+  }
+}
+
+bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
+
+  double goal_weight = 1;
+  static int last_index = -1;
+  int optimal_index;
+  bool isLastEnable = false;
+
+  int path_group_index;
+  vector<int> sub_path_index;
+  vector<double> path_cost(spline_array_num_,0);
+  vector<int> sub_path_cost(spline_2nd_level_,0);
+
+  // compute path group cost, choose max_feasible_pro fist group path
+  for(int i = 0; i < path_safe_set_.size(); i++) {
+    int path_1st_group_index = path_safe_set_[i].path_id / (spline_2nd_level_*spline_3rd_level_);
+    geometry_msgs::Point32 candidate_point = path_safe_set_[i].path_pointcloud.points.back();
+    double path_goal_distance = hypot((candidate_point.y - Goal.y),(candidate_point.x - Goal.x));
+    path_cost[path_1st_group_index] += goal_weight / path_goal_distance;
+  }
+
+
+  double max_feasible_prob = DBL_MIN;
+  for(int j = 0; j < path_cost.size(); j++) {
+    cout << j << " : "<< path_cost[j] << endl;
+    if(path_cost[j] - max_feasible_prob > 0.0001) {
+      cout << j << "  **********" << endl;
+      max_feasible_prob = path_cost[j];
+      path_group_index = j;
+    }
+  }
+
+  cout << "path_group_index : "  << path_group_index << endl;
+  
+  path_best_.points.clear();
+
+  // compute sub path cost, choose sub_max_feasible_pro second group path
+  for(int k = 0; k < path_safe_set_.size(); k++) {
+    if(path_safe_set_[k].path_id / (spline_2nd_level_*spline_3rd_level_) == path_group_index) {
+      int check_id = path_safe_set_[k].path_id % (spline_2nd_level_*spline_3rd_level_);
+      int check_index = check_id / spline_3rd_level_;
+      sub_path_cost[check_index] += 1;
+      for(int m = 0; m < path_safe_set_[k].path_pointcloud.points.size(); m++) {
+        geometry_msgs::Point32 temp_point;
+        temp_point = path_safe_set_[k].path_pointcloud.points[m];
+        temp_point.z = 400;
+        path_best_.points.push_back(temp_point);
+      }
+    }
+  }
+
+  int sub_max_feasible_prob = INT_MIN;
+  for(int ii = 0; ii < sub_path_cost.size(); ii++) {
+    cout << ii << " : "<< sub_path_cost[ii] << endl;
+    if(sub_path_cost[ii] > sub_max_feasible_prob) {
+      cout << ii << "  **********" << endl;
+      optimal_index = path_group_index*spline_2nd_level_ + ii;
+      sub_max_feasible_prob = sub_path_cost[ii];
+    }
+  }
+
+  for (int jj = 0; jj < sub_path_cost.size(); jj++) {
+    if(sub_path_cost[jj] == sub_max_feasible_prob) {
+      sub_path_index.push_back(jj);
+      if(path_group_index*spline_2nd_level_+jj == last_index) isLastEnable = true;
+    }
+  }
+
+  double stable_weight = 1;
+  if(sub_path_index.size() != 1) {
+    double min_distance = DBL_MAX;
+    for (int i = 0; i < sub_path_index.size(); ++i) {
+      geometry_msgs::Point32 candidate_point = path_set_[path_group_index*(spline_2nd_level_*spline_3rd_level_)+sub_path_index[i]*spline_3rd_level_].path_pointcloud.points[path_set_[path_group_index*(spline_2nd_level_*spline_3rd_level_)+sub_path_index[i]*spline_3rd_level_].path_pointcloud.points.size()/3];
+      double path_distance = hypot((candidate_point.y - Goal.y),(candidate_point.x - Goal.x));
+
+      if(isLastEnable) {
+        geometry_msgs::Point32 last_point = path_set_[last_index*spline_3rd_level_].path_pointcloud.points[path_set_[last_index*spline_3rd_level_].path_pointcloud.points.size()/3];
+        path_distance += stable_weight * hypot((candidate_point.y - last_point.y),(candidate_point.x - last_point.x));
+      }
+
+      if(path_distance < min_distance) {
+        min_distance = path_distance;
+        optimal_index = path_group_index * spline_2nd_level_ + sub_path_index[i];
+      }
+    }
+  }
+
+  // 最优第二级子路径
+  bool enable_push_back = true;
+  for(int k = 0; k < path_safe_set_.size(); k++) {
+    if(path_safe_set_[k].path_id / spline_3rd_level_ == optimal_index) {
+      for(int m = 0; m < path_safe_set_[k].path_pointcloud.points.size(); m++) {
+        geometry_msgs::Point32 temp_point;
+        temp_point = path_safe_set_[k].path_pointcloud.points[m];
+        temp_point.z = 400;
+        sub_1_path_best_.points.push_back(temp_point);
+        if(enable_push_back) {
+          sub_2_path_best_.push_back(temp_point);
+          enable_push_back = false;
+        }
+      }
+    }
+  }
+
+  cout << "optimal_index : " << optimal_index << endl;
+  last_index = optimal_index;
+}
+
+bool Planning::CheckNodeRepeat(int check_id, vector<int> id_group) {
+  if(id_group.empty()) return false;
+  for(int i = 0; i < id_group.size(); ++i) {
+    if(check_id == id_group[i]) return true; 
+  }
+  return false;
+}
+
+
 

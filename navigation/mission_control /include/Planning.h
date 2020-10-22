@@ -70,8 +70,15 @@ public:
 		costmap_resolution_    				= 0.1; // xiugai
 	 	safe_path_search_grid_ 				= 3;
 
+		spline_1st_level_ 						= 1;
+		spline_2nd_level_ 						= 7;
+		spline_3rd_level_ 						= 5;
+
+		spline_array_num_							= 15;
+
+
 		Astar_local_map_window_radius_ 		= 30;
-    	Astar_local_costmap_resolution_ 	= 0.5;
+		Astar_local_costmap_resolution_ 	= 0.5;
 		Astar_plan_num_ 					= 1;
 
 		RRT_iteration_ 						= 5000;
@@ -83,6 +90,8 @@ public:
 		RRT_expand_size_ 					= 2;
 
 		path_best_.header.frame_id = "/base_link";
+		sub_1_path_best_.header.frame_id = "/base_link";
+		sub_2_path_best_.header.frame_id = "/base_link";
 	}
 	~Planning(){}
 	bool GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::PointCloud Obstacle,double Path_Radius);
@@ -189,6 +198,10 @@ private:
 
 	double costmap_resolution_;
 	int safe_path_search_grid_;
+	int spline_1st_level_ ;
+	int spline_2nd_level_;
+	int spline_3rd_level_;
+	int spline_array_num_; // 单数，两侧对称
 
 	std::mutex mtx_radius_;
 
