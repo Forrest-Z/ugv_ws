@@ -976,13 +976,19 @@ void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel,int mission_stat
       }
     }
     else if(mission_state == static_cast<int>(AutoState::NARROW)) {
-      if(last_origin_vel.linear.x == 0) Cmd_vel.linear.x = last_cmd_vel.linear.x - 4 * max_linear_acceleration_;
+      if(last_origin_vel.linear.x == 0) {
+        Cmd_vel.linear.x = last_cmd_vel.linear.x - 4 * max_linear_acceleration_;
+        if(Cmd_vel.linear.x < 0) Cmd_vel.linear.x = 0;
+      }
     }
   }
 
-  if(mission_state == static_cast<int>(AutoState::AUTO) || mission_state == static_cast<int>(AutoState::NARROW))
-    if(MySuperviser_.DangerObstaclepPercept()) Cmd_vel.linear.x = 0;  
-
+  if(mission_state == static_cast<int>(AutoState::AUTO) || mission_state == static_cast<int>(AutoState::NARROW)) {
+    if(MySuperviser_.DangerObstaclepPercept()) {
+      Cmd_vel.linear.x = last_cmd_vel.linear.x - 6 * max_linear_acceleration_; 
+      if(Cmd_vel.linear.x < 0) Cmd_vel.linear.x = 0;
+    }
+  }
   last_cmd_vel = Cmd_vel; 
 }
 
