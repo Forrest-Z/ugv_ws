@@ -90,13 +90,13 @@ Visualization Manager:
     - Class: rviz/Group
       Displays:
         - Class: rviz/Marker
-          Enabled: false
+          Enabled: true
           Marker Topic: /vehicle_model
           Name: Marker
           Namespaces:
-            {}
+            "": true
           Queue Size: 100
-          Value: false
+          Value: true
         - Class: rviz/Marker
           Enabled: true
           Marker Topic: /vehicle_info
@@ -513,7 +513,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: 3.12500024
+      Angle: 2.5250001
       Class: rviz/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
@@ -523,11 +523,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Scale: -80.0979614
+      Scale: -27.0239449
       Target Frame: base_link
       Value: TopDownOrtho (rviz)
-      X: -3.12191486
-      Y: 3.568784
+      X: 0.814400554
+      Y: 0.257643193
     Saved: ~
 Window Geometry:
   Displays:

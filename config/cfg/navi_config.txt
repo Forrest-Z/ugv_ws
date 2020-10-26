@@ -31,3 +31,7 @@ revolute_safe_radius 0.3
 danger_assist_radius 0.4
 
 spline_search_grid 4
+spline_costmap_resolution 0.2
+RRT_costmap_resolution 0.1
+spline_map_window_radius 4
+RRT_map_window_radius 8

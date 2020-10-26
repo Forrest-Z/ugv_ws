@@ -24,7 +24,7 @@
 void Controlling::ComputePurePursuitCommand(geometry_msgs::Point32 Goal_Route, geometry_msgs::Point32 Goal_Plan,geometry_msgs::Twist& Pp_command) {
   double u_turn_speed_scale = 0; 
   double u_turn_rotation_scale = 0.8;
-  double rotation_threshold = 0.6;
+  double rotation_threshold = 1;
 
   double goal_plan_distance = hypot(Goal_Plan.x,Goal_Plan.y);
   double goal_plan_yaw = atan2(Goal_Plan.y,Goal_Plan.x);
@@ -32,11 +32,11 @@ void Controlling::ComputePurePursuitCommand(geometry_msgs::Point32 Goal_Route, g
 
   max_linear_acceleration_ = temp_max_linear_acceleration_;
   
-  if(fabs(faceing_angle) > rotation_threshold ) {
+  if(fabs(goal_plan_yaw) > rotation_threshold) {
     Pp_command.linear.x =  speed_scale_ * u_turn_speed_scale;
     Pp_command.angular.z = rotation_scale_ * u_turn_rotation_scale 
-                            * (faceing_angle/fabs(faceing_angle));
-    max_linear_acceleration_ = temp_max_linear_acceleration_ * 3;
+                            * (goal_plan_yaw/fabs(goal_plan_yaw));
+    max_linear_acceleration_ = temp_max_linear_acceleration_ * 4;
   } else {
     Pp_command.linear.x =  speed_scale_ * goal_plan_distance;
     Pp_command.angular.z = rotation_scale_ * goal_plan_yaw;

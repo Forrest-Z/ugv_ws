@@ -47,7 +47,8 @@ bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::Po
     path_temp.header.frame_id = "/base_link";
     path_temp.header.stamp = ros::Time::now();
     path_temp.points.push_back(point_temp);
-    path_best_ = path_temp;
+    sub_2_path_best_ = path_temp;
+    cout << "Spline path find failed !" << endl;
     return false;
   }
   
@@ -73,7 +74,7 @@ bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::Po
 bool Planning::UpdateCostmap(sensor_msgs::PointCloud Obstacle) {
   InitLocalCostmap(costmap_local_);
   SetLocalCostmap(costmap_local_,Obstacle);
-  ExpandCostmap(costmap_local_,2);
+  ExpandCostmap(costmap_local_,1);
   return true;
 }
 
@@ -1676,6 +1677,7 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
   vector<int> sub_path_index;
   vector<double> path_cost(spline_array_num_,0);
   vector<int> sub_path_cost(spline_2nd_level_,0);
+  if(path_safe_set_.empty()) return false;
 
   // compute path group cost, choose max_feasible_pro fist group path
   for(int i = 0; i < path_safe_set_.size(); i++) {
@@ -1734,7 +1736,7 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
     }
   }
 
-  double stable_weight = 1;
+  double stable_weight = 0;
   if(sub_path_index.size() != 1) {
     double min_distance = DBL_MAX;
     for (int i = 0; i < sub_path_index.size(); ++i) {
@@ -1772,6 +1774,8 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
 
   cout << "optimal_index : " << optimal_index << endl;
   last_index = optimal_index;
+
+  return true;
 }
 
 bool Planning::CheckNodeRepeat(int check_id, vector<int> id_group) {

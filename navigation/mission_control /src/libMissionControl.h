@@ -132,6 +132,11 @@ private:
   double danger_assist_radius_;
   double spline_search_grid_;
 
+  double spline_costmap_resolution_;
+  double RRT_costmap_resolution_;
+  double spline_map_window_radius_;
+  double RRT_map_window_radius_;
+
   /** Flag **/
   bool isWIFIControl_;
   bool isJoyControl_;
@@ -261,10 +266,10 @@ private:
     return lte_cmd_;
   }
 
-  bool setAutoCoefficient(double index) {
-    double grid_res = 0.1;
+  bool setAutoCoefficient(double index,double grid_res,double map_window_radius) {
     MyPlanner_.set_safe_path_search_grid(spline_search_grid_);
     MyPlanner_.set_costmap_resolution(grid_res);
+    MyPlanner_.set_map_window_radius(map_window_radius);
 
     MyPlanner_.set_Astar_map_window_radius(Astar_local_map_window_radius_);
 	  MyPlanner_.set_RRT_iteration(RRT_iteration_);
@@ -287,7 +292,7 @@ private:
     MySuperviser_.set_danger_assist_radius(danger_assist_radius_);
     
     lookahead_global_meter_ = 5;
-    lookahead_local_scale_ = 3;
+    lookahead_local_scale_ = 5;
     return true;
   }
 

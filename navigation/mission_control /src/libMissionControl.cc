@@ -80,7 +80,11 @@ bool MissionControl::Initialization() {
     revolute_safe_radius_    = 0.5;
     danger_assist_radius_    = 1;
 
-    spline_search_grid_ = 3;
+    spline_search_grid_     = 3;
+    RRT_costmap_resolution_ = 0.1;
+    spline_costmap_resolution_ = 0.2;
+    spline_map_window_radius_  = 4;
+    RRT_map_window_radius_     = 8;
 
     vehicle_radius_ = 0.3;
   }
@@ -227,7 +231,6 @@ int MissionControl::DecisionMaker() {
     return static_cast<int>(AutoState::LTE);
   }
   if(checkMissionStage()){ 
-    return static_cast<int>(AutoState::AUTO);  
     // if(auto_state_global_ == 1) return static_cast<int>(AutoState::NOMAP);
     // else if(auto_state_global_ == 2) return static_cast<int>(AutoState::RELOCATION);
     // else {
@@ -303,11 +306,11 @@ void MissionControl::ApplyStopControl(int mission_state) {
 void MissionControl::ApplyAutoControl(int mission_state) {
   relocation_stage_ = 0;
   geometry_msgs::Twist safe_cmd;
-  if(!setAutoCoefficient(1)) return;
+  if(!setAutoCoefficient(1,spline_costmap_resolution_,spline_map_window_radius_)) return;
   if(!updateState()) return;
   geometry_msgs::Twist raw_cmd = getAutoCommand();
-  // auto supervise_state = SuperviseDecision(mission_state);
-  // raw_cmd = ExecuteDecision(raw_cmd,mission_state,supervise_state);
+  auto supervise_state = SuperviseDecision(mission_state);
+  raw_cmd = ExecuteDecision(raw_cmd,mission_state,supervise_state);
   checkCommandSafety(raw_cmd,safe_cmd,mission_state);
   createCommandInfo(safe_cmd);
   publishCommand();
@@ -316,9 +319,9 @@ void MissionControl::ApplyAutoControl(int mission_state) {
 
 void MissionControl::ApplyNarrowControl(int mission_state) {
   geometry_msgs::Twist safe_cmd;
-  if(!setAutoCoefficient(1)) return;
+  if(!setAutoCoefficient(1,RRT_costmap_resolution_,RRT_map_window_radius_)) return;
   if(!updateState()) return;
-  if(!updateNarrowState()) return;
+  // if(!updateNarrowState()) return;
   geometry_msgs::Twist raw_cmd = getNarrowCommand();
   auto supervise_state = SuperviseDecision(mission_state);
   raw_cmd = ExecuteDecision(raw_cmd,mission_state,supervise_state);
@@ -331,7 +334,7 @@ void MissionControl::ApplyNarrowControl(int mission_state) {
 void MissionControl::ApplyRelocationControl(int mission_state) {
   if(RelocationDelay()) return;
   geometry_msgs::Twist safe_cmd;
-  if(!setAutoCoefficient(1)) return;
+  if(!setAutoCoefficient(1,spline_costmap_resolution_,spline_map_window_radius_)) return;
   if(!updateState()) return;
   geometry_msgs::Twist raw_cmd = getAutoCommand();
   auto supervise_state = SuperviseDecision(mission_state);
@@ -345,7 +348,7 @@ void MissionControl::ApplyRelocationControl(int mission_state) {
 void MissionControl::ApplyNomapControl(int mission_state) {
   geometry_msgs::Twist safe_cmd;
   RemoveMapObstacle(obstacle_in_base_);
-  if(!setAutoCoefficient(1)) return;
+  if(!setAutoCoefficient(1,spline_costmap_resolution_,spline_map_window_radius_)) return;
   if(!updateState()) return;
   geometry_msgs::Twist raw_cmd = getAutoCommand();
   auto supervise_state = SuperviseDecision(mission_state);
@@ -381,8 +384,6 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
   // cout << "global_goal_in_local : " << global_goal_in_local.x << "," << global_goal_in_local.y << endl; 
   
   int path_lookahead_index;
-  ros::Time begin = ros::Time::now();
-  return controller_cmd;
 
   double search_range = 4;
   double search_range_min = 4;
@@ -401,22 +402,22 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
   }
   
 
-  // if(search_range < search_range_min) {
-  //   plan_state_ = false;
-  //   path_lookahead_index = 0;
-  // } else {
-  //   path_lookahead_index = MyPlanner_.sub_2_path_best().points.size()/lookahead_local_scale_;
-  //   plan_state_ = true;
-  // }
-  if(MyPlanner_.sub_2_path_best().points.size() <= 0) return controller_cmd;
-  path_lookahead_index = MyPlanner_.sub_2_path_best().points.size()/lookahead_local_scale_;
+  if(search_range < search_range_min) {
+    plan_state_ = false;
+    path_lookahead_index = 0;
+  } else {
+    path_lookahead_index = MyPlanner_.sub_2_path_best().points.size()/lookahead_local_scale_;
+    plan_state_ = true;
+  }
 
-  cout << "path_lookahead_index : " << path_lookahead_index << endl;
   ros::Time now_auto_time = ros::Time::now();
   if(plan_state_) cout << "spline plan search time : " << (now_auto_time.nsec - last_auto_time.nsec) * pow(10,-6) << "ms" << endl;
 
+  if(MyPlanner_.sub_2_path_best().points.size() <= 0) return controller_cmd;
+  path_lookahead_index = MyPlanner_.sub_2_path_best().points.size()/lookahead_local_scale_;
+
   local_sub_goal_ = MyPlanner_.sub_2_path_best().points[path_lookahead_index];
-  MyController_.ComputePurePursuitRRTCommand(global_goal_in_local,local_sub_goal_,controller_cmd);
+  MyController_.ComputePurePursuitCommand(global_goal_in_local,local_sub_goal_,controller_cmd);
 
 
   return controller_cmd;
@@ -501,13 +502,14 @@ void MissionControl::CheckNarrowToAutoState() {
   geometry_msgs::Point32 global_goal_in_local;
   ConvertPoint(global_path_pointcloud_.points[global_goal_index],global_goal_in_local,map_to_base_);
 
-  double check_search_range = 6;
-  if(MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_,check_search_range)){
-    ClearAutoMissionState();
+  double check_search_range = 4;
+  ClearAutoMissionState();
+  // if(MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_,check_search_range)){
+  //   ClearAutoMissionState();
 
-    vehicle_run_state_3rd_.data = GetLocalTime() + "step3： The route condition was better, NARROW planner had changed to AUTO.";
-    vehicle_run_state_pub.publish(vehicle_run_state_3rd_);
-  }
+  //   vehicle_run_state_3rd_.data = GetLocalTime() + "step3： The route condition was better, NARROW planner had changed to AUTO.";
+  //   vehicle_run_state_pub.publish(vehicle_run_state_3rd_);
+  // }
 }
 
 bool MissionControl::NarrowSubPlannerDecision() {
@@ -574,7 +576,7 @@ sensor_msgs::PointCloud MissionControl::NarrowRRTPathfind() {
   int global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter_);
   // cout << "global_goal_index :" << global_goal_index << endl;
   global_sub_goal_ = global_path_pointcloud_.points[global_goal_index];
-  // cout << "global_sub_goal_ : " << global_sub_goal_.x << " , " << global_sub_goal_.y << endl;
+  cout << "global_sub_goal_ : " << global_sub_goal_.x << " , " << global_sub_goal_.y << endl;
   
   geometry_msgs::Point32 global_goal_in_local;
   ConvertPoint(global_sub_goal_,global_goal_in_local,map_to_base_);
@@ -708,6 +710,7 @@ geometry_msgs::Twist MissionControl::PursuitRRTPathCommand() {
   last_index = init_index;
 
   if(RRT_refind_) {
+    printf("111111111111111\n");
     vehicle_run_state_3rd_.data = GetLocalTime() + "step3： RRT route appeared obstacle or achived sub goal, RRT started to replan. ";
     vehicle_run_state_pub.publish(vehicle_run_state_3rd_);
     ClearRRTPlanState();
@@ -1134,6 +1137,22 @@ bool MissionControl::ReadConfig() {
     }
     else if(yaml_info == "isJOYscram") {
       ss >> isJOYscram_;
+      info_linenum++;
+    }
+    else if(yaml_info == "spline_costmap_resolution") {
+      ss >> spline_costmap_resolution_;
+      info_linenum++;
+    }
+    else if(yaml_info == "RRT_costmap_resolution") {
+      ss >> RRT_costmap_resolution_;
+      info_linenum++;
+    }
+    else if(yaml_info == "spline_map_window_radius") {
+      ss >> spline_map_window_radius_;
+      info_linenum++;
+    }
+    else if(yaml_info == "RRT_map_window_radius") {
+      ss >> RRT_map_window_radius_;
       info_linenum++;
     }
   }
