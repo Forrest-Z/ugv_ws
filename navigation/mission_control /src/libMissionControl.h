@@ -287,7 +287,7 @@ private:
     MySuperviser_.set_danger_assist_radius(danger_assist_radius_);
     
     lookahead_global_meter_ = 5;
-    lookahead_local_scale_ = 2;
+    lookahead_local_scale_ = 3;
     return true;
   }
 
@@ -324,9 +324,9 @@ private:
     temp_point.points.push_back(global_sub_goal_);
     global_goal_pub.publish(temp_point);
 
-    if(MyPlanner_.path_all_set().size() > 0) local_all_pub.publish(MyTools_.ConvertVectortoPointcloud(MyPlanner_.path_all_set()));
-    if(MyPlanner_.path_safe_set().size() > 0) local_safe_pub.publish(MyTools_.ConvertVectortoPointcloud(MyPlanner_.path_safe_set()));
-    local_best_pub.publish(MyPlanner_.path_best());
+    if(MyPlanner_.path_all_set().size() > 0) local_all_pub.publish(MyPlanner_.ConvertVectortoPointcloud(MyPlanner_.path_all_set()));
+    if(MyPlanner_.path_safe_set().size() > 0) local_safe_pub.publish(MyPlanner_.ConvertVectortoPointcloud(MyPlanner_.path_safe_set()));
+    local_best_pub.publish(MyPlanner_.sub_1_path_best());
     global_path_pub.publish(global_path_pointcloud_);
 
     traceback_pub.publish(MySuperviser_.GetTracebackRoute());

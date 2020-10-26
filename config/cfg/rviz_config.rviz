@@ -8,6 +8,7 @@ Panels:
         - /TF1/Frames1
         - /Map1/Position1
         - /Robot_11
+        - /Robot_11/Safe_Path1
         - /Map4
       Splitter Ratio: 0.472222209
     Tree Height: 674
@@ -27,7 +28,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: ""
+    SyncSource: Map_Obstacle
 Toolbars:
   toolButtonStyle: 2
 Visualization Manager:
@@ -38,13 +39,22 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
+        base_link:
+          Value: true
+        map:
+          Value: true
+        odom:
+          Value: true
       Marker Scale: 5
       Name: TF
       Show Arrows: false
       Show Axes: true
       Show Names: false
       Tree:
-        {}
+        map:
+          odom:
+            base_link:
+              {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -80,19 +90,19 @@ Visualization Manager:
     - Class: rviz/Group
       Displays:
         - Class: rviz/Marker
-          Enabled: true
+          Enabled: false
           Marker Topic: /vehicle_model
           Name: Marker
           Namespaces:
             {}
           Queue Size: 100
-          Value: true
+          Value: false
         - Class: rviz/Marker
           Enabled: true
           Marker Topic: /vehicle_info
           Name: Marker
           Namespaces:
-            {}
+            "": true
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -254,8 +264,8 @@ Visualization Manager:
           Axis: Z
           Channel Name: intensity
           Class: rviz/PointCloud
-          Color: 255; 255; 255
-          Color Transformer: AxisColor
+          Color: 255; 226; 58
+          Color Transformer: FlatColor
           Decay Time: 0
           Enabled: true
           Invert Rainbow: false
@@ -433,7 +443,7 @@ Visualization Manager:
       Channel Name: intensity
       Class: rviz/PointCloud
       Color: 255; 255; 255
-      Color Transformer: ""
+      Color Transformer: Intensity
       Decay Time: 0
       Enabled: true
       Invert Rainbow: false
@@ -442,7 +452,7 @@ Visualization Manager:
       Min Color: 0; 0; 0
       Min Intensity: 0
       Name: PointCloud
-      Position Transformer: ""
+      Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
@@ -513,11 +523,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Scale: -3.28692484
+      Scale: -80.0979614
       Target Frame: base_link
       Value: TopDownOrtho (rviz)
-      X: 70.6385956
-      Y: 85.3084717
+      X: -3.12191486
+      Y: 3.568784
     Saved: ~
 Window Geometry:
   Displays:

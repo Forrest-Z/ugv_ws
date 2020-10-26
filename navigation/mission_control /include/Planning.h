@@ -30,6 +30,24 @@ using std::list;
 using std::random_device;
 using std::priority_queue;
 
+struct PathGroup
+{
+	sensor_msgs::PointCloud path_pointcloud;
+	int path_id;
+};
+
+struct PathToMap
+{
+	int path_id;
+	vector<int> map_data_num;
+};
+
+struct MapToPath
+{
+	int map_data_num;
+	vector<int> path_id;
+};
+
 
 struct CandidatePixel {
   int index;
@@ -61,8 +79,8 @@ class Planning
 {
 public:
 	Planning(){
-		map_window_radius_     				= 8;
-		path_swap_range_       				= 1.2;
+		map_window_radius_     				= 4;
+		path_swap_range_       				= 1.57;
 		path_vertical_step_    				= 0.2;
 
 		splines_joints_num_    				= 3;
@@ -74,7 +92,11 @@ public:
 		spline_2nd_level_ 						= 7;
 		spline_3rd_level_ 						= 5;
 
-		spline_array_num_							= 15;
+		spline_array_num_							= 29;
+
+		spline_height_                = 0;
+  	id_num_                       = 0;
+		path_window_radius_						= 4;
 
 
 		Astar_local_map_window_radius_ 		= 30;
@@ -99,9 +121,11 @@ public:
 	bool CheckIdealPath(geometry_msgs::Point32& Goal);
 	bool UpdateCostmap(sensor_msgs::PointCloud Obstacle);
 
-	vector<sensor_msgs::PointCloud> path_all_set() {return path_all_set_;}; 
-	vector<sensor_msgs::PointCloud> path_safe_set() {return path_safe_set_;};
+	vector<PathGroup> path_all_set() {return path_set_;}; 
+	vector<PathGroup> path_safe_set() {return path_safe_set_;};
 	sensor_msgs::PointCloud path_best() {return path_best_;};
+	sensor_msgs::PointCloud sub_2_path_best() {return sub_2_path_best_;};
+	sensor_msgs::PointCloud sub_1_path_best() {return sub_1_path_best_;};
 	nav_msgs::OccupancyGrid costmap_local() {return costmap_local_;};
 	double map_window_radius() {return map_window_radius_;};
 
@@ -182,6 +206,15 @@ public:
 	sensor_msgs::PointCloud getRRTTree() {return RRT_tree_;}
 	nav_msgs::Path ComputeBSplineCurve(nav_msgs::Path path);
 
+	bool CheckNodeRepeat(int check_id, vector<int> id_group);
+	bool SelectBestPath(geometry_msgs::Point32 Goal);
+	bool ReadAdjacentListTXT(string Adjacent_list_folder,string Adjacent_list_name);
+	void GenerateRevoluteSplinePath(vector<PathGroup> &Path_set);
+	void GenerateSplinesPath(vector<PathGroup>& Path_set,vector<sensor_msgs::PointCloud> Joints);
+	void InitSplineCurve(string Spline_folder,string Spline_name);
+	sensor_msgs::PointCloud ConvertVectortoPointcloud(vector<PathGroup> Input);
+	void ExpandCostmap(nav_msgs::OccupancyGrid &Grid,int expand_size);
+
 
 private:
 	const double PI = 3.14159265359;
@@ -203,15 +236,25 @@ private:
 	int spline_3rd_level_;
 	int spline_array_num_; // 单数，两侧对称
 
+	double spline_height_;
+	int id_num_;
+
 	std::mutex mtx_radius_;
 
 	/** Flag **/
 
 	/** Variables **/
-	vector<sensor_msgs::PointCloud> path_all_set_;
-	vector<sensor_msgs::PointCloud> path_safe_set_;
-	sensor_msgs::PointCloud path_best_;
 	nav_msgs::OccupancyGrid costmap_local_;
+
+	vector<PathToMap> path_to_map_;
+	vector<MapToPath> map_to_path_;
+	vector<PathGroup> path_set_;
+	vector<PathGroup> path_safe_set_;
+	vector<PathGroup> path_set_init_;
+	vector<sensor_msgs::PointCloud> joints_set_;
+	sensor_msgs::PointCloud path_best_;
+	sensor_msgs::PointCloud sub_1_path_best_;
+	sensor_msgs::PointCloud sub_2_path_best_;
 
 	/** Functions **/
 
@@ -225,7 +268,7 @@ private:
 	void ComputeStraight(sensor_msgs::PointCloud& Output,geometry_msgs::Point32 Goal);
 	void InitLocalCostmap(nav_msgs::OccupancyGrid& Costmap);
 	void SetLocalCostmap(nav_msgs::OccupancyGrid& Costmap,sensor_msgs::PointCloud Obstacle);
-	void ComputeSafePath(vector<vector<sensor_msgs::PointCloud>> Input_2d,vector<vector<sensor_msgs::PointCloud>>& Output_2d,vector<sensor_msgs::PointCloud>& Output,nav_msgs::OccupancyGrid Costmap);
+	void ComputeSafePath(nav_msgs::OccupancyGrid Costmap);
 	bool DetectObstcaleGrid(sensor_msgs::PointCloud Path,nav_msgs::OccupancyGrid Costmap,int Addition);
 	bool DetectPointObstcaleGrid(geometry_msgs::Point32 Point,nav_msgs::OccupancyGrid Costmap);
 

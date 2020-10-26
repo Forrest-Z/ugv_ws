@@ -227,6 +227,7 @@ int MissionControl::DecisionMaker() {
     return static_cast<int>(AutoState::LTE);
   }
   if(checkMissionStage()){ 
+    return static_cast<int>(AutoState::AUTO);  
     // if(auto_state_global_ == 1) return static_cast<int>(AutoState::NOMAP);
     // else if(auto_state_global_ == 2) return static_cast<int>(AutoState::RELOCATION);
     // else {
@@ -305,8 +306,8 @@ void MissionControl::ApplyAutoControl(int mission_state) {
   if(!setAutoCoefficient(1)) return;
   if(!updateState()) return;
   geometry_msgs::Twist raw_cmd = getAutoCommand();
-  auto supervise_state = SuperviseDecision(mission_state);
-  raw_cmd = ExecuteDecision(raw_cmd,mission_state,supervise_state);
+  // auto supervise_state = SuperviseDecision(mission_state);
+  // raw_cmd = ExecuteDecision(raw_cmd,mission_state,supervise_state);
   checkCommandSafety(raw_cmd,safe_cmd,mission_state);
   createCommandInfo(safe_cmd);
   publishCommand();
@@ -367,6 +368,7 @@ void MissionControl::ApplyWaitControl(int mission_state) {
 }
 
 geometry_msgs::Twist MissionControl::getAutoCommand() {
+  geometry_msgs::Twist controller_cmd;
   ros::Time last_auto_time = ros::Time::now();
 
   int global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter_);
@@ -374,39 +376,20 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
 
   auto_state_global_ = global_sub_goal_.z;
 
-  // cout << global_path_pointcloud_.points.size() << "/" << global_goal_index << endl;
-  // cout << "global_sub_goal_ : " << global_sub_goal_.x << "," << global_sub_goal_.y << endl; 
-  // geometry_msgs::Point32 destination = global_path_pointcloud_.points.back();
-
   geometry_msgs::Point32 global_goal_in_local;
   ConvertPoint(global_sub_goal_,global_goal_in_local,map_to_base_);
   // cout << "global_goal_in_local : " << global_goal_in_local.x << "," << global_goal_in_local.y << endl; 
-
-  sensor_msgs::PointCloud temp_pointcloud;
-  MyRouter_.ModifyRoutePoint(global_goal_in_local,temp_pointcloud,obstacle_in_base_);
-  // local_all_pub.publish(temp_pointcloud);
-
-  if(temp_pointcloud.points.size() > 0) {
-    if(temp_pointcloud.points.back().z == -1) {
-      global_goal_in_local = temp_pointcloud.points.back();
-      // ConvertPoint(global_goal_in_local,global_sub_goal_,base_to_map_);
-    }
-  }
-
-  double rotation_threshold = 0.6;
-  double faceing_angle = atan2(global_goal_in_local.y,global_goal_in_local.x);
-
   
   int path_lookahead_index;
-  geometry_msgs::Twist controller_cmd;
+  ros::Time begin = ros::Time::now();
+  return controller_cmd;
 
-  // double search_range = MyPlanner_.map_window_radius();
   double search_range = 4;
-  double search_range_min = 2.5;
+  double search_range_min = 4;
   double iteration_scale = 0.8;
   double wait_range = 3;
   wait_plan_state_ = true;
-  while(search_range > search_range_min) {
+  while(search_range >= search_range_min) {
     if(!MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_,search_range)) {
       if(search_range < wait_range) wait_plan_state_ = false;
     } else {
@@ -414,24 +397,27 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
     }
     search_range *= iteration_scale;
 
-    if(MyPlanner_.path_all_set().size() > 0) local_all_pub.publish(MyTools_.ConvertVectortoPointcloud(MyPlanner_.path_all_set()));
+    if(MyPlanner_.path_all_set().size() > 0) local_all_pub.publish(MyPlanner_.ConvertVectortoPointcloud(MyPlanner_.path_all_set()));
   }
   
 
-  if(search_range <= search_range_min) {
-    plan_state_ = false;
-    path_lookahead_index = 0;
-  } else {
-    path_lookahead_index = MyPlanner_.path_best().points.size()/lookahead_local_scale_;
-    plan_state_ = true;
-  }
+  // if(search_range < search_range_min) {
+  //   plan_state_ = false;
+  //   path_lookahead_index = 0;
+  // } else {
+  //   path_lookahead_index = MyPlanner_.sub_2_path_best().points.size()/lookahead_local_scale_;
+  //   plan_state_ = true;
+  // }
+  if(MyPlanner_.sub_2_path_best().points.size() <= 0) return controller_cmd;
+  path_lookahead_index = MyPlanner_.sub_2_path_best().points.size()/lookahead_local_scale_;
 
-  if(fabs(faceing_angle) > rotation_threshold) plan_state_ = true;
+  cout << "path_lookahead_index : " << path_lookahead_index << endl;
   ros::Time now_auto_time = ros::Time::now();
   if(plan_state_) cout << "spline plan search time : " << (now_auto_time.nsec - last_auto_time.nsec) * pow(10,-6) << "ms" << endl;
 
-  local_sub_goal_ = MyPlanner_.path_best().points[path_lookahead_index];
-  MyController_.ComputePurePursuitCommand(global_goal_in_local,local_sub_goal_,controller_cmd);
+  local_sub_goal_ = MyPlanner_.sub_2_path_best().points[path_lookahead_index];
+  MyController_.ComputePurePursuitRRTCommand(global_goal_in_local,local_sub_goal_,controller_cmd);
+
 
   return controller_cmd;
 }
@@ -667,7 +653,7 @@ geometry_msgs::Twist MissionControl::PursuitAstarPathCommand() {
     }
     search_range *= iteration_scale;
 
-    if(MyPlanner_.path_all_set().size() > 0) local_all_pub.publish(MyTools_.ConvertVectortoPointcloud(MyPlanner_.path_all_set()));
+    // if(MyPlanner_.path_all_set().size() > 0) local_all_pub.publish(MyTools_.ConvertVectortoPointcloud(MyPlanner_.path_all_set()));
   }
   
 
@@ -1023,6 +1009,11 @@ void MissionControl::PrintConfig() {
 bool MissionControl::ReadConfig() {
   std::ifstream yaml_file;
   std::string file_name_node = config_folder_+ "/cfg/navi_config.txt";
+
+  std::string Spline_folder = config_folder_;
+  std::string Spline_name = "/cfg/map_to_path";
+  MyPlanner_.InitSplineCurve(Spline_folder,Spline_name);
+  
   yaml_file.open(file_name_node);
   if(!yaml_file.is_open()) {
     cout<<"Could not find Config File"<<endl;

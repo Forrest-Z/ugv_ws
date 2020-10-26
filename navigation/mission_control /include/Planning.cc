@@ -33,20 +33,12 @@ bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::Po
   if(path_window_radius_ <= 0) return false;
   if(path_window_radius_ > map_window_radius_) return false;
 
-  path_result = CheckIdealPath(Goal);
+  // path_result = CheckIdealPath(Goal);
 
   if(!path_result){
-    double goal_plan_yaw = atan2(Goal.y,Goal.x);
-    if(fabs(goal_plan_yaw) > path_swap_range_/2) 
-      path_result = false;
-    else {
-      GenerateSplinesJoints(joints_set);
-      GenerateSplinesPath(path_set,joints_set,path_set_2d);
-      ComputeSafePath(path_set_2d,safe_set_2d,path_safe_set_,costmap_local_);
-      path_result = SelectBestPath(safe_set_2d,Goal);
-    }
+    ComputeSafePath(costmap_local_);
+    path_result = SelectBestPath(Goal);
   }
-  path_all_set_ = path_set;
   mtx_radius_.unlock();
  
   if(!path_result) {
@@ -81,6 +73,7 @@ bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::Po
 bool Planning::UpdateCostmap(sensor_msgs::PointCloud Obstacle) {
   InitLocalCostmap(costmap_local_);
   SetLocalCostmap(costmap_local_,Obstacle);
+  ExpandCostmap(costmap_local_,2);
   return true;
 }
 
@@ -265,86 +258,55 @@ void Planning::GenerateSplinesPath(vector<sensor_msgs::PointCloud>& Path_set,vec
  *     double path_window_radius_                  - candidate paths radius               *
  *     double path_swap_range_                     - maximum joint's distribution radian  *
  ******************************************************************************************/
-void Planning::GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output) {
-  Output.clear();
-  const int temp_splines_joints_num = 3;
+// void Planning::GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output) {
+//   Output.clear();
+//   const int temp_splines_joints_num = 3;
 
-  double shrink_scale = temp_splines_joints_num * 2;
-  double radius_unit = path_window_radius_ / temp_splines_joints_num;
+//   double shrink_scale = temp_splines_joints_num * 2;
+//   double radius_unit = path_window_radius_ / temp_splines_joints_num;
 
-  vector<int> level_nums = {5,3,3}; //{9,9,7};
-  vector<double> level_unit(temp_splines_joints_num,0);
-  vector<sensor_msgs::PointCloud> temp_vector(level_nums[0]);
+//   vector<int> level_nums = {5,3,3}; //{9,9,7};
+//   vector<double> level_unit(temp_splines_joints_num,0);
+//   vector<sensor_msgs::PointCloud> temp_vector(level_nums[0]);
 
-  level_unit[0] = path_swap_range_ / double(level_nums[0] - 1);
-  for (int i = 1; i < level_unit.size(); ++i) {
-    level_unit[i] = level_unit[i-1] * double(level_nums[i-1] - 1) / (shrink_scale * double(level_nums[i] - 1));
-  }
+//   level_unit[0] = path_swap_range_ / double(level_nums[0] - 1);
+//   for (int i = 1; i < level_unit.size(); ++i) {
+//     level_unit[i] = level_unit[i-1] * double(level_nums[i-1] - 1) / (shrink_scale * double(level_nums[i] - 1));
+//   }
 
-  sensor_msgs::PointCloud temp_level;
-  temp_level.header.frame_id = "/base_link";
-  temp_level.header.stamp = ros::Time::now();
-  geometry_msgs::Point32 temp_joint;
+//   sensor_msgs::PointCloud temp_level;
+//   temp_level.header.frame_id = "/base_link";
+//   temp_level.header.stamp = ros::Time::now();
+//   geometry_msgs::Point32 temp_joint;
 
-  for (int i = 0; i < temp_vector.size(); ++i) {
-    double level_0_angle = -(path_swap_range_/2) + i*level_unit[0];
-    temp_joint.x = radius_unit * 0.5 * cos(level_0_angle);
-    temp_joint.y = radius_unit * 0.5 * sin(level_0_angle); // 由radius_unit*1 -> radius_unit*0.5, 缩短第一个节点距离
-    temp_joint.z = i+1;
-    if(!DetectPointObstcaleGrid(temp_joint,costmap_local_)) continue;
-    temp_level.points.push_back(temp_joint);
-    for (int j = 0; j < level_nums[1]; ++j) {
-      double level_1_angle = level_0_angle - ((level_nums[1] - 1) * level_unit[1]/2) + j * level_unit[1];
-      temp_joint.x = radius_unit * 1.5 * cos(level_1_angle);
-      temp_joint.y = radius_unit * 1.5 * sin(level_1_angle);
-      temp_joint.z = i+1 + (j+1) * 10;
-      if(!DetectPointObstcaleGrid(temp_joint,costmap_local_)) continue;
-      temp_level.points.push_back(temp_joint);
-      for (int k = 0; k < level_nums[2]; ++k) {
-        double level_2_angle = level_1_angle - ((level_nums[2] - 1) * level_unit[2]/2) + k * level_unit[2];
-        temp_joint.x = radius_unit * 3 * cos(level_2_angle);
-        temp_joint.y = radius_unit * 3 * sin(level_2_angle);
-        temp_joint.z = i+1 + (j+1) * 10 + (k+1) * 100;
-        if(!DetectPointObstcaleGrid(temp_joint,costmap_local_)) continue;
-        temp_level.points.push_back(temp_joint);
-      }
-    }
-    temp_vector[i] = temp_level;
-    temp_level.points.clear();
-  }
-  Output = temp_vector;
-}
-
-
-/******************************************************************************************
- ****                                 Check Path Safety                                ****
- ******************************************************************************************
- * Iteration 2d vector of path to find non collision paths                                *
- * Explanation : TODO                                                                     *
- * Input:                                                                                 *
- *     Input_2d  - 2d vector of all candidate path                                        *
- *     Costmap   - the costmap in local frame                                             *
- * Output:                                                                                *
- *     Output    - vector of non collision path                                           *
- *     Output_2d - 2d vector of non collision path                                        *
- * Variables:                                                                             *
- *   Local :                                                                              *
- *   Global:                                                                              *
- *     const int ADDITION_SPLINE - addition grid when search obstacle around spline       *
- ******************************************************************************************/
-void Planning::ComputeSafePath(vector<vector<sensor_msgs::PointCloud>> Input_2d,vector<vector<sensor_msgs::PointCloud>>& Output_2d,vector<sensor_msgs::PointCloud>& Output,nav_msgs::OccupancyGrid Costmap) {
-  Output.clear();
-  Output_2d.resize(Input_2d.size());
-  for (int i = 0; i < Input_2d.size(); ++i) {
-    for (int j = 0; j < Input_2d[i].size(); ++j) {
-      if(!DetectObstcaleGrid(Input_2d[i][j],Costmap,ADDITION_SPLINE)) {
-        continue;
-      }
-      Output_2d[i].push_back(Input_2d[i][j]);
-      Output.push_back(Input_2d[i][j]);
-    }
-  }
-} 
+//   for (int i = 0; i < temp_vector.size(); ++i) {
+//     double level_0_angle = -(path_swap_range_/2) + i*level_unit[0];
+//     temp_joint.x = radius_unit * 0.5 * cos(level_0_angle);
+//     temp_joint.y = radius_unit * 0.5 * sin(level_0_angle); // 由radius_unit*1 -> radius_unit*0.5, 缩短第一个节点距离
+//     temp_joint.z = i+1;
+//     if(!DetectPointObstcaleGrid(temp_joint,costmap_local_)) continue;
+//     temp_level.points.push_back(temp_joint);
+//     for (int j = 0; j < level_nums[1]; ++j) {
+//       double level_1_angle = level_0_angle - ((level_nums[1] - 1) * level_unit[1]/2) + j * level_unit[1];
+//       temp_joint.x = radius_unit * 1.5 * cos(level_1_angle);
+//       temp_joint.y = radius_unit * 1.5 * sin(level_1_angle);
+//       temp_joint.z = i+1 + (j+1) * 10;
+//       if(!DetectPointObstcaleGrid(temp_joint,costmap_local_)) continue;
+//       temp_level.points.push_back(temp_joint);
+//       for (int k = 0; k < level_nums[2]; ++k) {
+//         double level_2_angle = level_1_angle - ((level_nums[2] - 1) * level_unit[2]/2) + k * level_unit[2];
+//         temp_joint.x = radius_unit * 3 * cos(level_2_angle);
+//         temp_joint.y = radius_unit * 3 * sin(level_2_angle);
+//         temp_joint.z = i+1 + (j+1) * 10 + (k+1) * 100;
+//         if(!DetectPointObstcaleGrid(temp_joint,costmap_local_)) continue;
+//         temp_level.points.push_back(temp_joint);
+//       }
+//     }
+//     temp_vector[i] = temp_level;
+//     temp_level.points.clear();
+//   }
+//   Output = temp_vector;
+// }
 
 
 /******************************************************************************************
@@ -466,6 +428,7 @@ void Planning::InitLocalCostmap(nav_msgs::OccupancyGrid& Costmap) {
  *   Global:                                                                              *
  *     double path_vertical_step_ - path point gap                                        *
  ******************************************************************************************/
+/*
 void Planning::ComputeSplines(sensor_msgs::PointCloud& Output,geometry_msgs::Point32 Point_1,geometry_msgs::Point32 Point_2, double Level) {
 
   Output.points.clear();
@@ -628,7 +591,7 @@ void Planning::ComputeSplines(sensor_msgs::PointCloud& Output,geometry_msgs::Poi
     Output.points.push_back(temp_output);
   }
 }
-
+*/
 /******************************************************************************************
  ****                              Generate Straight Line                              ****
  ******************************************************************************************
@@ -1373,11 +1336,9 @@ void Planning::InitSplineCurve(string Spline_folder,string Spline_name) {
   path_set_.clear();
 
   InitLocalCostmap(costmap_local_);
-
   GenerateSplinesJoints(joints_set_);
-  GenerateSplinesPath(path_set_,joints_set_,path_set_2d);
+  GenerateSplinesPath(path_set_,joints_set_);
   GenerateRevoluteSplinePath(path_set_);
-
   if(!ReadAdjacentListTXT(Spline_folder,Spline_name)) return;
 }
 
@@ -1428,6 +1389,12 @@ void Planning::GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output) {
     temp_level.points.clear();
   }
   Output = temp_vector;
+
+  for(int i = 0; i < Output.size(); i++) {
+    for(int j = 0; j < Output[i].points.size(); j++) {
+      cout << Output[i].points[j].x << " " << Output[i].points[j].y << endl;
+    }
+  }
 }
 
 void Planning::GenerateSplinesPath(vector<PathGroup>& Path_set,vector<sensor_msgs::PointCloud> Joints) {
@@ -1467,18 +1434,120 @@ void Planning::GenerateSplinesPath(vector<PathGroup>& Path_set,vector<sensor_msg
   }
 }
 
+void Planning::ComputeSplines(sensor_msgs::PointCloud& Output,geometry_msgs::Point32 Point_1,geometry_msgs::Point32 Point_2,geometry_msgs::Point32 Point_3,double Level) {
+
+  Output.points.clear();
+  geometry_msgs::Point32 temp_output;
+  geometry_msgs::Point32 Point_0;
+  vector<geometry_msgs::Point32> Point_group;
+
+  vector<double> path_h(3,0);
+  vector<double> path_a(3,0);
+  vector<double> path_b(3,0);
+  vector<double> path_c(3,0);
+  vector<double> path_d(3,0);
+  vector<double> path_m(4,0);
+
+  bool x_input;
+  bool variable_increase;
+
+  double temp_p_1;
+  double temp_p_2;
+  
+  if(Point_1.x > 0 && Point_1.x < Point_2.x && Point_2.x < Point_3.x) { 
+    x_input = true; 
+    variable_increase = true; 
+    Point_group.push_back(Point_0);
+    Point_group.push_back(Point_1);
+    Point_group.push_back(Point_2);
+    Point_group.push_back(Point_3);
+
+  } else if(Point_1.x < 0 && Point_1.x > Point_2.x && Point_2.x > Point_3.x) { 
+    x_input = true; 
+    variable_increase = false; 
+    Point_group.push_back(Point_3);
+    Point_group.push_back(Point_2);
+    Point_group.push_back(Point_1);
+    Point_group.push_back(Point_0);
+
+  } else if(Point_1.y > 0 && Point_1.y < Point_2.y && Point_2.y < Point_3.y) { 
+    x_input = false; 
+    variable_increase = true; 
+    Point_group.push_back(Point_0);
+    Point_group.push_back(Point_1);
+    Point_group.push_back(Point_2);
+    Point_group.push_back(Point_3);
+
+  } else if(Point_1.y < 0 && Point_1.y > Point_2.y && Point_2.y > Point_3.y) { 
+    x_input = false; 
+    variable_increase = false; 
+    Point_group.push_back(Point_3);
+    Point_group.push_back(Point_2);
+    Point_group.push_back(Point_1);
+    Point_group.push_back(Point_0);
+
+  }
+
+  if(x_input && variable_increase ) {
+
+    path_h[0] = Point_group[1].x - Point_group[0].x;
+    path_h[1] = Point_group[2].x - Point_group[1].x;
+    path_h[2] = Point_group[3].x - Point_group[2].x;
+
+    temp_p_1 = 6 * ((Point_group[2].y - Point_group[1].y)/path_h[1] - (Point_group[1].y - Point_group[0].y)/path_h[0]);
+    temp_p_2 = 6 * ((Point_group[3].y - Point_group[2].y)/path_h[2] - (Point_group[2].y - Point_group[1].y)/path_h[1]);
+
+
+    path_m[0] = 0;
+    path_m[2] = ((path_h[0]+path_h[1])*temp_p_2*2 - path_h[1]*temp_p_1) / (4*(path_h[0]+path_h[1])*(path_h[1]+path_h[2]) - pow(path_h[1],2));
+    path_m[1] = (temp_p_1 - path_h[1]*path_m[2]) / (2*(path_h[0]+path_h[1]));
+    path_m[3] = 0;
+
+    for(int i = 0; i < path_h.size(); i++) {
+      path_a[i] = Point_group[i].y;
+      path_b[i] = (Point_group[i+1].y - Point_group[i].y)/path_h[i] - path_h[i]*path_m[i]/2 - path_h[i]*(path_m[i+1] - path_m[i])/6;
+      path_c[i] = path_m[i]/2;
+      path_d[i] = (path_m[i+1] - path_m[i])/path_h[i]/6;
+    }
+
+    double range   = fabs(Point_3.x);
+    double iter_num = 20;
+    path_vertical_step_ = range / iter_num;
+
+    for (int j = 0; j <= iter_num; j++) {
+      temp_output.x = j * path_vertical_step_;
+      if(temp_output.x >= Point_group[0].x && temp_output.x  <= Point_group[1].x) {
+        temp_output.y = path_a[0] + path_b[0]*(temp_output.x - Point_group[0].x) + path_c[0]*pow(temp_output.x - Point_group[0].x,2) + path_d[0]*pow(temp_output.x - Point_group[0].x,3);
+      }
+      else if (temp_output.x >= Point_group[1].x && temp_output.x  <= Point_group[2].x) {
+        temp_output.y = path_a[1] + path_b[1]*(temp_output.x - Point_group[1].x) + path_c[1]*pow(temp_output.x - Point_group[1].x,2) + path_d[1]*pow(temp_output.x - Point_group[1].x,3);
+      }
+      else if (temp_output.x >= Point_group[2].x && temp_output.x  <= Point_group[3].x) {
+        temp_output.y = path_a[2] + path_b[2]*(temp_output.x - Point_group[2].x) + path_c[2]*pow(temp_output.x - Point_group[2].x,2) + path_d[2]*pow(temp_output.x - Point_group[2].x,3);
+      } else {
+        continue;
+      }
+      
+      temp_output.z = spline_height_;
+      Output.points.push_back(temp_output);
+    }
+    spline_height_+=0.1;
+  }
+
+}
+
 void Planning::GenerateRevoluteSplinePath(vector<PathGroup> &Path_set) {
-  double average_angle = 20.0/180*PI;
+  double average_angle = 10.0/180*PI;
   int single_num = spline_array_num_ / 2;
-  double shrink_rate = －single_num　＊　average_angle;
+  double shrink_rate = -average_angle * single_num;
   double z_height = 10;
   vector<PathGroup> Path_set_init = Path_set;
   double path_scale = 1000;
 
   for(int index = 0;index < spline_array_num_;index++) {
-    double revolute_angle = PI*shrink_rate;
+    double revolute_angle = shrink_rate;
     shrink_rate += average_angle;
-    if(index == spline_array_num_/2+1) continue;
+    if(index == spline_array_num_/2) continue;
 
     for(int i = 0; i < Path_set_init.size(); i++) {
       PathGroup Path_sub_path;
@@ -1598,7 +1667,7 @@ void Planning::ComputeSafePath(nav_msgs::OccupancyGrid Cost_map) {
 
 bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
 
-  double goal_weight = 1;
+  double goal_weight = 2;
   static int last_index = -1;
   int optimal_index;
   bool isLastEnable = false;
@@ -1613,15 +1682,15 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
     int path_1st_group_index = path_safe_set_[i].path_id / (spline_2nd_level_*spline_3rd_level_);
     geometry_msgs::Point32 candidate_point = path_safe_set_[i].path_pointcloud.points.back();
     double path_goal_distance = hypot((candidate_point.y - Goal.y),(candidate_point.x - Goal.x));
-    path_cost[path_1st_group_index] += goal_weight / path_goal_distance;
+    path_cost[path_1st_group_index] += 1.0 / pow(path_goal_distance,goal_weight);
   }
 
 
   double max_feasible_prob = DBL_MIN;
   for(int j = 0; j < path_cost.size(); j++) {
-    cout << j << " : "<< path_cost[j] << endl;
+    // cout << j << " : "<< path_cost[j] << endl;
     if(path_cost[j] - max_feasible_prob > 0.0001) {
-      cout << j << "  **********" << endl;
+      // cout << j << "  **********" << endl;
       max_feasible_prob = path_cost[j];
       path_group_index = j;
     }
@@ -1630,6 +1699,8 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
   cout << "path_group_index : "  << path_group_index << endl;
   
   path_best_.points.clear();
+  sub_1_path_best_.points.clear();
+  sub_2_path_best_.points.clear();
 
   // compute sub path cost, choose sub_max_feasible_pro second group path
   for(int k = 0; k < path_safe_set_.size(); k++) {
@@ -1648,9 +1719,9 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
 
   int sub_max_feasible_prob = INT_MIN;
   for(int ii = 0; ii < sub_path_cost.size(); ii++) {
-    cout << ii << " : "<< sub_path_cost[ii] << endl;
+    // cout << ii << " : "<< sub_path_cost[ii] << endl;
     if(sub_path_cost[ii] > sub_max_feasible_prob) {
-      cout << ii << "  **********" << endl;
+      // cout << ii << "  **********" << endl;
       optimal_index = path_group_index*spline_2nd_level_ + ii;
       sub_max_feasible_prob = sub_path_cost[ii];
     }
@@ -1692,10 +1763,10 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
         temp_point.z = 400;
         sub_1_path_best_.points.push_back(temp_point);
         if(enable_push_back) {
-          sub_2_path_best_.push_back(temp_point);
-          enable_push_back = false;
+          sub_2_path_best_.points.push_back(temp_point);
         }
       }
+      enable_push_back = false;
     }
   }
 
@@ -1711,5 +1782,39 @@ bool Planning::CheckNodeRepeat(int check_id, vector<int> id_group) {
   return false;
 }
 
+sensor_msgs::PointCloud Planning::ConvertVectortoPointcloud(vector<PathGroup> Input) {
+  sensor_msgs::PointCloud temp_pointcloud;
+  if(Input.empty()) return temp_pointcloud;
+  temp_pointcloud.channels.resize(1);
+  temp_pointcloud.channels[0].name = "path_id";
+
+  temp_pointcloud.header.frame_id = "/base_link";
+  temp_pointcloud.header.stamp = ros::Time::now();
+  for(int j = 0; j < Input.size(); j++) {
+    for(int i = 0; i < Input[j].path_pointcloud.points.size(); i++) {
+      temp_pointcloud.points.push_back(Input[j].path_pointcloud.points[i]);
+      temp_pointcloud.channels[0].values.push_back(Input[j].path_pointcloud.channels[0].values[i]);
+    }
+  }
+}
+
+void Planning::ExpandCostmap(nav_msgs::OccupancyGrid &Grid,int expand_size) {
+  for(int index = 0; index < Grid.data.size(); index++) {
+    if(Grid.data[index] == 50) {
+      int col_num = index / Grid.info.width; //width 是x方向的长度
+      int row_num = index % Grid.info.width;
+      for(int i = col_num - expand_size; i <= col_num + expand_size; i++) {
+        if(i < 0 || i > Grid.info.height - 1) continue;
+        for(int j = row_num - expand_size; j <= row_num + expand_size; j++) {
+          if(j < 0 || j > Grid.info.width - 1) continue;
+          if(Grid.data[i * Grid.info.width + j] != 50) {
+            Grid.data[i * Grid.info.width + j] = 55;
+          }
+        }
+      }
+
+    } 
+  }
+}
 
 
