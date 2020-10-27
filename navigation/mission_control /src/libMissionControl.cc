@@ -915,11 +915,8 @@ void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel,int mission_stat
     max_linear_acceleration_ = temp_max_linear_acceleration_;
 
   static geometry_msgs::Twist last_cmd_vel;
-  static geometry_msgs::Twist last_run_vel;
   static geometry_msgs::Twist last_origin_vel;
   last_origin_vel = Cmd_vel;
-  if(mission_state != static_cast<int>(AutoState::STOP) || mission_state != static_cast<int>(AutoState::ACTION)) last_run_vel = Cmd_vel;
-
 
   // Velocity Limit
   if(fabs(Cmd_vel.linear.x) > fabs(max_linear_velocity_)) Cmd_vel.linear.x = ComputeSign(Cmd_vel.linear.x) * max_linear_velocity_;
@@ -958,7 +955,7 @@ void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel,int mission_stat
       }
     }
     else if(mission_state == static_cast<int>(AutoState::STOP) || mission_state == static_cast<int>(AutoState::ACTION)) {
-      if(last_run_vel.linear.x == 0) Cmd_vel.linear.x = 0; 
+      if(last_cmd_vel.linear.x == 0) Cmd_vel.linear.x = 0; 
       else {
         Cmd_vel.linear.x = last_cmd_vel.linear.x - 2 * max_linear_acceleration_;
         if(Cmd_vel.linear.x < 0) Cmd_vel.linear.x = 0;
