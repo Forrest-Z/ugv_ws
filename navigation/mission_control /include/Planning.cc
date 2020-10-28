@@ -21,7 +21,6 @@
  *     double map_window_radius_                      - radius of local costmap           *
  ******************************************************************************************/
 bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::PointCloud Obstacle, double Path_Radius) {
-  
   bool path_result = false;
   vector<sensor_msgs::PointCloud> joints_set;
   vector<sensor_msgs::PointCloud> path_set;
@@ -33,14 +32,13 @@ bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::Po
   if(path_window_radius_ <= 0) return false;
   if(path_window_radius_ > map_window_radius_) return false;
 
-  // path_result = CheckIdealPath(Goal);
 
   if(!path_result){
     ComputeSafePath(costmap_local_);
     path_result = SelectBestPath(Goal);
   }
   mtx_radius_.unlock();
- 
+  
   if(!path_result) {
     sensor_msgs::PointCloud path_temp;
     geometry_msgs::Point32 point_temp;
@@ -1639,31 +1637,26 @@ void Planning::ComputeSafePath(nav_msgs::OccupancyGrid Cost_map) {
     int single_path_id;
     for(int j = 0; j < map_to_path_[i].path_id.size(); j++) {
       single_path_id = map_to_path_[i].path_id[j];
-    
-      if(!CheckNodeRepeat(single_path_id,temp_path_id)) {
-        path_set_init_[single_path_id].path_pointcloud.channels[0].values.assign(path_set_init_[single_path_id].path_pointcloud.points.size(),-1);
-        temp_path_id.push_back(single_path_id);
-      }
+      path_set_init_[single_path_id].path_pointcloud.channels[0].values.assign(path_set_init_[single_path_id].path_pointcloud.points.size(),-1);
+      temp_path_id.push_back(single_path_id);
+      // if(!CheckNodeRepeat(single_path_id,temp_path_id)) {
+      //   path_set_init_[single_path_id].path_pointcloud.channels[0].values.assign(path_set_init_[single_path_id].path_pointcloud.points.size(),-1);
+      //   temp_path_id.push_back(single_path_id);
+      // }
     } 
   }
 
-  // cout << "------------------" << endl;
-  // for(int k = 0; k < temp_path_id.size(); k++) {
-  //   cout << temp_path_id[k] << " ";
-  // }
-  // cout << endl;
-  // vector<sensor_msgs::PointCloud> path_safe_set_2d(spline_array_num_);
-
-  for(int ii = 0; ii < path_set_.size(); ii++) {
+  for(int ii = 0; ii < path_set_init_.size(); ii++) {
     PathGroup temp_path_group;
-    if(!CheckNodeRepeat(path_set_[ii].path_id,temp_path_id)) {
-      double path_group_id = path_set_[ii].path_id / (spline_2nd_level_*spline_3rd_level_);
-      // path_safe_set_2d[path_group_id].push_back(path_set_[ii].path_pointcloud);
-      temp_path_group.path_id = path_set_[ii].path_id;
-      temp_path_group.path_pointcloud = path_set_[ii].path_pointcloud;
+    if(path_set_init_[ii].path_pointcloud.channels[0].values.front() != -1) {
+      double path_group_id = path_set_init_[ii].path_id / (spline_2nd_level_*spline_3rd_level_);
+      // path_safe_set_2d[path_group_id].push_back(path_set_init_[ii].path_pointcloud);
+      temp_path_group.path_id = path_set_init_[ii].path_id;
+      temp_path_group.path_pointcloud = path_set_init_[ii].path_pointcloud;
       path_safe_set_.push_back(temp_path_group);
     }
   }
+  return;
 }
 
 bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
@@ -1710,12 +1703,12 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
       int check_id = path_safe_set_[k].path_id % (spline_2nd_level_*spline_3rd_level_);
       int check_index = check_id / spline_3rd_level_;
       sub_path_cost[check_index] += 1;
-      for(int m = 0; m < path_safe_set_[k].path_pointcloud.points.size(); m++) {
-        geometry_msgs::Point32 temp_point;
-        temp_point = path_safe_set_[k].path_pointcloud.points[m];
-        temp_point.z = 400;
-        path_best_.points.push_back(temp_point);
-      }
+      // for(int m = 0; m < path_safe_set_[k].path_pointcloud.points.size(); m++) {
+      //   geometry_msgs::Point32 temp_point;
+      //   temp_point = path_safe_set_[k].path_pointcloud.points[m];
+      //   temp_point.z = 400;
+      //   path_best_.points.push_back(temp_point);
+      // }
     }
   }
 

@@ -313,8 +313,8 @@ void MissionControl::ApplyAutoControl(int mission_state) {
   raw_cmd = ExecuteDecision(raw_cmd,mission_state,supervise_state);
   checkCommandSafety(raw_cmd,safe_cmd,mission_state);
   createCommandInfo(safe_cmd);
-  publishCommand();
   publishInfo();
+  publishCommand();
 }
 
 void MissionControl::ApplyNarrowControl(int mission_state) {
@@ -327,8 +327,8 @@ void MissionControl::ApplyNarrowControl(int mission_state) {
   raw_cmd = ExecuteDecision(raw_cmd,mission_state,supervise_state);
   checkCommandSafety(raw_cmd,safe_cmd,mission_state);
   createCommandInfo(safe_cmd);
-  publishCommand();
   publishInfo();
+  publishCommand();
 }
 
 void MissionControl::ApplyRelocationControl(int mission_state) {
@@ -384,25 +384,12 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
   // cout << "global_goal_in_local : " << global_goal_in_local.x << "," << global_goal_in_local.y << endl; 
   
   int path_lookahead_index;
-
   double search_range = 4;
-  double search_range_min = 4;
-  double iteration_scale = 0.8;
-  double wait_range = 3;
   wait_plan_state_ = true;
-  while(search_range >= search_range_min) {
-    if(!MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_,search_range)) {
-      if(search_range < wait_range) wait_plan_state_ = false;
-    } else {
-      break;
-    }
-    search_range *= iteration_scale;
+  // plan_state_ = true;
+  // return controller_cmd;
 
-    if(MyPlanner_.path_all_set().size() > 0) local_all_pub.publish(MyPlanner_.ConvertVectortoPointcloud(MyPlanner_.path_all_set()));
-  }
-  
-
-  if(search_range < search_range_min) {
+  if(!MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_,search_range)) {
     plan_state_ = false;
     path_lookahead_index = 0;
   } else {
@@ -1268,8 +1255,24 @@ void MissionControl::JoyCallback(const sensor_msgs::Joy::ConstPtr& Input) {
     joy_cmd_.angular.z = axis_y * max_rotation_velocity_;      
   }
 
-  if(isJoyControl_ && Input->buttons[BUTTON_BACK]) {
+  if(Input->buttons[BUTTON_LB] && Input->buttons[BUTTON_BACK]) {
     global_path_pointcloud_.points.clear();
+  }
+
+  if(Input->buttons[BUTTON_LB] && Input->buttons[BUTTON_A]) {
+    goal_in_map_.x = -138.251;
+    goal_in_map_.y = 16.853;
+    goal_in_map_.z = 0;
+    ComputeGlobalPlan(goal_in_map_);
+    ClearAutoMissionState();
+  }
+
+  if(Input->buttons[BUTTON_LB] && Input->buttons[BUTTON_B]) {
+    goal_in_map_.x = -108.230;
+    goal_in_map_.y = 61.600;
+    goal_in_map_.z = 0;
+    ComputeGlobalPlan(goal_in_map_);
+    ClearAutoMissionState();
   }
 }
 
