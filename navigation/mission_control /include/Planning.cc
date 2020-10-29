@@ -35,6 +35,7 @@ bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::Po
 
   if(!path_result){
     ComputeSafePath(costmap_local_);
+    // path_result = true;
     path_result = SelectBestPath(Goal);
   }
   mtx_radius_.unlock();
@@ -72,7 +73,7 @@ bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::Po
 bool Planning::UpdateCostmap(sensor_msgs::PointCloud Obstacle) {
   InitLocalCostmap(costmap_local_);
   SetLocalCostmap(costmap_local_,Obstacle);
-  ExpandCostmap(costmap_local_,1);
+  ExpandCostmap(costmap_local_,spline_expand_size_);
   return true;
 }
 
@@ -1031,7 +1032,8 @@ bool Planning::AstarPathCost(list<AstarPoint> cost_path) {
 //============ RRT Pathfind ===============================
 nav_msgs::Path Planning::getRRTPlan(const geometry_msgs::Point32 start, const geometry_msgs::Point32 goal) {      
   RRT_path_que_.clear();
-  RRTExpandCostmap(RRT_costmap_local_);
+  RRT_costmap_local_ = costmap_local_; //costmap_local在二代样条寻路时已经膨胀spline_expand_size;
+  // RRTExpandCostmap(RRT_costmap_local_);
   
   for(int search_times = 0;search_times < RRT_search_plan_num_;search_times++) {
     RRTInitialRoot(start);
@@ -1631,7 +1633,6 @@ void Planning::ComputeSafePath(nav_msgs::OccupancyGrid Cost_map) {
   path_set_init_ = path_set_;
 
   vector<int> temp_path_id;
-
   for(int i = 0; i < Cost_map.data.size(); i++) {
     if(Cost_map.data[i] < 10) continue;
     int single_path_id;
@@ -1639,10 +1640,6 @@ void Planning::ComputeSafePath(nav_msgs::OccupancyGrid Cost_map) {
       single_path_id = map_to_path_[i].path_id[j];
       path_set_init_[single_path_id].path_pointcloud.channels[0].values.assign(path_set_init_[single_path_id].path_pointcloud.points.size(),-1);
       temp_path_id.push_back(single_path_id);
-      // if(!CheckNodeRepeat(single_path_id,temp_path_id)) {
-      //   path_set_init_[single_path_id].path_pointcloud.channels[0].values.assign(path_set_init_[single_path_id].path_pointcloud.points.size(),-1);
-      //   temp_path_id.push_back(single_path_id);
-      // }
     } 
   }
 
@@ -1650,7 +1647,6 @@ void Planning::ComputeSafePath(nav_msgs::OccupancyGrid Cost_map) {
     PathGroup temp_path_group;
     if(path_set_init_[ii].path_pointcloud.channels[0].values.front() != -1) {
       double path_group_id = path_set_init_[ii].path_id / (spline_2nd_level_*spline_3rd_level_);
-      // path_safe_set_2d[path_group_id].push_back(path_set_init_[ii].path_pointcloud);
       temp_path_group.path_id = path_set_init_[ii].path_id;
       temp_path_group.path_pointcloud = path_set_init_[ii].path_pointcloud;
       path_safe_set_.push_back(temp_path_group);
@@ -1661,7 +1657,7 @@ void Planning::ComputeSafePath(nav_msgs::OccupancyGrid Cost_map) {
 
 bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
 
-  double goal_weight = 2;
+  double goal_weight = 3;
   static int last_index = -1;
   int optimal_index;
   bool isLastEnable = false;
@@ -1714,9 +1710,9 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
 
   int sub_max_feasible_prob = INT_MIN;
   for(int ii = 0; ii < sub_path_cost.size(); ii++) {
-    // cout << ii << " : "<< sub_path_cost[ii] << endl;
+    cout << ii << " : "<< sub_path_cost[ii] << endl;
     if(sub_path_cost[ii] > sub_max_feasible_prob) {
-      // cout << ii << "  **********" << endl;
+      cout << ii << "  **********" << endl;
       optimal_index = path_group_index*spline_2nd_level_ + ii;
       sub_max_feasible_prob = sub_path_cost[ii];
     }
@@ -1729,24 +1725,27 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
     }
   }
 
-  double stable_weight = 0;
-  if(sub_path_index.size() != 1) {
-    double min_distance = DBL_MAX;
-    for (int i = 0; i < sub_path_index.size(); ++i) {
-      geometry_msgs::Point32 candidate_point = path_set_[path_group_index*(spline_2nd_level_*spline_3rd_level_)+sub_path_index[i]*spline_3rd_level_].path_pointcloud.points[path_set_[path_group_index*(spline_2nd_level_*spline_3rd_level_)+sub_path_index[i]*spline_3rd_level_].path_pointcloud.points.size()/3];
-      double path_distance = hypot((candidate_point.y - Goal.y),(candidate_point.x - Goal.x));
+  int sub_max_feasible_prob_index = sub_path_index.size()/2;
+  optimal_index = path_group_index * spline_2nd_level_ + sub_path_index[sub_max_feasible_prob_index];
 
-      if(isLastEnable) {
-        geometry_msgs::Point32 last_point = path_set_[last_index*spline_3rd_level_].path_pointcloud.points[path_set_[last_index*spline_3rd_level_].path_pointcloud.points.size()/3];
-        path_distance += stable_weight * hypot((candidate_point.y - last_point.y),(candidate_point.x - last_point.x));
-      }
+  // double stable_weight = 0;
+  // if(sub_path_index.size() != 1) {
+  //   double min_distance = DBL_MAX;
+  //   for (int i = 0; i < sub_path_index.size(); ++i) {
+  //     geometry_msgs::Point32 candidate_point = path_set_[path_group_index*(spline_2nd_level_*spline_3rd_level_)+sub_path_index[i]*spline_3rd_level_].path_pointcloud.points[path_set_[path_group_index*(spline_2nd_level_*spline_3rd_level_)+sub_path_index[i]*spline_3rd_level_].path_pointcloud.points.size()/3];
+  //     double path_distance = hypot((candidate_point.y - Goal.y),(candidate_point.x - Goal.x));
 
-      if(path_distance < min_distance) {
-        min_distance = path_distance;
-        optimal_index = path_group_index * spline_2nd_level_ + sub_path_index[i];
-      }
-    }
-  }
+  //     if(isLastEnable) {
+  //       geometry_msgs::Point32 last_point = path_set_[last_index*spline_3rd_level_].path_pointcloud.points[path_set_[last_index*spline_3rd_level_].path_pointcloud.points.size()/3];
+  //       path_distance += stable_weight * hypot((candidate_point.y - last_point.y),(candidate_point.x - last_point.x));
+  //     }
+
+  //     if(path_distance < min_distance) {
+  //       min_distance = path_distance;
+  //       optimal_index = path_group_index * spline_2nd_level_ + sub_path_index[i];
+  //     }
+  //   }
+  // }
 
   // 最优第二级子路径
   bool enable_push_back = true;
@@ -1796,6 +1795,7 @@ sensor_msgs::PointCloud Planning::ConvertVectortoPointcloud(vector<PathGroup> In
 }
 
 void Planning::ExpandCostmap(nav_msgs::OccupancyGrid &Grid,int expand_size) {
+  if(expand_size <= 0) return;
   for(int index = 0; index < Grid.data.size(); index++) {
     if(Grid.data[index] == 50) {
       int col_num = index / Grid.info.width; //width 是x方向的长度

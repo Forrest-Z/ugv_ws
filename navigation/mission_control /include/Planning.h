@@ -97,6 +97,7 @@ public:
 		spline_height_                = 0;
   	id_num_                       = 0;
 		path_window_radius_						= 4;
+		spline_expand_size_ 					= 1;
 
 
 		Astar_local_map_window_radius_ 		= 30;
@@ -145,6 +146,7 @@ public:
 	void set_RRT_exten_step(double Input) {RRT_extend_step_ = Input;}
 	void set_RRT_search_plan_num(double Input) {RRT_search_plan_num_ = Input;}
 	void set_RRT_expand_size(double Input) {RRT_expand_size_ = Input;}
+	void set_spline_expand_size(double Input) {spline_expand_size_ = Input;}
 
 
 	inline int  ConvertCartesianToLocalOccupany(nav_msgs::OccupancyGrid Grid,geometry_msgs::Point32 Point) {
@@ -228,6 +230,7 @@ private:
 	double path_vertical_step_;
 
 	int splines_joints_num_;
+	int spline_expand_size_;
 
 	double costmap_resolution_;
 	int safe_path_search_grid_;

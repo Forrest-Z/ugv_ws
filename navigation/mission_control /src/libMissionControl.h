@@ -136,6 +136,7 @@ private:
   double RRT_costmap_resolution_;
   double spline_map_window_radius_;
   double RRT_map_window_radius_;
+  int spline_expand_size_;
 
   /** Flag **/
   bool isWIFIControl_;
@@ -276,6 +277,7 @@ private:
 	  MyPlanner_.set_RRT_exten_step(RRT_extend_step_);
 	  MyPlanner_.set_RRT_search_plan_num(RRT_search_plan_num_);
 	  MyPlanner_.set_RRT_expand_size(RRT_expand_size_);
+	  MyPlanner_.set_spline_expand_size(spline_expand_size_);
     
     MyController_.set_speed_scale(index * controller_linear_scale_);
     MyController_.set_rotation_scale(index * controller_rotation_scale_);

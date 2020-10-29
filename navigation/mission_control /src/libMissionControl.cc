@@ -68,6 +68,7 @@ bool MissionControl::Initialization() {
 		RRT_extend_step_ 					        = 0.2;
 		RRT_search_plan_num_ 				      = 1;
 		RRT_expand_size_ 					        = 2;
+		spline_expand_size_ 					        = 2;
 
     limit_danger_radius_     = 0.5;
     min_danger_longth_       = 0.35;
@@ -372,7 +373,6 @@ void MissionControl::ApplyWaitControl(int mission_state) {
 
 geometry_msgs::Twist MissionControl::getAutoCommand() {
   geometry_msgs::Twist controller_cmd;
-  ros::Time last_auto_time = ros::Time::now();
 
   int global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter_);
   global_sub_goal_ = global_path_pointcloud_.points[global_goal_index];
@@ -388,6 +388,7 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
   wait_plan_state_ = true;
   // plan_state_ = true;
   // return controller_cmd;
+  ros::Time last_auto_time = ros::Time::now();
 
   if(!MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_,search_range)) {
     plan_state_ = false;
@@ -398,7 +399,7 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
   }
 
   ros::Time now_auto_time = ros::Time::now();
-  if(plan_state_) cout << "spline plan search time : " << (now_auto_time.nsec - last_auto_time.nsec) * pow(10,-6) << "ms" << endl;
+  if(plan_state_) cout << "spline plan search time : " << (now_auto_time.nsec - last_auto_time.nsec) * pow(10,-3) << "us" << endl;
 
   if(MyPlanner_.sub_2_path_best().points.size() <= 0) return controller_cmd;
   path_lookahead_index = MyPlanner_.sub_2_path_best().points.size()/lookahead_local_scale_;
@@ -1139,6 +1140,10 @@ bool MissionControl::ReadConfig() {
       ss >> RRT_map_window_radius_;
       info_linenum++;
     }
+    else if(yaml_info == "spline_expand_size") {
+      ss >> spline_expand_size_;
+      info_linenum++;
+    }
   }
 
   yaml_file.close(); 
@@ -1268,8 +1273,8 @@ void MissionControl::JoyCallback(const sensor_msgs::Joy::ConstPtr& Input) {
   }
 
   if(Input->buttons[BUTTON_LB] && Input->buttons[BUTTON_B]) {
-    goal_in_map_.x = -108.230;
-    goal_in_map_.y = 61.600;
+    goal_in_map_.x = -106;
+    goal_in_map_.y = 63.800;
     goal_in_map_.z = 0;
     ComputeGlobalPlan(goal_in_map_);
     ClearAutoMissionState();

@@ -8,6 +8,7 @@ Panels:
         - /TF1/Frames1
         - /Map1/Position1
         - /Robot_11
+        - /Robot_11/Trace_Back1
         - /Robot_11/Safe_Path1
         - /Map4
       Splitter Ratio: 0.472222209
@@ -218,7 +219,7 @@ Visualization Manager:
           Queue Size: 10
           Selectable: true
           Size (Pixels): 12
-          Size (m): 0.100000009
+          Size (m): 0.800000012
           Style: Spheres
           Topic: /trace_back
           Unreliable: false
@@ -523,11 +524,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Scale: -27.0239449
+      Scale: -22.5053596
       Target Frame: base_link
       Value: TopDownOrtho (rviz)
-      X: 0.814400554
-      Y: 0.257643193
+      X: -1.51355982
+      Y: 0.548397481
     Saved: ~
 Window Geometry:
   Displays:

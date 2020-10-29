@@ -224,7 +224,6 @@ void Supervising::GenerateTracebackRoute(geometry_msgs::Point32 global_goal, geo
     }
     last_global_goal = global_goal;
     vehicle_pose_que.clear();
-    // vehicle_pose_.insert(vehicle_pose_que.end(), vehicle_pose_3.begin(), vehicle_pose_3.end());
     vehicle_pose_que.insert(vehicle_pose_que.end(), vehicle_pose_2.begin(), vehicle_pose_2.end());
     vehicle_pose_que.insert(vehicle_pose_que.end(), vehicle_pose_1.begin(), vehicle_pose_1.end());
 }
