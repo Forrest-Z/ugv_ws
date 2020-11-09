@@ -1554,15 +1554,20 @@ void Planning::GenerateRevoluteSplinePath(vector<PathGroup> &Path_set) {
       PathGroup Path_sub_path;
       for(int j = 0; j < Path_set_init[i].path_pointcloud.points.size(); j++) {
         geometry_msgs::Point32 temp_point;
-        double point_distance = hypot(Path_set_init[i].path_pointcloud.points[j].x,Path_set_init[i].path_pointcloud.points[j].y);
-        double costheta = Path_set_init[i].path_pointcloud.points[j].x / point_distance;
-        double sintheta = Path_set_init[i].path_pointcloud.points[j].y / point_distance;
+        if(j == 0) {
+          temp_point.x = 0;
+          temp_point.y = 0;
+          temp_point.z = Path_set_init[i].path_pointcloud.points[j].z + z_height; ;
+        } else {
+          double point_distance = hypot(Path_set_init[i].path_pointcloud.points[j].x,Path_set_init[i].path_pointcloud.points[j].y);
+          double costheta = Path_set_init[i].path_pointcloud.points[j].x / point_distance;
+          double sintheta = Path_set_init[i].path_pointcloud.points[j].y / point_distance;
 
-        temp_point.x = point_distance * (costheta*cos(revolute_angle)-sintheta*sin(revolute_angle));
-        temp_point.y = point_distance * (sintheta*cos(revolute_angle)+costheta*sin(revolute_angle));
-        temp_point.z = Path_set_init[i].path_pointcloud.points[j].z + z_height;           ;
+          temp_point.x = point_distance * (costheta*cos(revolute_angle)-sintheta*sin(revolute_angle));
+          temp_point.y = point_distance * (sintheta*cos(revolute_angle)+costheta*sin(revolute_angle));
+          temp_point.z = Path_set_init[i].path_pointcloud.points[j].z + z_height;
+        }
         Path_sub_path.path_pointcloud.points.push_back(temp_point);
-
       }
       double temp_path_id = Path_set[i].path_pointcloud.channels[0].values[0] + path_scale;
       Path_sub_path.path_pointcloud.channels.resize(1);

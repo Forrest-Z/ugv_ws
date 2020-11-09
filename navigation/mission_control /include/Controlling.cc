@@ -24,7 +24,7 @@
 void Controlling::ComputePurePursuitCommand(geometry_msgs::Point32 Goal_Route, geometry_msgs::Point32 Goal_Plan,geometry_msgs::Twist& Pp_command) {
   double u_turn_speed_scale = 0; 
   double u_turn_rotation_scale = 0.8;
-  double rotation_threshold = 1;
+  double rotation_threshold = 0.78;
 
   double goal_plan_distance = hypot(Goal_Plan.x,Goal_Plan.y);
   double goal_plan_yaw = atan2(Goal_Plan.y,Goal_Plan.x);
@@ -46,7 +46,7 @@ void Controlling::ComputePurePursuitCommand(geometry_msgs::Point32 Goal_Route, g
 void Controlling::ComputePurePursuitRRTCommand(geometry_msgs::Point32 Goal_Route, geometry_msgs::Point32 Goal_Plan,geometry_msgs::Twist& Pp_command) {
   double u_turn_speed_scale = 0; 
   double u_turn_rotation_scale = 0.8;
-  double rotation_threshold = 1;
+  double rotation_threshold = 0.78;
 
   double goal_plan_distance = hypot(Goal_Plan.x,Goal_Plan.y);
   double goal_plan_yaw = atan2(Goal_Plan.y,Goal_Plan.x);

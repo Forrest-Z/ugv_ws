@@ -233,41 +233,41 @@ void Routing::SetPathtoPointcloud(geometry_msgs::Point32 Goal) {
 		pointcloud.points.push_back(Goal);
 	}
 
-  for (int i = 0; i < pointcloud.points.size() - 2; ++i) {
-  	geometry_msgs::Point32 point_1 = pointcloud.points[i];
-  	geometry_msgs::Point32 point_2 = pointcloud.points[i+1];
-  	geometry_msgs::Point32 point_3 = pointcloud.points[i+2];
+  // for (int i = 0; i < pointcloud.points.size() - 2; ++i) {
+  // 	geometry_msgs::Point32 point_1 = pointcloud.points[i];
+  // 	geometry_msgs::Point32 point_2 = pointcloud.points[i+1];
+  // 	geometry_msgs::Point32 point_3 = pointcloud.points[i+2];
 
-    double distance_12 = hypot((point_1.x - point_2.x),(point_1.y - point_2.y));
-    double distance_23 = hypot((point_2.x - point_3.x),(point_2.y - point_3.y));	
-    double distance_13 = hypot((point_1.x - point_3.x),(point_1.y - point_3.y));	
-    double cosin_2_numerator = pow(distance_12,2) + pow(distance_23,2) - pow(distance_13,2);
-    double cosin_2_denominator = 2 * distance_12 * distance_23;
-    double cosin_2 = cosin_2_numerator/cosin_2_denominator;
-    double radian_2 = acos(cosin_2);
+  //   double distance_12 = hypot((point_1.x - point_2.x),(point_1.y - point_2.y));
+  //   double distance_23 = hypot((point_2.x - point_3.x),(point_2.y - point_3.y));	
+  //   double distance_13 = hypot((point_1.x - point_3.x),(point_1.y - point_3.y));	
+  //   double cosin_2_numerator = pow(distance_12,2) + pow(distance_23,2) - pow(distance_13,2);
+  //   double cosin_2_denominator = 2 * distance_12 * distance_23;
+  //   double cosin_2 = cosin_2_numerator/cosin_2_denominator;
+  //   double radian_2 = acos(cosin_2);
 
-    double point_gap_curve = points_gap/curve_ratio;
-	int points_number_curve = distance_13/point_gap_curve;
+  //   double point_gap_curve = points_gap/curve_ratio;
+	// int points_number_curve = distance_13/point_gap_curve;
 
-    if(radian_2 < curve_threshold) {
-  		sensor_msgs::PointCloud pointcloud_curve;
-			pointcloud_curve.header.frame_id = "/map";
-	    for (int j = 0; j <= points_number_curve; ++j) {
-	      geometry_msgs::Point32 point_mid;
-	      double tt = static_cast<double>(j)/static_cast<double>(points_number_curve);
+  //   if(radian_2 < curve_threshold) {
+  // 		sensor_msgs::PointCloud pointcloud_curve;
+	// 		pointcloud_curve.header.frame_id = "/map";
+	//     for (int j = 0; j <= points_number_curve; ++j) {
+	//       geometry_msgs::Point32 point_mid;
+	//       double tt = static_cast<double>(j)/static_cast<double>(points_number_curve);
 
-	      point_mid.x = (1-tt)*((1-tt)*point_1.x+tt*point_2.x) + tt*((1-tt)*point_2.x + tt*point_3.x);
-	      point_mid.y = (1-tt)*((1-tt)*point_1.y+tt*point_2.y) + tt*((1-tt)*point_2.y + tt*point_3.y);
-				point_mid.z = point_2.z;
-	      pointcloud_curve.points.push_back(point_mid);
+	//       point_mid.x = (1-tt)*((1-tt)*point_1.x+tt*point_2.x) + tt*((1-tt)*point_2.x + tt*point_3.x);
+	//       point_mid.y = (1-tt)*((1-tt)*point_1.y+tt*point_2.y) + tt*((1-tt)*point_2.y + tt*point_3.y);
+	// 			point_mid.z = point_2.z;
+	//       pointcloud_curve.points.push_back(point_mid);
 
-    	}
-    	pointcloud.points.erase(pointcloud.points.begin()+i,pointcloud.points.begin()+i+2);
-    	pointcloud.points.insert(pointcloud.points.begin()+i,pointcloud_curve.points.begin(),pointcloud_curve.points.end());
-    	i+=pointcloud_curve.points.size();
-    	continue;
-    }
-  }
+  //   	}
+  //   	pointcloud.points.erase(pointcloud.points.begin()+i,pointcloud.points.begin()+i+2);
+  //   	pointcloud.points.insert(pointcloud.points.begin()+i,pointcloud_curve.points.begin(),pointcloud_curve.points.end());
+  //   	i+=pointcloud_curve.points.size();
+  //   	continue;
+  //   }
+  // }
 
   for (int i = 0; i < pointcloud.points.size(); ++i)
   {

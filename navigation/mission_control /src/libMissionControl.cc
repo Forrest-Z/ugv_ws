@@ -698,7 +698,6 @@ geometry_msgs::Twist MissionControl::PursuitRRTPathCommand() {
   last_index = init_index;
 
   if(RRT_refind_) {
-    printf("111111111111111\n");
     vehicle_run_state_3rd_.data = GetLocalTime() + "step3： RRT route appeared obstacle or achived sub goal, RRT started to replan. ";
     vehicle_run_state_pub.publish(vehicle_run_state_3rd_);
     ClearRRTPlanState();

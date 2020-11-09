@@ -1,4 +1,4 @@
-max_linear_velocity 1.2
+max_linear_velocity 1.5
 max_rotation_velocity 0.8
 
 max_linear_acceleration 0.015
@@ -7,8 +7,8 @@ max_rotation_acceleration 0.05
 max_translational_velocity 1.5
 min_translational_velocity 0.1
 
-controller_linear_scale 1
-controller_rotation_scale 1.1
+controller_linear_scale 1.5
+controller_rotation_scale 2
 vehicle_radius 0.3
 
 Astar_local_map_window_radius 30
