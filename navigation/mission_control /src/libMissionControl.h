@@ -18,6 +18,7 @@
 #include <string>
 #include "time.h"
 #include <unistd.h>
+#include <sensor_msgs/LaserScan.h>
 
 using std::to_string;
 using std::string;
@@ -74,6 +75,8 @@ private:
   ros::Subscriber reset_sub;
   ros::Subscriber action_sub;
   ros::Subscriber planner_manual_sub;
+
+  ros::Subscriber scan_sub;
 
   /** Publishers **/
   ros::Publisher cmd_vel_pub;
@@ -204,6 +207,24 @@ private:
   string robot_id_;
   string community_id_;
   int auto_state_global_;
+
+
+  int lift_mode_;
+  int stage_index_;
+  int collision_distance_;
+  int mirror_num_;
+  double linear_speed_,angular_speed_;
+
+  ros::Time beginturn_ = ros::Time::now();
+
+  double k_wall_;
+  double y_coordinate_; 
+  double angle_right_,angle_left_,h1_,h2_,h3_;
+  double elevator_wall_;
+  double length_up_,length_down_,length_left_,length_right_;
+  double ob_lift_;
+
+  sensor_msgs::PointCloud scan_points_;
 
   /** Functions **/
   void ApplyAutoControl(ros::Time& Timer,double& Duration_Limit);
@@ -518,6 +539,7 @@ private:
     planner_manual_state_ = true;
   }
 
+
   //========== 增加Astar 与 RRT =======================
   geometry_msgs::Twist getNarrowCommand();
   sensor_msgs::PointCloud NarrowAstarPathfind();
@@ -560,6 +582,31 @@ private:
     return time_local;
   }
 
-  
+
+  void ScanCallback(const sensor_msgs::LaserScan::ConstPtr& Input);
+  void initLift();
+  geometry_msgs::Twist UpLift1Cmd();
+  geometry_msgs::Twist DownLift1Cmd();
+  geometry_msgs::Twist UpLift17Cmd();
+  geometry_msgs::Twist DownLift17Cmd();
+  bool GoStraight(geometry_msgs::Twist& Output);
+  bool StepBack(geometry_msgs::Twist& Output);
+  bool Turn(geometry_msgs::Twist& Output);
+  bool EnterLift(geometry_msgs::Twist& Output);
+  bool GetOffLift(geometry_msgs::Twist& Output);
+  void RansacFrontWall(sensor_msgs::PointCloud Input);
+  void DetectObstacles(sensor_msgs::PointCloud Input);
+  void Retreat(sensor_msgs::PointCloud Input);
+  void DistanceAroundandMirror(sensor_msgs::PointCloud Input);
+  void goStraightObstacleDete(sensor_msgs::PointCloud Input);
+
+
+
+
+
+
+
+
+
 };
 #endif

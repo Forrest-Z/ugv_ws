@@ -14,6 +14,8 @@ MissionControl::MissionControl():pn("~") {
   control_sub = n.subscribe("control_string",10, &MissionControl::ControlCallback,this);
   map_number_sub = n.subscribe("map_number",1, &MissionControl::MapNumberCallback,this);
 
+  scan_sub = n.subscribe("/lidar_scan",1, &MissionControl::ScanCallback,this);
+
   cmd_vel_pub = n.advertise<geometry_msgs::Twist> ("husky_velocity_controller/cmd_vel", 1);
   path_pred_pub = n.advertise<sensor_msgs::PointCloud>("pred_path",1);
 
@@ -118,8 +120,11 @@ bool MissionControl::Initialization() {
 
   RRT_refind_ = false;
 
+  initLift();
+
   return(true);
 }
+
 
 void MissionControl::Execute() {
   if(!Initialization()) return;
@@ -246,17 +251,31 @@ int MissionControl::DecisionMaker() {
 }
 
 void MissionControl::ApplyAction(int mission_state) {
-  double action_time = 5;
-  if((ros::Time::now() - action_start_timer_).toSec() > action_time) {
-    std_msgs::Int32 action_state;
-    action_state.data = current_action_index_;
-    action_state_pub.publish(action_state);
-    isAction_ = false;
+  geometry_msgs::Twist raw_cmd;
+  if(lift_mode_ == 0) {
+    double action_time = 5;
+    if((ros::Time::now() - action_start_timer_).toSec() > action_time) {
+      std_msgs::Int32 action_state;
+      action_state.data = current_action_index_;
+      action_state_pub.publish(action_state);
+      isAction_ = false;
+    }
+  }
+  else if(lift_mode_ == 1) {
+    raw_cmd = UpLift1Cmd();
+  }
+  else if(lift_mode_ == 3) {
+    raw_cmd = UpLift17Cmd();
+  }
+  else if (lift_mode_ == 4) {
+    raw_cmd = DownLift17Cmd();
+  }
+  else if (lift_mode_ == 2) {
+    raw_cmd = DownLift1Cmd();
   }
 
+
   geometry_msgs::Twist safe_cmd;
-  geometry_msgs::Twist raw_cmd;
-  ZeroCommand(raw_cmd);
   checkCommandSafety(raw_cmd,safe_cmd,mission_state);
   createCommandInfo(safe_cmd);
   publishCommand();
@@ -1301,6 +1320,38 @@ void MissionControl::JoyCallback(const sensor_msgs::Joy::ConstPtr& Input) {
     ComputeGlobalPlan(goal_in_map_);
     ClearAutoMissionState();
   }
+
+  if(Input->buttons[BUTTON_RB]) {
+    if(Input->buttons[BUTTON_A]) {
+      cout << " Up to Lift 1 floor" << endl;
+      global_path_pointcloud_.points.clear();
+      isAction_    = true;
+      lift_mode_   = 1;
+      stage_index_ = 0;
+    }
+    else if (Input->buttons[BUTTON_B]) {
+      cout << "Down to Lift 1 floor " << endl;
+      global_path_pointcloud_.points.clear();
+      isAction_    = true;
+      lift_mode_   = 2;
+      stage_index_ = 0;
+    }
+    else if (Input->buttons[BUTTON_X]) {
+      cout << "Up to Lift 17 floor" << endl;
+      global_path_pointcloud_.points.clear();
+      isAction_    = true;
+      lift_mode_   = 3;
+      stage_index_ = 0;
+    }
+    else if (Input->buttons[BUTTON_Y]) {
+      cout << "Down to Lift 17 floor" << endl;
+      global_path_pointcloud_.points.clear();
+      isAction_    = true;
+      lift_mode_   = 4;
+      stage_index_ = 0;
+    }
+  }
+
 }
 
 void MissionControl::CmdCallback(const geometry_msgs::Twist::ConstPtr& Input) {
@@ -1539,3 +1590,748 @@ bool MissionControl::CheckTracebackState(geometry_msgs::Point32 Input) {
         return false;
     }
 }
+
+
+
+
+  // ================= Lift ================= 
+  void MissionControl::ScanCallback(const sensor_msgs::LaserScan::ConstPtr& Input) {
+    scan_points_.points.clear();
+    geometry_msgs::Point32 temp_point;
+    for (int i = 0; i < Input->ranges.size(); ++i) {
+      double current_angle = Input->angle_min + i * Input->angle_increment;
+      if(Input->ranges[i] <= Input->range_min || Input->ranges[i] >= Input->range_max) continue;
+      temp_point.x = Input->ranges[i] * cos(current_angle);
+      temp_point.y = Input->ranges[i] * sin(current_angle);
+      scan_points_.points.push_back(temp_point);
+    }
+    scan_points_.header.frame_id = "/base_link";
+    scan_points_.header.stamp = ros::Time::now();
+  }
+
+  void MissionControl::initLift() {
+    lift_mode_ = 0;
+    stage_index_ = 0;
+  }
+
+  geometry_msgs::Twist MissionControl::UpLift1Cmd() {
+    geometry_msgs::Twist output_cmd;
+
+    if(stage_index_ == 0) { 
+      if(GoStraight(output_cmd)) stage_index_ = 2;
+     }
+     else if(stage_index_ == 2) {
+      if(Turn(output_cmd)) stage_index_ = 3;
+     } 
+     else if(stage_index_ == 3) {
+      if(EnterLift(output_cmd)) stage_index_ = 4;
+    }
+    else if(stage_index_ == 4) {
+      initLift();
+      cout << "Entered the 1st floor LIFT" << endl;
+    }
+    return output_cmd;
+  }
+
+
+  geometry_msgs::Twist MissionControl::DownLift1Cmd() {
+    geometry_msgs::Twist output_cmd;
+
+    if(stage_index_ == 0) {
+      if(GetOffLift(output_cmd)) stage_index_ = 2;
+    }
+    else if(stage_index_ == 2) {
+      if(Turn(output_cmd)) stage_index_ = 3;
+    } 
+    else if(stage_index_ == 3) {
+      if(StepBack(output_cmd)) stage_index_ = 4;
+    }
+    else if(stage_index_ == 4) {
+      initLift();
+      cout << "get off the 1st floor LIFT" << endl;
+    }
+    return output_cmd;
+  }
+
+  geometry_msgs::Twist MissionControl::UpLift17Cmd() {
+    geometry_msgs::Twist output_cmd;
+
+    if(stage_index_ == 0) {
+      if(GoStraight(output_cmd)) stage_index_ = 2;
+    }
+    else if(stage_index_ == 2) {
+      if(Turn(output_cmd)) stage_index_ = 3;
+    } 
+    else if(stage_index_ == 3) {
+      if(EnterLift(output_cmd)) stage_index_ = 4;
+    }
+    else if(stage_index_ == 4) {
+        initLift();
+        cout << "Entered the 17th floor LIFT" << endl;
+    }
+    return output_cmd;
+  }
+
+  geometry_msgs::Twist MissionControl::DownLift17Cmd() {
+    geometry_msgs::Twist output_cmd;
+
+    if(stage_index_ == 0) {
+      if(GetOffLift(output_cmd)) stage_index_ = 1;
+    }
+    else if(stage_index_ == 1) {
+      if(Turn(output_cmd)) stage_index_ = 2;
+    } 
+    else if(stage_index_ == 2) {
+      if(StepBack(output_cmd)) stage_index_ = 3;
+    } 
+    else if(stage_index_ == 3) {
+        initLift();
+        cout << "get off the 17th floor LIFT" << endl;
+    }
+    return output_cmd;
+  }
+
+  
+  bool MissionControl::GoStraight(geometry_msgs::Twist& Output) {
+    cout << "=== GoStraight ===" << endl;
+    y_coordinate_ = 0;
+    RansacFrontWall(scan_points_);
+    cout << "length is " << y_coordinate_ << endl;
+    geometry_msgs::Twist output_cmd;
+    double linear_speed = 0;
+    double angular_speed = 0;
+    double standard_linear_velocity = 0.2;
+    static int state = 0;
+    double wait_turn_point;
+    double standard_tolerance = 0.1;
+    double standard_angular_velocity = 0.2;
+
+    (lift_mode_ == 3) ? wait_turn_point = 3.75 :  wait_turn_point = 3.95;
+    if (y_coordinate_ < wait_turn_point && y_coordinate_ > 3) state = 2;
+    
+    if (state == 0) {
+      linear_speed = standard_linear_velocity;
+      if (k_wall_< 0) angular_speed = -standard_angular_velocity;
+      else angular_speed = standard_angular_velocity;
+      if (k_wall_ < standard_tolerance && k_wall_ > -standard_tolerance) state = 1;
+    }
+    else if (state == 1){
+      linear_speed = standard_linear_velocity;
+      angular_speed =0;
+      if (fabs(k_wall_) > 0.3) state = 0;
+    }
+
+    if (state == 2) {
+      linear_speed = 0;
+      if (k_wall_< 0) angular_speed = -standard_angular_velocity;
+      else angular_speed = standard_angular_velocity;
+      if (k_wall_ < standard_tolerance && k_wall_ > -standard_tolerance) state = 3;
+    }
+
+    goStraightObstacleDete(scan_points_);
+    if (collision_distance_ != 0 || isnan(y_coordinate_)) {
+      linear_speed = 0;
+      angular_speed = 0;
+    }
+
+    output_cmd.linear.x = linear_speed;
+    output_cmd.angular.z = angular_speed;
+    cout << "linear_speed is " << linear_speed << endl;
+    cout << "angular_speed is " << angular_speed << endl;
+    cout << "state is " << state << endl;
+    Output = output_cmd;
+    if (state == 3) {
+      beginturn_ = ros::Time::now();
+      state = 0;
+      return true;
+    }
+    else return false;
+  }
+
+
+  bool MissionControl::StepBack(geometry_msgs::Twist& Output) {
+    cout << "===StepBack===" << endl;
+
+    DistanceAroundandMirror(scan_points_);
+    geometry_msgs::Twist output_cmd;
+    double linear_speed = 0;
+    double angular_speed = 0;
+
+    linear_speed_ = linear_speed; 
+    angular_speed_ = angular_speed;
+    Retreat(scan_points_);
+
+    if (angular_speed != angular_speed_) angular_speed = -angular_speed_;
+    if (linear_speed != linear_speed_) linear_speed = linear_speed_;
+
+    goStraightObstacleDete(scan_points_);
+    if (collision_distance_ != 0) {
+      linear_speed = 0;
+      angular_speed = 0;
+    }
+    (lift_mode_ == 4) ? output_cmd.linear.x = linear_speed : output_cmd.linear.x = -linear_speed;
+
+    output_cmd.angular.z = angular_speed;
+    cout << "linear_speed is " << output_cmd.linear.x << endl;
+    cout << "angular_speed is " << output_cmd.angular.z << endl;
+    Output = output_cmd;
+    if (lift_mode_ == 4) if (h3_ > 6) return true;
+    else if (h3_ > 5) return true;
+    return false;
+  }
+
+  bool MissionControl::Turn(geometry_msgs::Twist& Output) {
+    cout << "=== Turn ===" << endl;
+    geometry_msgs::Twist output_cmd;
+    ros::Time beginturn = ros::Time::now();
+    double linear_speed = 0;
+    double angular_speed = 0;
+    double standard_linear_velocity = 0.2;
+    int state = 0;
+    (lift_mode_ == 4) ? angular_speed = -0.38 : angular_speed = 0.38;
+    (lift_mode_ == 3) ? linear_speed = 0.9 :  linear_speed = standard_linear_velocity;
+
+    cout << beginturn.toSec() << " , " << beginturn_.toSec() << endl;
+    if (fabs(beginturn.toSec() - beginturn_.toSec()) > 4.5) state = 1;
+      
+    output_cmd.linear.x = linear_speed;
+    output_cmd.angular.z = angular_speed;
+    cout << "linear_speed is " << linear_speed << endl;
+    cout << "angular_speed is " << angular_speed << endl;
+    
+    Output = output_cmd;
+    if(state == 1) return true;
+    return false;
+  }
+
+  bool MissionControl::EnterLift(geometry_msgs::Twist& Output) {
+    cout << "===EnterLift===" << endl;
+    y_coordinate_ = 0;
+    
+    DistanceAroundandMirror(scan_points_);
+    DetectObstacles(scan_points_);
+
+    cout << "obstacle = " << angle_left_ << " , " << angle_right_ << endl;
+    if (lift_mode_ == 3) {
+      if (y_coordinate_ == 0) mirror_num_ = 0;
+      else mirror_num_ = 100;
+      h1_ = h1_ + 2;
+    }
+    cout << "mirror_num is " << mirror_num_ << endl;
+    cout << "h1_ = " << h1_ << endl;
+    cout << "y_coordinate_ = " << y_coordinate_ << endl;
+    elevator_wall_ = length_up_ + length_down_ + h3_;
+    cout << "elevator_wall_ = " << elevator_wall_ << endl;
+    geometry_msgs::Twist output_cmd;
+    static int state = 2;
+    double linear_speed = 0;
+    double angular_speed = 0;
+    double standard_linear_velocity = 0.2;
+    
+    if (state == 0){
+      if (h1_ < 2.5){
+        if (angle_right_ == 1 || angle_left_ == 1 || ob_lift_ == 1) {
+          linear_speed = 0;
+          angular_speed = 0;
+        }
+      }
+      else if (h1_ >= 2.5){
+        if (angle_right_ == 1 && angle_left_ == 0) {
+          angular_speed= -0.2;
+          linear_speed = -0;
+        }
+        else if (angle_left_ == 1 && angle_right_ == 0) {
+          angular_speed = 0.2;
+          linear_speed = 0;
+        }
+        else if ((angle_left_ == 1 && angle_right_ == 1) || ob_lift_ == 1){
+          angular_speed = 0;
+          linear_speed = 0;
+        }
+      }
+      if (angle_right_ == 0 && angle_left_ == 0 && ob_lift_ == 0) {
+        linear_speed = standard_linear_velocity;
+        angular_speed = 0;
+      }
+      if (elevator_wall_ < 3) state = 4;
+      if (y_coordinate_ == 0 && mirror_num_ <= 15) state = 2;
+    }
+    else if (state == 2){
+      if (y_coordinate_ != 0 && mirror_num_ > 15) state = 0;
+      else {
+        if (h1_ > 3 && elevator_wall_ > 3) state = 3;
+        else {
+          linear_speed = 0;
+          angular_speed = 0;
+        }
+      }
+      if (elevator_wall_ < 3 || h1_ > 4) state = 4;
+    }
+    else if (state == 3){
+      if (h1_ >= 3.2){
+        linear_speed = -standard_linear_velocity;
+        angular_speed = 0;
+
+        if (y_coordinate_ != 0 && ob_lift_ == 0 && angle_right_ == 0 && angle_left_ == 0) state = 2;
+      } 
+      else if (h1_ < 3.2) state = 2;
+    }
+    else if (state == 4) {
+      cout << " special mode " << endl;
+      if (angle_right_ == 0 && angle_left_ == 0 && ob_lift_ == 0) {
+        angular_speed= 0;
+        linear_speed = standard_linear_velocity;
+      }
+      else if (angle_right_ == 1 && angle_left_ == 0) {
+        angular_speed= -0.2;
+        linear_speed = -0;
+      }
+      else if (angle_left_ == 1 && angle_right_ == 0) {
+        angular_speed = 0.2;
+        linear_speed = 0;
+      }
+      else if ((angle_left_ == 1 && angle_right_ == 1) || ob_lift_ == 1) {
+        angular_speed = 0;
+        linear_speed = 0;
+        if ((h3_ > 1.1 && h3_ < 1.9) || (h1_ > 4 && h1_ < 4.7)) state = 3;
+      }
+      if (elevator_wall_ <= 2.3 && elevator_wall_ >= 1.6 && h3_ <= 0.8 && length_up_ + h3_  >= 1.35 && (length_up_ < 0.9 || length_down_ < 0.9) && h3_ < 0.75) state = 1;
+      else if (elevator_wall_ <= 1.6 && h3_ < 0.75 && length_up_ + length_down_ < 1.2) state = 1;
+      if (h1_ > 4.7 && h3_ < 0.75) state = 1;
+
+      if (elevator_wall_ > 3 && h1_ < 4) state = 2;
+    }
+
+    goStraightObstacleDete(scan_points_);
+    if (collision_distance_ != 0) {
+      linear_speed = 0;
+      angular_speed = 0;
+    }
+
+    output_cmd.linear.x = linear_speed;
+    output_cmd.angular.z = angular_speed;
+    cout << "linear_speed is " << linear_speed << endl;
+    cout << "angular_speed is " << angular_speed << endl;
+    cout << "state is " << state << endl; 
+    Output = output_cmd;
+
+    if (state == 1) {
+      state = 2;
+      return true;
+    }
+    return false;
+  }
+
+  bool MissionControl::GetOffLift(geometry_msgs::Twist& Output) {
+    DistanceAroundandMirror(scan_points_);
+    cout << "h1 = " << h1_ << endl;
+    geometry_msgs::Twist output_cmd;
+    double linear_speed = 0;
+    double angular_speed = 0;
+    double wait_turn_point;
+    (lift_mode_ == 4) ? wait_turn_point = 1.25 :  wait_turn_point = 1.6;
+
+    linear_speed_ = linear_speed; 
+    angular_speed_ = angular_speed;
+    Retreat(scan_points_);
+
+    if (angular_speed != angular_speed_) angular_speed = -angular_speed_;
+    if (linear_speed != linear_speed_) linear_speed = linear_speed_;
+
+    goStraightObstacleDete(scan_points_);
+    if (collision_distance_ != 0) {
+      linear_speed = 0;
+      angular_speed = 0;
+    }
+
+    output_cmd.linear.x = linear_speed;
+    output_cmd.angular.z = angular_speed;
+    cout << "linear_speed is " << linear_speed << endl;
+    cout << "angular_speed is " << angular_speed << endl;
+    Output = output_cmd;
+
+    if (h1_ < wait_turn_point) {
+      beginturn_ = ros::Time::now();
+      return true;
+    }
+    return false;
+  }
+
+  void MissionControl::RansacFrontWall(sensor_msgs::PointCloud Input) {
+    sensor_msgs::PointCloud rightwall_point_selected;
+    int cont;
+    y_coordinate_ = 0;
+    double temp, sequence,value_y;
+    double ave_pointcloud_interval[3][20];
+    
+    for (int i = 0; i < Input.points.size() ; ++i) {
+      geometry_msgs::Point32 pointis_1 = Input.points[i];
+      if (pointis_1.x > 2.8) rightwall_point_selected.points.push_back(pointis_1);
+    }
+
+    int size = rightwall_point_selected.points.size();
+    int point_cloud_interval = size / 20; 
+    for (int j = 0; j < 20; ++j){
+      double ave_interval_x = 0,ave_interval_y = 0;
+      for (int m = 0; m < point_cloud_interval; ++m)  {
+        ave_interval_x = ave_interval_x + rightwall_point_selected.points[point_cloud_interval * j + m].x;
+        ave_interval_y = ave_interval_y + rightwall_point_selected.points[point_cloud_interval * j + m].y;
+      }
+      ave_interval_x = ave_interval_x / point_cloud_interval;
+      ave_interval_y = ave_interval_y / point_cloud_interval;
+      ave_pointcloud_interval[0][j] = ave_interval_x;
+      ave_pointcloud_interval[1][j] = ave_interval_y;
+      ave_pointcloud_interval[2][j] = j;
+    }
+
+    for (int i = 0; i < 19; ++i){
+      for (int j = 0; j < 20 - i; ++j){
+        if (ave_pointcloud_interval[0][j + 1] > ave_pointcloud_interval[0][j]){
+          temp = ave_pointcloud_interval[0][j];
+          ave_pointcloud_interval[0][j] = ave_pointcloud_interval[0][j + 1];
+          ave_pointcloud_interval[0][j + 1] = temp;
+          value_y = ave_pointcloud_interval[1][j];
+          ave_pointcloud_interval[1][j] = ave_pointcloud_interval[1][j + 1];
+          ave_pointcloud_interval[1][j + 1] = value_y;
+          sequence = ave_pointcloud_interval[2][j];
+          ave_pointcloud_interval[2][j] = ave_pointcloud_interval[2][j + 1];
+          ave_pointcloud_interval[2][j + 1] = sequence;
+        }
+      } 
+    }
+
+    std::vector<double> x;
+    std::vector<double> y;
+    x.push_back(ave_pointcloud_interval[0][0]);
+    x.push_back(ave_pointcloud_interval[0][1]);
+    y.push_back(ave_pointcloud_interval[1][1]);
+    y.push_back(ave_pointcloud_interval[1][2]);
+    double t1 = 0, t2 = 0, t3 = 0, t4 = 0;
+    double a, b;
+    a = (ave_pointcloud_interval[1][0] - ave_pointcloud_interval[1][1]) / (ave_pointcloud_interval[0][0] - ave_pointcloud_interval[0][1]);
+    b = ave_pointcloud_interval[1][0] - a * ave_pointcloud_interval[0][0];
+
+    for (int i = 2; i < 20; ++i){
+      double sigma = 0.15;
+      double d = fabs((a * ave_pointcloud_interval[0][i] - ave_pointcloud_interval[1][i] + b) / (hypot(a,-1)));
+      if (d <= sigma)  {
+        x.push_back(ave_pointcloud_interval[0][i]);
+        y.push_back(ave_pointcloud_interval[1][i]);
+      }
+      else;
+    }
+        t1 = 0, t2 = 0, t3 = 0, t4 = 0;
+        for (int i = 0; i < x.size(); ++i){
+          t1 += x[i] * x[i];
+          t2 += x[i];
+          t3 += x[i] * y[i];
+          t4 += y[i];
+        }
+        a = (t3 * x.size() - t2 * t4) / (t1 * x.size() - t2 * t2);
+        b = (t1 * t4 - t2 * t3) / (t1 * x.size() - t2 * t2);
+        cout << "y = " << a << "x + " << b << endl;
+
+    k_wall_ = -1 / a;
+
+    y_coordinate_ = ave_pointcloud_interval[0][0];
+    if (y_coordinate_ < 2.8 || k_wall_ > 5) collision_distance_ = 2;
+
+    rightwall_point_selected.header.frame_id = "/base_link";
+    rightwall_point_selected.header.stamp = ros::Time::now();
+    // pointcloud_pub.publish(rightwall_point_selected);
+
+    x.clear();
+    y.clear();
+  }
+   
+  void MissionControl::DetectObstacles(sensor_msgs::PointCloud Input) {
+    sensor_msgs::PointCloud rightwall_point_selected;
+    elevator_wall_ = length_up_ + length_down_ + length_right_;
+    angle_right_ = 0;
+    angle_left_ = 0;
+    double ob_lift_1 = 0,ob_lift_2 = 0,ob_lift_3 = 0,ob_lift_4 = 0,ob_lift_0 = 0,ob_lift_5 = 0;
+    ob_lift_ = 0;
+
+    for (int i = 0; i < Input.points.size(); ++i) {
+      geometry_msgs::Point32 pointis_1 = Input.points[i]; 
+      if ((pointis_1.x < 0.5 && pointis_1.x > 0 && pointis_1.y < 0.3 && pointis_1.y > 0)) angle_right_ = 1;
+      if ((pointis_1.x < 0.5 && pointis_1.x > 0 && pointis_1.y < 0 && pointis_1.y > -0.3)) angle_left_ = 1;
+    
+      if (pointis_1.x > -0.08 && pointis_1.x < 0.08 && pointis_1.y > 0) length_up_ = fabs(pointis_1.y);
+      if (pointis_1.x > -0.08 && pointis_1.x < 0.08 && pointis_1.y < 0) length_down_ = fabs(pointis_1.y);
+      if (pointis_1.y > -0.08 && pointis_1.y < 0.08 && pointis_1.x < 0) length_left_ = fabs(pointis_1.x);
+    }
+    cout << "h3 = " << h3_ << endl; 
+
+    if (h3_ > 1){
+      for (int i = 0; i < Input.points.size(); ++i) {
+        geometry_msgs::Point32 pointis_lift = Input.points[i];  
+        if ((pointis_lift.x < h3_ - 1 && pointis_lift.x > 0 && pointis_lift.y < 0.6 && pointis_lift.y > 0.45))  {
+          ob_lift_0 = 1;
+          rightwall_point_selected.points.push_back(pointis_lift);
+        }
+        if ((pointis_lift.x < h3_ - 1 && pointis_lift.x > 0 && pointis_lift.y < 0.45 && pointis_lift.y > 0.25))  {
+          ob_lift_1 = 1;
+          rightwall_point_selected.points.push_back(pointis_lift);
+        }
+        if ((pointis_lift.x < h3_ - 1 && pointis_lift.x > 0 && pointis_lift.y < 0.2 && pointis_lift.y > 0))  {
+          ob_lift_2= 1;
+          rightwall_point_selected.points.push_back(pointis_lift);
+        }
+        if ((pointis_lift.x < h3_ - 1 && pointis_lift.x > 0 && pointis_lift.y < 0 && pointis_lift.y > -0.2))  {
+          ob_lift_3 = 1;
+          rightwall_point_selected.points.push_back(pointis_lift);
+        }
+        if ((pointis_lift.x < h3_ - 1 && pointis_lift.x > 0 && pointis_lift.y < -0.25 && pointis_lift.y > -0.45))  {
+          ob_lift_4 = 1;
+          rightwall_point_selected.points.push_back(pointis_lift);
+        }
+        if ((pointis_lift.x < h3_ - 1 && pointis_lift.x > 0 && pointis_lift.y < -0.45 && pointis_lift.y > -0.6))  {
+          ob_lift_5 = 1;
+          rightwall_point_selected.points.push_back(pointis_lift);
+        } 
+      }
+      cout << "ob_lift is " << ob_lift_0 << " , "<< ob_lift_1 << " , " << ob_lift_2 << " , " << ob_lift_3 << " , " << ob_lift_4 << " , " << ob_lift_5 << endl;
+      if ((ob_lift_1 == 1 && ob_lift_2 == 1) || (ob_lift_2 == 1 && ob_lift_3 == 1) || (ob_lift_3 == 1 && ob_lift_4 == 1)) ob_lift_ = 1;
+      else ob_lift_ = 0;
+      if (ob_lift_0 == 0 || ob_lift_5 == 0) ob_lift_ = 0;
+      if ((ob_lift_1 == 0 && ob_lift_2 == 0) || (ob_lift_2 == 0 && ob_lift_3 == 0) || (ob_lift_3 == 0 && ob_lift_4 == 0)) ob_lift_ = 0;
+      cout << "ob_lift_ is " << ob_lift_ << endl;
+    }
+    else ob_lift_ = 0;
+  }
+
+  void MissionControl::Retreat(sensor_msgs::PointCloud Input) {
+    int obstacle_dir1_ = 0,obstacle_dir2_ = 0,obstacle_dir3_ = 0,obstacle_dir4_ = 0;
+    
+    for (int i = 0; i < Input.points.size(); ++i) {
+      geometry_msgs::Point32 pointis_1 = Input.points[i]; 
+      if ((pointis_1.x < 0.2 && pointis_1.x > 0 && pointis_1.y < 0.25 && pointis_1.y > 0)) obstacle_dir1_ = 1;
+      if ((pointis_1.x < 0.2 && pointis_1.x > 0 && pointis_1.y < 0 && pointis_1.y > -0.25)) obstacle_dir2_ = 1;
+      if ((pointis_1.x < -0.4 && pointis_1.x > -0.95 && pointis_1.y < 0.3 && pointis_1.y > 0)) obstacle_dir3_ = 1;
+      if ((pointis_1.x < -0.4 && pointis_1.x > -0.95 && pointis_1.y < 0 && pointis_1.y > -0.3)) obstacle_dir4_ = 1;
+    }
+
+    cout << "obstacle is " << " 1: " << obstacle_dir1_ << " 2 : " << obstacle_dir2_ << " 3: " << obstacle_dir3_ << " 4: " << obstacle_dir4_ << endl;
+    if ((obstacle_dir1_ == 1 && obstacle_dir2_ == 1) || (obstacle_dir3_ == 1 && obstacle_dir4_ == 1)) {
+      linear_speed_ = 0;
+      angular_speed_ = 0;
+    }
+    else if (obstacle_dir1_ == 1 || obstacle_dir4_ == 1){
+      linear_speed_ = 0;
+      angular_speed_ = 0.33;
+    }
+    else if (obstacle_dir2_ == 1 || obstacle_dir3_ == 1){
+      linear_speed_ = 0;
+      angular_speed_ = -0.33;
+    }
+    else if (obstacle_dir1_ == 0 && obstacle_dir2_ == 0 && obstacle_dir3_ == 0 && obstacle_dir4_ == 0) {
+      linear_speed_ = -0.2;
+      angular_speed_ = 0;
+    }
+  }
+
+  void MissionControl::DistanceAroundandMirror(sensor_msgs::PointCloud Input) {
+    sensor_msgs::PointCloud rightwall_point_selected;
+    h1_ = 0;
+    h2_ = 0;
+    h3_ = 0;
+    elevator_wall_ = length_up_ + length_down_ + length_right_;
+    cout << "=== DistanceAroundandMirror ===" << endl;
+    
+    int cont;
+    double temp, sequence,value_y;
+    double ave_pointcloud_interval[3][20];
+    double ave_pointcloud_interval2[2][20];
+    double ave_pointcloud_interval3[2][20];
+
+    rightwall_point_selected.points.clear();
+    
+    for (int i = 0; i < Input.points.size() ; ++i) {
+      geometry_msgs::Point32 pointis_1 = Input.points[i];
+      if (pointis_1.x > 0 && pointis_1.y < 1 && pointis_1.y > -1.5) rightwall_point_selected.points.push_back(pointis_1);
+    }
+
+    if (!rightwall_point_selected.points.empty()){
+      int size = rightwall_point_selected.points.size();
+      int point_cloud_interval = size / 20; 
+      for (int j = 0; j < 20; ++j){
+        double ave_interval_x = 0,ave_interval_y = 0;
+        for (int m = 0; m < point_cloud_interval; ++m)  {
+          ave_interval_x = ave_interval_x + rightwall_point_selected.points[point_cloud_interval * j + m].x;
+          ave_interval_y = ave_interval_y + rightwall_point_selected.points[point_cloud_interval * j + m].y;
+        }
+        ave_interval_x = ave_interval_x / point_cloud_interval;
+        ave_interval_y = ave_interval_y / point_cloud_interval;
+        ave_pointcloud_interval2[0][j] = ave_interval_x;
+        ave_pointcloud_interval2[1][j] = ave_interval_y;
+      }
+
+      for (int i = 0; i < 20; ++i){
+        for (int j = 0; j < 20 - i; ++j){
+          if (ave_pointcloud_interval2[0][j + 1] > ave_pointcloud_interval2[0][j]){
+            temp = ave_pointcloud_interval2[0][j];
+            ave_pointcloud_interval2[0][j] = ave_pointcloud_interval2[0][j + 1];
+            ave_pointcloud_interval2[0][j + 1] = temp;
+            value_y = ave_pointcloud_interval2[1][j];
+            ave_pointcloud_interval2[1][j] = ave_pointcloud_interval2[1][j + 1];
+            ave_pointcloud_interval2[1][j + 1] = value_y;
+          }
+        } 
+      }
+      h3_ = fabs(ave_pointcloud_interval2[0][0]);
+    }
+    else h3_ = 0;
+    rightwall_point_selected.points.clear();
+
+    for (int i = 0; i < Input.points.size() ; ++i) {
+      geometry_msgs::Point32 pointis_1 = Input.points[i];
+      if (pointis_1.x < 0 && pointis_1.y < 1 && pointis_1.y > -1.5) rightwall_point_selected.points.push_back(pointis_1);
+    }
+
+    if (!rightwall_point_selected.points.empty()){
+      int size = rightwall_point_selected.points.size();
+      int point_cloud_interval = size / 20; 
+      for (int j = 0; j < 20; ++j){
+        double ave_interval_x = 0,ave_interval_y = 0;
+        for (int m = 0; m < point_cloud_interval; ++m)  {
+          ave_interval_x = ave_interval_x + rightwall_point_selected.points[point_cloud_interval * j + m].x;
+          ave_interval_y = ave_interval_y + rightwall_point_selected.points[point_cloud_interval * j + m].y;
+        }
+        ave_interval_x = ave_interval_x / point_cloud_interval;
+        ave_interval_y = ave_interval_y / point_cloud_interval;
+        ave_pointcloud_interval2[0][j] = ave_interval_x;
+        ave_pointcloud_interval2[1][j] = ave_interval_y;
+      }
+
+      for (int i = 0; i < 20; ++i){
+        for (int j = 0; j < 20 - i; ++j){
+          if (ave_pointcloud_interval2[0][j + 1] < ave_pointcloud_interval2[0][j]){
+            temp = ave_pointcloud_interval2[0][j];
+            ave_pointcloud_interval2[0][j] = ave_pointcloud_interval2[0][j + 1];
+            ave_pointcloud_interval2[0][j + 1] = temp;
+            value_y = ave_pointcloud_interval2[1][j];
+            ave_pointcloud_interval2[1][j] = ave_pointcloud_interval2[1][j + 1];
+            ave_pointcloud_interval2[1][j + 1] = value_y;
+          }
+        } 
+      }
+      h1_ = fabs(ave_pointcloud_interval2[0][0]);
+    }
+    else h1_ = 0;
+    rightwall_point_selected.points.clear();
+
+    for (int i = 0; i < Input.points.size() ; ++i) {
+      geometry_msgs::Point32 pointis_1 = Input.points[i];
+      if (pointis_1.x > 0 && pointis_1.y > -1.5 && pointis_1.y < 1.5 && pointis_1.x < 6.5 - h1_) rightwall_point_selected.points.push_back(pointis_1);
+    }
+
+    int size = rightwall_point_selected.points.size();
+    int point_cloud_interval = size / 20; 
+    for (int j = 0; j < 20; ++j){
+      double ave_interval_x = 0,ave_interval_y = 0;
+      for (int m = 0; m < point_cloud_interval; ++m)  {
+        ave_interval_x = ave_interval_x + rightwall_point_selected.points[point_cloud_interval * j + m].x;
+        ave_interval_y = ave_interval_y + rightwall_point_selected.points[point_cloud_interval * j + m].y;
+      }
+      ave_interval_x = ave_interval_x / point_cloud_interval;
+      ave_interval_y = ave_interval_y / point_cloud_interval;
+      ave_pointcloud_interval[0][j] = ave_interval_x;
+      ave_pointcloud_interval[1][j] = ave_interval_y;
+      ave_pointcloud_interval[2][j] = j;
+    }
+
+    for (int i = 0; i < 19; ++i){
+      for (int j = 0; j < 20 - i; ++j){
+        if (ave_pointcloud_interval[0][j + 1] > ave_pointcloud_interval[0][j]){
+          temp = ave_pointcloud_interval[0][j];
+          ave_pointcloud_interval[0][j] = ave_pointcloud_interval[0][j + 1];
+          ave_pointcloud_interval[0][j + 1] = temp;
+          value_y = ave_pointcloud_interval[1][j];
+          ave_pointcloud_interval[1][j] = ave_pointcloud_interval[1][j + 1];
+          ave_pointcloud_interval[1][j + 1] = value_y;
+          sequence = ave_pointcloud_interval[2][j];
+          ave_pointcloud_interval[2][j] = ave_pointcloud_interval[2][j + 1];
+          ave_pointcloud_interval[2][j + 1] = sequence;
+        }
+      } 
+    }
+    length_right_ = ave_pointcloud_interval[0][0];
+    if (ave_pointcloud_interval[0][1] - ave_pointcloud_interval[0][18] > 1.6) y_coordinate_ = ave_pointcloud_interval[0][0] - ave_pointcloud_interval[0][18];
+    else if (ave_pointcloud_interval[0][1] > 2 && ave_pointcloud_interval[0][1] < 2.4 && ave_pointcloud_interval[0][0] - ave_pointcloud_interval[0][19] > 1) y_coordinate_ = 1;
+
+    rightwall_point_selected.points.clear();
+
+    for (int i = 0; i < Input.points.size() ; ++i) {
+      geometry_msgs::Point32 pointis_1 = Input.points[i];
+      if (pointis_1.y < 0) rightwall_point_selected.points.push_back(pointis_1);
+    }
+
+    if (!rightwall_point_selected.points.empty()){
+      int size = rightwall_point_selected.points.size();
+      // for (int i = 0; i < size ; ++i) {
+      double  point_cloud_interval = size / 20; 
+      for (int j = 0; j < 20; ++j){
+        double ave_interval_x = 0,ave_interval_y = 0;
+        for (int m = 0; m < point_cloud_interval; ++m)  {
+          ave_interval_x = ave_interval_x + rightwall_point_selected.points[point_cloud_interval * j + m].x;
+          ave_interval_y = ave_interval_y + rightwall_point_selected.points[point_cloud_interval * j + m].y;
+        }
+        ave_interval_x = ave_interval_x / point_cloud_interval;
+        ave_interval_y = ave_interval_y / point_cloud_interval;
+        ave_pointcloud_interval3[0][j] = ave_interval_x;
+        ave_pointcloud_interval3[1][j] = ave_interval_y;
+      }
+
+      for (int i = 0; i < 20; ++i){
+        for (int j = 0; j < 20 - i; ++j){
+          if (ave_pointcloud_interval3[1][j + 1] < ave_pointcloud_interval3[1][j]){
+            temp = ave_pointcloud_interval3[0][j];
+            ave_pointcloud_interval3[0][j] = ave_pointcloud_interval3[0][j + 1];
+            ave_pointcloud_interval3[0][j + 1] = temp;
+            value_y = ave_pointcloud_interval3[1][j];
+            ave_pointcloud_interval3[1][j] = ave_pointcloud_interval3[1][j + 1];
+            ave_pointcloud_interval3[1][j + 1] = value_y;
+          }
+        } 
+      }
+      h2_ = fabs(ave_pointcloud_interval3[1][0]);
+    }
+    else h2_ = 0;
+
+    sensor_msgs::PointCloud mirror_point_selected;
+
+    for (int i = 0; i < Input.points.size() ; ++i) {
+      geometry_msgs::Point32 pointis_0 = Input.points[i];
+      if (pointis_0.x < 7 - h1_ && pointis_0.x > 5 - h1_  && pointis_0.y < 4.1 - h2_ && pointis_0.y > -(h2_ - 2)) mirror_point_selected.points.push_back(pointis_0);
+    }
+    mirror_num_ = mirror_point_selected.points.size();
+
+    rightwall_point_selected.header.frame_id = "/base_link";
+    rightwall_point_selected.header.stamp = ros::Time::now();
+    // pointcloud_pub.publish(rightwall_point_selected);
+  }
+
+  void MissionControl::goStraightObstacleDete(sensor_msgs::PointCloud Input) {
+    collision_distance_ = 0;
+    for (int i = 0; i < Input.points.size() ; ++i) {
+      geometry_msgs::Point32 pointis = Input.points[i];
+      double length = hypot(pointis.x,pointis.y);
+      if (lift_mode_ == 4) {
+        if (pointis.y < 0.25 && pointis.y > -0.25 && pointis.x < 0 && pointis.x > -0.5) {
+          cout << "pointis " << pointis.x << " , " << pointis.y << endl;
+          collision_distance_ = 1;
+        }
+      }
+      else{
+        if (pointis.y < 0.25 && pointis.y > -0.25 && pointis.x < 0.1 && pointis.x > -0.5) {
+          cout << "pointis " << pointis.x << " , " << pointis.y << endl;
+          collision_distance_ = 1;
+        }
+      }
+    }
+    if (collision_distance_ != 0) cout << "WARMING (* O *) !!!" << endl;
+  }
+
+
+
