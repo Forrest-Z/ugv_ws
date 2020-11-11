@@ -373,6 +373,8 @@ void MissionControl::ApplyWaitControl(int mission_state) {
 
 geometry_msgs::Twist MissionControl::getAutoCommand() {
   geometry_msgs::Twist controller_cmd;
+  static bool last_plan_state = true;
+  bool now_plan_state = true;
 
   int global_goal_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter_);
   global_sub_goal_ = global_path_pointcloud_.points[global_goal_index];
@@ -381,32 +383,40 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
 
   geometry_msgs::Point32 global_goal_in_local;
   ConvertPoint(global_sub_goal_,global_goal_in_local,map_to_base_);
-  // cout << "global_goal_in_local : " << global_goal_in_local.x << "," << global_goal_in_local.y << endl; 
-  
-  int path_lookahead_index;
-  double search_range = 4;
-  wait_plan_state_ = true;
-  // plan_state_ = true;
-  // return controller_cmd;
-  ros::Time last_auto_time = ros::Time::now();
 
-  if(!MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_,search_range)) {
-    plan_state_ = false;
+  int path_lookahead_index;
+  double search_range = MyPlanner_.map_window_radius();
+  double search_range_min = 2;
+  double iteration_scale = 0.5;
+
+  ros::Time last_auto_time = ros::Time::now();
+  while(search_range >= search_range_min) {
+    if(MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_,search_range)) break;
+    else search_range *= iteration_scale;
+  }
+
+  if(search_range < search_range_min) {
+    now_plan_state = false;
     path_lookahead_index = 0;
   } else {
     path_lookahead_index = MyPlanner_.sub_2_path_best().points.size()/lookahead_local_scale_;
-    plan_state_ = true;
+    now_plan_state = true;
   }
 
-  ros::Time now_auto_time = ros::Time::now();
-  if(plan_state_) cout << "spline plan search time : " << (now_auto_time.nsec - last_auto_time.nsec) * pow(10,-3) << "us" << endl;
+  if((!last_plan_state) && (!now_plan_state)) plan_state_ = false;
+  else plan_state_ = true;
 
+  last_plan_state = now_plan_state;
+
+  ros::Time now_auto_time = ros::Time::now();
+  if(plan_state_) cout << "spline plan search time : " << (now_auto_time.nsec - last_auto_time.nsec) * pow(10,-6) << "ms" << endl;
+
+  cout << "plan_state_ : " << plan_state_ << endl;
   if(MyPlanner_.sub_2_path_best().points.size() <= 0) return controller_cmd;
   path_lookahead_index = MyPlanner_.sub_2_path_best().points.size()/lookahead_local_scale_;
 
   local_sub_goal_ = MyPlanner_.sub_2_path_best().points[path_lookahead_index];
   MyController_.ComputePurePursuitCommand(global_goal_in_local,local_sub_goal_,controller_cmd);
-
 
   return controller_cmd;
 }
@@ -568,6 +578,13 @@ sensor_msgs::PointCloud MissionControl::NarrowRRTPathfind() {
   
   geometry_msgs::Point32 global_goal_in_local;
   ConvertPoint(global_sub_goal_,global_goal_in_local,map_to_base_);
+
+  double goal_distance = hypot(global_goal_in_local.x,global_goal_in_local.y);
+  if(goal_distance > 6) {
+    double shrink_scale = 6.0 / goal_distance;
+    global_goal_in_local.x = global_goal_in_local.x * shrink_scale;
+    global_goal_in_local.y = global_goal_in_local.y * shrink_scale;
+  }
   
   geometry_msgs::Point32 vehicle_in_local;
   vehicle_in_local.x = 0;
@@ -690,10 +707,10 @@ geometry_msgs::Twist MissionControl::PursuitRRTPathCommand() {
   
   int init_index = FindCurrentGoalRoute(global_path_pointcloud_,vehicle_in_map_,lookahead_global_meter_); //global_sub_goal 是否发生变化
   static int last_index = init_index;
-  cout << "init_index :" << init_index << endl;
+
   if(last_index != init_index) {
     RRT_refind_ = true;
-    CheckNarrowToAutoState(); //RRT每到达一个目标点判断一次是否可以转为AUTO
+    ClearAutoMissionState(); //RRT每到达一个目标点转为AUTO
   }
   last_index = init_index;
 
@@ -706,6 +723,10 @@ geometry_msgs::Twist MissionControl::PursuitRRTPathCommand() {
 
   MyController_.ComputePurePursuitRRTCommand(RRT_pointcloud_local.points.front(),RRT_pointcloud_local.points[path_lookahead_index],controller_cmd);
   if(CheckRRTRouteState(RRT_pointcloud_global_.points[path_lookahead_index])) lookahead_RRT_scale_ = lookahead_RRT_scale_ * 0.9;
+  if(CheckRRTRouteState(RRT_pointcloud_global_.points.front())) {
+    RRT_refind_ = true;
+    ClearAutoMissionState(); //RRT每到达一个目标点转为AUTO
+  }
   return controller_cmd;
 }
 
@@ -998,8 +1019,10 @@ bool MissionControl::ReadConfig() {
   std::string file_name_node = config_folder_+ "/cfg/navi_config.txt";
 
   std::string Spline_folder = config_folder_;
-  std::string Spline_name = "/cfg/map_to_path";
+  std::string Spline_name = "/cfg/map_to_path_4m";
+  std::string Spline_name_1st = "/cfg/map_to_path_2m";
   MyPlanner_.InitSplineCurve(Spline_folder,Spline_name);
+  MyPlanner_.InitSplineCurve1st(Spline_folder,Spline_name_1st);
   
   yaml_file.open(file_name_node);
   if(!yaml_file.is_open()) {

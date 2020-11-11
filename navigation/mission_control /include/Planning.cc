@@ -22,22 +22,19 @@
  ******************************************************************************************/
 bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::PointCloud Obstacle, double Path_Radius) {
   bool path_result = false;
-  vector<sensor_msgs::PointCloud> joints_set;
-  vector<sensor_msgs::PointCloud> path_set;
-  vector<vector<sensor_msgs::PointCloud>> path_set_2d;
-  vector<vector<sensor_msgs::PointCloud>> safe_set_2d;
-
   mtx_radius_.lock();
   path_window_radius_ = Path_Radius;
   if(path_window_radius_ <= 0) return false;
   if(path_window_radius_ > map_window_radius_) return false;
 
-
-  if(!path_result){
-    ComputeSafePath(costmap_local_);
-    // path_result = true;
+  if(Path_Radius < 4) {
+    ComputeSafePath(costmap_local_,path_set_1_,map_to_path_1_);
+    path_result = SelectBestPath(Goal);
+  } else {
+    ComputeSafePath(costmap_local_,path_set_,map_to_path_);
     path_result = SelectBestPath(Goal);
   }
+
   mtx_radius_.unlock();
   
   if(!path_result) {
@@ -1332,24 +1329,34 @@ bool Planning::RRTEndAhead(geometry_msgs::Point32 start_point,geometry_msgs::Poi
 
 // local multi-spline pathfind
 void Planning::InitSplineCurve(string Spline_folder,string Spline_name) {
-  vector<vector<sensor_msgs::PointCloud>> path_set_2d;
   joints_set_.clear();
   path_set_.clear();
 
   InitLocalCostmap(costmap_local_);
-  GenerateSplinesJoints(joints_set_);
+  GenerateSplinesJoints(joints_set_,path_window_radius_);
   GenerateSplinesPath(path_set_,joints_set_);
   GenerateRevoluteSplinePath(path_set_);
-  if(!ReadAdjacentListTXT(Spline_folder,Spline_name)) return;
+  if(!ReadAdjacentListTXT(Spline_folder,Spline_name,map_to_path_)) return;
 }
 
-void Planning::GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output) {
+void Planning::InitSplineCurve1st(string Spline_folder,string Spline_name) {
+  joints_set_.clear();
+  path_set_1_.clear();
+
+  InitLocalCostmap(costmap_local_);
+  GenerateSplinesJoints(joints_set_,path_window_radius_1_);
+  GenerateSplinesPath(path_set_1_,joints_set_);
+  GenerateRevoluteSplinePath(path_set_1_);
+  if(!ReadAdjacentListTXT(Spline_folder,Spline_name,map_to_path_1_)) return;
+}
+
+void Planning::GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output,double Path_Radius) {
   Output.clear();
   const int temp_splines_joints_num = 3;
 
   double first_shrink_scale = temp_splines_joints_num * 0.95;
   double second_shrink_scale = temp_splines_joints_num * 0.55;
-  double radius_unit = path_window_radius_ / temp_splines_joints_num;
+  double radius_unit = Path_Radius / temp_splines_joints_num;
 
   vector<int> level_nums = {spline_1st_level_,spline_2nd_level_,spline_3rd_level_}; //{1,7,5};
   vector<double> level_unit(temp_splines_joints_num,0);
@@ -1512,7 +1519,7 @@ void Planning::ComputeSplines(sensor_msgs::PointCloud& Output,geometry_msgs::Poi
     }
 
     double range   = fabs(Point_3.x);
-    double iter_num = 20;
+    double iter_num = 15;
     path_vertical_step_ = range / iter_num;
 
     for (int j = 0; j <= iter_num; j++) {
@@ -1580,10 +1587,12 @@ void Planning::GenerateRevoluteSplinePath(vector<PathGroup> &Path_set) {
     z_height+=10;
     path_scale+=1000;
   }
+
+  id_num_ = 0;
 }
 
-bool Planning::ReadAdjacentListTXT(string Adjacent_list_folder,string Adjacent_list_name) {
-  map_to_path_.clear();
+bool Planning::ReadAdjacentListTXT(string Adjacent_list_folder,string Adjacent_list_name,vector<MapToPath> &map_to_path) {
+  map_to_path.clear();
 
   std::ifstream node_file;
 
@@ -1615,16 +1624,16 @@ bool Planning::ReadAdjacentListTXT(string Adjacent_list_folder,string Adjacent_l
       map_enable = false;
     }
 
-    map_to_path_.push_back(sub_map_to_path);
+    map_to_path.push_back(sub_map_to_path);
 	}
 	node_file.close();
 
-  // for(int m = 0; m < map_to_path_.size(); m++) {
+  // for(int m = 0; m < map_to_path.size(); m++) {
   //   cout << "------------------------------" << endl;
-  //   cout << "map_num : " << map_to_path_[m].map_data_num << endl;
+  //   cout << "map_num : " << map_to_path[m].map_data_num << endl;
   //   cout << "path_id : ";
-  //   for(int n = 0; n < map_to_path_[m].path_id.size(); n++) {
-  //     cout <<  map_to_path_[m].path_id[n] << " , ";
+  //   for(int n = 0; n < map_to_path[m].path_id.size(); n++) {
+  //     cout <<  map_to_path[m].path_id[n] << " , ";
   //   }
   //   cout << endl;
   // }
@@ -1632,17 +1641,17 @@ bool Planning::ReadAdjacentListTXT(string Adjacent_list_folder,string Adjacent_l
 	return true;
 }
 
-void Planning::ComputeSafePath(nav_msgs::OccupancyGrid Cost_map) {
+void Planning::ComputeSafePath(nav_msgs::OccupancyGrid Cost_map,vector<PathGroup> Path_set,vector<MapToPath> map_to_path) {
   path_safe_set_.clear();
   path_set_init_.clear();
-  path_set_init_ = path_set_;
+  path_set_init_ = Path_set;
 
   vector<int> temp_path_id;
   for(int i = 0; i < Cost_map.data.size(); i++) {
     if(Cost_map.data[i] < 10) continue;
     int single_path_id;
-    for(int j = 0; j < map_to_path_[i].path_id.size(); j++) {
-      single_path_id = map_to_path_[i].path_id[j];
+    for(int j = 0; j < map_to_path[i].path_id.size(); j++) {
+      single_path_id = map_to_path[i].path_id[j];
       path_set_init_[single_path_id].path_pointcloud.channels[0].values.assign(path_set_init_[single_path_id].path_pointcloud.points.size(),-1);
       temp_path_id.push_back(single_path_id);
     } 
@@ -1657,11 +1666,16 @@ void Planning::ComputeSafePath(nav_msgs::OccupancyGrid Cost_map) {
       path_safe_set_.push_back(temp_path_group);
     }
   }
+  cout << "path_safe_set_.size() : " << path_safe_set_.size() << endl;
   return;
 }
 
 bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
 
+  path_best_.points.clear();
+  sub_1_path_best_.points.clear();
+  sub_2_path_best_.points.clear();
+  
   double goal_weight = 3;
   static int last_index = -1;
   int optimal_index;
@@ -1682,11 +1696,9 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
   }
 
 
-  double max_feasible_prob = DBL_MIN;
+  double max_feasible_prob = -1;
   for(int j = 0; j < path_cost.size(); j++) {
-    // cout << j << " : "<< path_cost[j] << endl;
-    if(path_cost[j] - max_feasible_prob > 0.0001) {
-      // cout << j << "  **********" << endl;
+    if(path_cost[j] > max_feasible_prob) {
       max_feasible_prob = path_cost[j];
       path_group_index = j;
     }
@@ -1694,9 +1706,6 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
 
   cout << "path_group_index : "  << path_group_index << endl;
   
-  path_best_.points.clear();
-  sub_1_path_best_.points.clear();
-  sub_2_path_best_.points.clear();
 
   // compute sub path cost, choose sub_max_feasible_pro second group path
   for(int k = 0; k < path_safe_set_.size(); k++) {
@@ -1704,12 +1713,7 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
       int check_id = path_safe_set_[k].path_id % (spline_2nd_level_*spline_3rd_level_);
       int check_index = check_id / spline_3rd_level_;
       sub_path_cost[check_index] += 1;
-      // for(int m = 0; m < path_safe_set_[k].path_pointcloud.points.size(); m++) {
-      //   geometry_msgs::Point32 temp_point;
-      //   temp_point = path_safe_set_[k].path_pointcloud.points[m];
-      //   temp_point.z = 400;
-      //   path_best_.points.push_back(temp_point);
-      // }
+
     }
   }
 
@@ -1732,25 +1736,6 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
 
   int sub_max_feasible_prob_index = sub_path_index.size()/2;
   optimal_index = path_group_index * spline_2nd_level_ + sub_path_index[sub_max_feasible_prob_index];
-
-  // double stable_weight = 0;
-  // if(sub_path_index.size() != 1) {
-  //   double min_distance = DBL_MAX;
-  //   for (int i = 0; i < sub_path_index.size(); ++i) {
-  //     geometry_msgs::Point32 candidate_point = path_set_[path_group_index*(spline_2nd_level_*spline_3rd_level_)+sub_path_index[i]*spline_3rd_level_].path_pointcloud.points[path_set_[path_group_index*(spline_2nd_level_*spline_3rd_level_)+sub_path_index[i]*spline_3rd_level_].path_pointcloud.points.size()/3];
-  //     double path_distance = hypot((candidate_point.y - Goal.y),(candidate_point.x - Goal.x));
-
-  //     if(isLastEnable) {
-  //       geometry_msgs::Point32 last_point = path_set_[last_index*spline_3rd_level_].path_pointcloud.points[path_set_[last_index*spline_3rd_level_].path_pointcloud.points.size()/3];
-  //       path_distance += stable_weight * hypot((candidate_point.y - last_point.y),(candidate_point.x - last_point.x));
-  //     }
-
-  //     if(path_distance < min_distance) {
-  //       min_distance = path_distance;
-  //       optimal_index = path_group_index * spline_2nd_level_ + sub_path_index[i];
-  //     }
-  //   }
-  // }
 
   // 最优第二级子路径
   bool enable_push_back = true;

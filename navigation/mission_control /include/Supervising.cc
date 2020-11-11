@@ -376,72 +376,73 @@ int Supervising::AutoSuperviseDecision(sensor_msgs::PointCloud obstacle_in_base,
             if(revolute_flag) buffer = true;
             if(danger){
                 return static_cast<int>(AUTO::P); 
-            }else if(buffer){
-                AUTO_mission_state_ = false;
-                attempt_times = 0;
-                traceback_index = 0;
-                return static_cast<int>(AUTO::P);
-                if(!revolute_safe){
-                    if(yaw_index == 0) {
-                        revolute_pose_.x = vehicle_in_map.x;
-                        revolute_pose_.y = vehicle_in_map.y;
-                        revolute_pose_.z = vehicle_in_map.z;
-                        yaw_index++;
-                    }
-                    if(index_ < 3){
-                        /***************vehicle yaw convert*********************/
-                        if(revolute_2_flag){
-                            if(yaw_now - revolute_pose_.z <= 0) yaw_now = yaw_now;
-                            else if(yaw_now - revolute_pose_.z > 0) yaw_now = yaw_now - 2*PI;
-                        }
-                        if(revolute_1_flag){
-                            if(yaw_now - revolute_pose_.z >= 0) yaw_now = yaw_now;
-                            else if(yaw_now - revolute_pose_.z < 0) yaw_now = yaw_now + 2*PI;
-                        }
-                        if((yaw_now - revolute_pose_.z >= 0) && (revolute_angle_ - yaw_now + revolute_pose_.z > angle_offset_)){
-                            revolute_flag = true;
-                            revolute_1_flag = true;
-                            revolute_2_flag = false; 
-                            return static_cast<int>(AUTO::REVOLUTE1);
-                        }else if(revolute_angle_ - yaw_now + revolute_pose_.z <= angle_offset_){
-                            if(index_ <= 1) {
-                                if(back_safe_left){
-                                    return static_cast<int>(AUTO::P); 
-                                }else if(!back_safe_left){
-                                    revolute_pose_.x = vehicle_in_map.x;
-                                    revolute_pose_.y = vehicle_in_map.y;
-                                    ConvertAnglePositive(revolute_pose_.z,vehicle_in_map);
-                                    index_++;
-                                    revolute_1_flag = false;
-                                    revolute_2_flag = true;
-                                    return static_cast<int>(AUTO::REVOLUTE2);
-                                }
-                            }else{
-                                index_++;
-                            }
-                        }else if((yaw_now - revolute_pose_.z < 0) && (PI/2 + yaw_now - revolute_pose_.z > angle_offset_)){
-                            return static_cast<int>(AUTO::REVOLUTE2);
-                        }else if(PI/2 + yaw_now - revolute_pose_.z < angle_offset_){
-                            if(back_safe_right){
-                                return static_cast<int>(AUTO::P); 
-                            }else if(!back_safe_right){
-                                revolute_pose_.x = vehicle_in_map.x;
-                                revolute_pose_.y = vehicle_in_map.y;
-                                ConvertAngleNegative(revolute_pose_.z,vehicle_in_map);
-                                index_++;
-                                revolute_1_flag = true;
-                                revolute_2_flag = false; 
-                                return static_cast<int>(AUTO::REVOLUTE1);
-                            }
-                        }
-                    }else{
-                        if(back_turn == 1) return static_cast<int>(AUTO::R1);
-                        else if(back_turn == 2) return static_cast<int>(AUTO::R2);
-                        else if(back_turn == 0) return static_cast<int>(AUTO::R3);
-                    }
-                }else if(revolute_safe){
-                    return static_cast<int>(AUTO::P);
-                }
+            // }else if(buffer){
+
+            //     AUTO_mission_state_ = false;
+            //     attempt_times = 0;
+            //     traceback_index = 0;
+            //     return static_cast<int>(AUTO::P);
+            //     if(!revolute_safe){
+            //         if(yaw_index == 0) {
+            //             revolute_pose_.x = vehicle_in_map.x;
+            //             revolute_pose_.y = vehicle_in_map.y;
+            //             revolute_pose_.z = vehicle_in_map.z;
+            //             yaw_index++;
+            //         }
+            //         if(index_ < 3){
+            //             /***************vehicle yaw convert*********************/
+            //             if(revolute_2_flag){
+            //                 if(yaw_now - revolute_pose_.z <= 0) yaw_now = yaw_now;
+            //                 else if(yaw_now - revolute_pose_.z > 0) yaw_now = yaw_now - 2*PI;
+            //             }
+            //             if(revolute_1_flag){
+            //                 if(yaw_now - revolute_pose_.z >= 0) yaw_now = yaw_now;
+            //                 else if(yaw_now - revolute_pose_.z < 0) yaw_now = yaw_now + 2*PI;
+            //             }
+            //             if((yaw_now - revolute_pose_.z >= 0) && (revolute_angle_ - yaw_now + revolute_pose_.z > angle_offset_)){
+            //                 revolute_flag = true;
+            //                 revolute_1_flag = true;
+            //                 revolute_2_flag = false; 
+            //                 return static_cast<int>(AUTO::REVOLUTE1);
+            //             }else if(revolute_angle_ - yaw_now + revolute_pose_.z <= angle_offset_){
+            //                 if(index_ <= 1) {
+            //                     if(back_safe_left){
+            //                         return static_cast<int>(AUTO::P); 
+            //                     }else if(!back_safe_left){
+            //                         revolute_pose_.x = vehicle_in_map.x;
+            //                         revolute_pose_.y = vehicle_in_map.y;
+            //                         ConvertAnglePositive(revolute_pose_.z,vehicle_in_map);
+            //                         index_++;
+            //                         revolute_1_flag = false;
+            //                         revolute_2_flag = true;
+            //                         return static_cast<int>(AUTO::REVOLUTE2);
+            //                     }
+            //                 }else{
+            //                     index_++;
+            //                 }
+            //             }else if((yaw_now - revolute_pose_.z < 0) && (PI/2 + yaw_now - revolute_pose_.z > angle_offset_)){
+            //                 return static_cast<int>(AUTO::REVOLUTE2);
+            //             }else if(PI/2 + yaw_now - revolute_pose_.z < angle_offset_){
+            //                 if(back_safe_right){
+            //                     return static_cast<int>(AUTO::P); 
+            //                 }else if(!back_safe_right){
+            //                     revolute_pose_.x = vehicle_in_map.x;
+            //                     revolute_pose_.y = vehicle_in_map.y;
+            //                     ConvertAngleNegative(revolute_pose_.z,vehicle_in_map);
+            //                     index_++;
+            //                     revolute_1_flag = true;
+            //                     revolute_2_flag = false; 
+            //                     return static_cast<int>(AUTO::REVOLUTE1);
+            //                 }
+            //             }
+            //         }else{
+            //             if(back_turn == 1) return static_cast<int>(AUTO::R1);
+            //             else if(back_turn == 2) return static_cast<int>(AUTO::R2);
+            //             else if(back_turn == 0) return static_cast<int>(AUTO::R3);
+            //         }
+            //     }else if(revolute_safe){
+            //         return static_cast<int>(AUTO::P);
+            //     }
             }else if(!plan_state){ 
                 AUTO_mission_state_ = false;
                 attempt_times = 0;

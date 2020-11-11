@@ -92,11 +92,12 @@ public:
 		spline_2nd_level_ 						= 7;
 		spline_3rd_level_ 						= 5;
 
-		spline_array_num_							= 29;
+		spline_array_num_							= 21;
 
 		spline_height_                = 0;
   	id_num_                       = 0;
 		path_window_radius_						= 4;
+		path_window_radius_1_					= 2;
 		spline_expand_size_ 					= 1;
 
 
@@ -210,10 +211,11 @@ public:
 
 	bool CheckNodeRepeat(int check_id, vector<int> id_group);
 	bool SelectBestPath(geometry_msgs::Point32 Goal);
-	bool ReadAdjacentListTXT(string Adjacent_list_folder,string Adjacent_list_name);
+	bool ReadAdjacentListTXT(string Adjacent_list_folder,string Adjacent_list_name,vector<MapToPath> &map_to_path);
 	void GenerateRevoluteSplinePath(vector<PathGroup> &Path_set);
 	void GenerateSplinesPath(vector<PathGroup>& Path_set,vector<sensor_msgs::PointCloud> Joints);
 	void InitSplineCurve(string Spline_folder,string Spline_name);
+	void InitSplineCurve1st(string Spline_folder,string Spline_name);
 	sensor_msgs::PointCloud ConvertVectortoPointcloud(vector<PathGroup> Input);
 	void ExpandCostmap(nav_msgs::OccupancyGrid &Grid,int expand_size);
 
@@ -225,6 +227,7 @@ private:
 
 	/** Parameters **/
 	double path_window_radius_;
+	double path_window_radius_1_;
 	double map_window_radius_;
 	double path_swap_range_;
 	double path_vertical_step_;
@@ -251,7 +254,9 @@ private:
 
 	vector<PathToMap> path_to_map_;
 	vector<MapToPath> map_to_path_;
+	vector<MapToPath> map_to_path_1_;
 	vector<PathGroup> path_set_;
+	vector<PathGroup> path_set_1_;
 	vector<PathGroup> path_safe_set_;
 	vector<PathGroup> path_set_init_;
 	vector<sensor_msgs::PointCloud> joints_set_;
@@ -261,7 +266,7 @@ private:
 
 	/** Functions **/
 
-	void GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output);
+	void GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output,double Path_Radius);
 
 	void GenerateSplinesPath(vector<sensor_msgs::PointCloud>& Path_set,vector<sensor_msgs::PointCloud> Joints);
 	void GenerateSplinesPath(vector<sensor_msgs::PointCloud>& Path_set,vector<sensor_msgs::PointCloud> Joints, vector<vector<sensor_msgs::PointCloud>>& Path_set_2d);
@@ -271,7 +276,7 @@ private:
 	void ComputeStraight(sensor_msgs::PointCloud& Output,geometry_msgs::Point32 Goal);
 	void InitLocalCostmap(nav_msgs::OccupancyGrid& Costmap);
 	void SetLocalCostmap(nav_msgs::OccupancyGrid& Costmap,sensor_msgs::PointCloud Obstacle);
-	void ComputeSafePath(nav_msgs::OccupancyGrid Costmap);
+	void ComputeSafePath(nav_msgs::OccupancyGrid Costmap,vector<PathGroup> Path_set,vector<MapToPath> map_to_path);
 	bool DetectObstcaleGrid(sensor_msgs::PointCloud Path,nav_msgs::OccupancyGrid Costmap,int Addition);
 	bool DetectPointObstcaleGrid(geometry_msgs::Point32 Point,nav_msgs::OccupancyGrid Costmap);
 
