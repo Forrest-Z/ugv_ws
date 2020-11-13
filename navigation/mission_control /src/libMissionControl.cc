@@ -1303,6 +1303,7 @@ void MissionControl::JoyCallback(const sensor_msgs::Joy::ConstPtr& Input) {
 
   if(Input->buttons[BUTTON_LB] && Input->buttons[BUTTON_BACK]) {
     global_path_pointcloud_.points.clear();
+    isAction_ = false;
   }
 
   if(Input->buttons[BUTTON_LB] && Input->buttons[BUTTON_A]) {
@@ -1729,7 +1730,7 @@ bool MissionControl::CheckTracebackState(geometry_msgs::Point32 Input) {
     }
 
     goStraightObstacleDete(scan_points_);
-    if (collision_distance_ != 0 || isnan(y_coordinate_)) {
+    if (collision_distance_ != 0 || std::isnan(y_coordinate_)) {
       linear_speed = 0;
       angular_speed = 0;
     }
@@ -2102,30 +2103,33 @@ bool MissionControl::CheckTracebackState(geometry_msgs::Point32 Input) {
   }
 
   void MissionControl::Retreat(sensor_msgs::PointCloud Input) {
-    int obstacle_dir1_ = 0,obstacle_dir2_ = 0,obstacle_dir3_ = 0,obstacle_dir4_ = 0;
-    
-    for (int i = 0; i < Input.points.size(); ++i) {
-      geometry_msgs::Point32 pointis_1 = Input.points[i]; 
-      if ((pointis_1.x < 0.2 && pointis_1.x > 0 && pointis_1.y < 0.25 && pointis_1.y > 0)) obstacle_dir1_ = 1;
-      if ((pointis_1.x < 0.2 && pointis_1.x > 0 && pointis_1.y < 0 && pointis_1.y > -0.25)) obstacle_dir2_ = 1;
-      if ((pointis_1.x < -0.4 && pointis_1.x > -0.95 && pointis_1.y < 0.3 && pointis_1.y > 0)) obstacle_dir3_ = 1;
-      if ((pointis_1.x < -0.4 && pointis_1.x > -0.95 && pointis_1.y < 0 && pointis_1.y > -0.3)) obstacle_dir4_ = 1;
-    }
+    double ob_lift_2 = 0,ob_lift_3 = 0;
 
-    cout << "obstacle is " << " 1: " << obstacle_dir1_ << " 2 : " << obstacle_dir2_ << " 3: " << obstacle_dir3_ << " 4: " << obstacle_dir4_ << endl;
-    if ((obstacle_dir1_ == 1 && obstacle_dir2_ == 1) || (obstacle_dir3_ == 1 && obstacle_dir4_ == 1)) {
+    for (int i = 0; i < Input.points.size(); ++i) {
+      geometry_msgs::Point32 pointis_lift = Input.points[i];
+
+      if ((pointis_lift.x < 0 && pointis_lift.x > -0.7 && pointis_lift.y < 0.2 && pointis_lift.y > 0)) {
+        ob_lift_2= 1;
+      }
+      if ((pointis_lift.x < 0 && pointis_lift.x > -0.7 && pointis_lift.y < 0 && pointis_lift.y > -0.2)) {
+        ob_lift_3 = 1;
+      }
+    }
+    cout << ob_lift_2 << " , " << ob_lift_3 << endl;
+
+    if ((ob_lift_2 == 1 && ob_lift_3 == 1)) {
       linear_speed_ = 0;
       angular_speed_ = 0;
     }
-    else if (obstacle_dir1_ == 1 || obstacle_dir4_ == 1){
+    else if (ob_lift_3 == 1){
       linear_speed_ = 0;
       angular_speed_ = 0.33;
     }
-    else if (obstacle_dir2_ == 1 || obstacle_dir3_ == 1){
+    else if (ob_lift_2 == 1){
       linear_speed_ = 0;
       angular_speed_ = -0.33;
     }
-    else if (obstacle_dir1_ == 0 && obstacle_dir2_ == 0 && obstacle_dir3_ == 0 && obstacle_dir4_ == 0) {
+    else if (ob_lift_2 == 0 && ob_lift_3 == 0) {
       linear_speed_ = -0.2;
       angular_speed_ = 0;
     }
