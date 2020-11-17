@@ -24,6 +24,7 @@ enum class AutoState
   RELOCATION,
   NOMAP,
   WAIT,
+  ROTATION,
 };
 
 enum class AUTO

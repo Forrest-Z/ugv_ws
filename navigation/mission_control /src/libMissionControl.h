@@ -102,6 +102,8 @@ private:
   ros::Publisher action_state_pub;
   ros::Publisher plan_str_pub;
 
+  ros::Publisher gate_command_pub;
+
   /** ROS Components **/
   tf::TransformListener listener_map_to_base;
 
@@ -150,6 +152,7 @@ private:
 
   bool isLocationUpdate_;
   bool isReachCurrentGoal_;
+  bool isAdjustGuardPose_;
 
 
   /** Variables **/
@@ -182,6 +185,7 @@ private:
   std_msgs::String vehicle_run_state_3rd_;
   std_msgs::String vehicle_run_state_4th_;
 
+  std_msgs::String action_msg_;
 
   double lookahead_global_meter_;
   double lookahead_local_scale_;
@@ -252,6 +256,7 @@ private:
   void ApplyRelocationControl(int mission_state);
   void ApplyNomapControl(int mission_state);
   void ApplyWaitControl(int mission_state);
+  void ApplyRotationControl(int mission_state);
 
 
   int DecisionMaker();
@@ -454,6 +459,33 @@ private:
   inline void ZeroCommand(geometry_msgs::Twist& Cmd_vel) {
     Cmd_vel.linear.x  = 0;
     Cmd_vel.angular.z = 0;
+  }
+
+  inline void RotationCommand(geometry_msgs::Twist& Cmd_vel) {
+    static bool isRotationState = true;
+    static double yaw_init;
+    if(isRotationState) {
+      yaw_init = vehicle_in_map_.z;
+      isRotationState = false;
+    }
+
+    double yaw_now = vehicle_in_map_.z;
+    double rotation_angle = PI/2;
+    double angle_offset = 0;
+
+    if(yaw_now - yaw_init + angle_offset < rotation_angle) {
+      cout << "yaw_now - yaw_init + angle_offset : " << yaw_now - yaw_init + angle_offset << endl;
+      Cmd_vel.linear.x  = 0;
+      Cmd_vel.angular.z = 0.3;
+    } else {
+      Cmd_vel.linear.x  = 0;
+      Cmd_vel.angular.z = 0;
+      isAdjustGuardPose_ = false;
+      isRotationState = true;
+
+      action_msg_.data = "open";
+		  gate_command_pub.publish(action_msg_);
+    }
   }
 
   inline double ComputeSign(double Input){

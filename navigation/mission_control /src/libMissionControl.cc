@@ -37,6 +37,7 @@ MissionControl::MissionControl():pn("~") {
   RRT_pointcloud_pub = n.advertise<sensor_msgs::PointCloud>("/RRT_pointcloud",1);
   Astar_pointcloud_pub = n.advertise<sensor_msgs::PointCloud>("/Astar_pointcloud",1);
   vehicle_run_state_pub = n.advertise<std_msgs::String>("/vehicle_run_state",1);
+  gate_command_pub = n.advertise<std_msgs::String>("/gate_command", 1);
   
   reset_sub = n.subscribe("/reset_control",1,&MissionControl::ResetCallback,this);
   action_sub = n.subscribe("action_index",1,&MissionControl::ActionCallback,this);
@@ -100,6 +101,7 @@ bool MissionControl::Initialization() {
   isAction_ = false;
   isLocationUpdate_ = false;
   isReachCurrentGoal_ = false;
+  isAdjustGuardPose_ = false;
 
   isJOYscram_ = false;
   planner_manual_state_ = false;
@@ -205,6 +207,11 @@ void MissionControl::Execute() {
       vehicle_run_state_1st_.data = "step1: mission_state was WAIT.";
       ApplyWaitControl(mission_state);
       continue; 
+    }
+    else if(mission_state == static_cast<int>(AutoState::ROTATION)) {
+      vehicle_run_state_1st_.data = "step1: mission_state was ROTATION.";
+      ApplyRotationControl(mission_state);
+      continue; 
     }  
     else {
       cout << "Unknown Mission State" << endl;
@@ -245,7 +252,9 @@ int MissionControl::DecisionMaker() {
       else 
         return static_cast<int>(AutoState::AUTO);  
     // } 
-   }
+  }
+
+  if(isReachCurrentGoal_ && isAdjustGuardPose_) return static_cast<int>(AutoState::ROTATION);
 
   return static_cast<int>(AutoState::STOP);
 }
@@ -388,6 +397,17 @@ void MissionControl::ApplyWaitControl(int mission_state) {
   publishCommand();
   if(!updateState()) return;
   return;
+}
+
+void MissionControl::ApplyRotationControl(int mission_state) {
+  geometry_msgs::Twist safe_cmd;
+  geometry_msgs::Twist raw_cmd;
+  if(!UpdateVehicleLocation()) return;
+  RotationCommand(raw_cmd);
+  checkCommandSafety(raw_cmd,safe_cmd,mission_state);
+  createCommandInfo(safe_cmd);
+  publishCommand();
+  publishInfo();
 }
 
 geometry_msgs::Twist MissionControl::getAutoCommand() {
@@ -1322,6 +1342,15 @@ void MissionControl::JoyCallback(const sensor_msgs::Joy::ConstPtr& Input) {
     ClearAutoMissionState();
   }
 
+  if(Input->buttons[BUTTON_LB] && Input->buttons[BUTTON_START]) {
+    goal_in_map_.x = -103;
+    goal_in_map_.y = 44.7;
+    goal_in_map_.z = 0;
+    isAdjustGuardPose_ = true;
+    ComputeGlobalPlan(goal_in_map_);
+    ClearAutoMissionState();
+  }
+
   if(Input->buttons[BUTTON_RB]) {
     if(Input->buttons[BUTTON_A]) {
       cout << " Up to Lift 1 floor" << endl;
@@ -1623,6 +1652,8 @@ bool MissionControl::CheckTracebackState(geometry_msgs::Point32 Input) {
      }
      else if(stage_index_ == 2) {
       if(Turn(output_cmd)) stage_index_ = 3;
+      action_msg_.data = "close";
+		  gate_command_pub.publish(action_msg_);
      } 
      else if(stage_index_ == 3) {
       if(EnterLift(output_cmd)) stage_index_ = 4;
@@ -1776,8 +1807,14 @@ bool MissionControl::CheckTracebackState(geometry_msgs::Point32 Input) {
     cout << "linear_speed is " << output_cmd.linear.x << endl;
     cout << "angular_speed is " << output_cmd.angular.z << endl;
     Output = output_cmd;
-    if (lift_mode_ == 4) if (h3_ > 6) return true;
-    else if (h3_ > 5) return true;
+    if (lift_mode_ == 4) {
+      cout << "h3 = " << h3_ << endl;
+      if (h3_ > 6) return true;
+    }
+    else {
+      cout << "h1 = " << h1_ << endl;
+      if (h1_ > 6.5) return true;
+    }
     return false;
   }
 
