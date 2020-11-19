@@ -15,6 +15,7 @@ MissionControl::MissionControl():pn("~") {
   map_number_sub = n.subscribe("map_number",1, &MissionControl::MapNumberCallback,this);
 
   scan_sub = n.subscribe("/lidar_scan",1, &MissionControl::ScanCallback,this);
+  remote_control_sub = n.subscribe("/remote_control",1, &MissionControl::RemoteControlCallback,this);
 
   cmd_vel_pub = n.advertise<geometry_msgs::Twist> ("husky_velocity_controller/cmd_vel", 1);
   path_pred_pub = n.advertise<sensor_msgs::PointCloud>("pred_path",1);
