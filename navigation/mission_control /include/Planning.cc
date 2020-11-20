@@ -33,17 +33,26 @@ bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::Po
   } else {
     ComputeSafePath(costmap_local_,path_set_,map_to_path_);
     path_result = SelectBestPath(Goal);
+
+    if(path_result) {
+      geometry_msgs::Point32 sub_goal;
+      sub_goal.x = sub_2_path_best_.points[sub_2_path_best_.points.size()/4].x;
+      sub_goal.y = sub_2_path_best_.points[sub_2_path_best_.points.size()/4].y;
+
+      double goal_distance = hypot(Goal.x,Goal.y);
+      double sub_goal_distance = hypot(sub_goal.x,sub_goal.y);
+      double goal_to_subgoal_distance = hypot(Goal.x-sub_goal.x,Goal.y-sub_goal.y);
+
+      double between_goal_angle = acos((pow(goal_distance,2)+pow(sub_goal_distance,2)-pow(goal_to_subgoal_distance,2)) / (2*goal_distance*sub_goal_distance));
+
+      if(between_goal_angle > PI/4) path_result = false;
+    }
   }
+  cout << "sub_2_path_best_.points " << sub_2_path_best_.points.size() << endl;
 
   mtx_radius_.unlock();
   
   if(!path_result) {
-    sensor_msgs::PointCloud path_temp;
-    geometry_msgs::Point32 point_temp;
-    path_temp.header.frame_id = "/base_link";
-    path_temp.header.stamp = ros::Time::now();
-    path_temp.points.push_back(point_temp);
-    sub_2_path_best_ = path_temp;
     cout << "Spline path find failed !" << endl;
     return false;
   }
@@ -1719,9 +1728,9 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
 
   int sub_max_feasible_prob = INT_MIN;
   for(int ii = 0; ii < sub_path_cost.size(); ii++) {
-    cout << ii << " : "<< sub_path_cost[ii] << endl;
+    // cout << ii << " : "<< sub_path_cost[ii] << endl;
     if(sub_path_cost[ii] > sub_max_feasible_prob) {
-      cout << ii << "  **********" << endl;
+      // cout << ii << "  **********" << endl;
       optimal_index = path_group_index*spline_2nd_level_ + ii;
       sub_max_feasible_prob = sub_path_cost[ii];
     }

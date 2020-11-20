@@ -16,6 +16,6 @@
     <remap from="map" to="map_navi"/>
   </node>
 
-  <node pkg="rviz" type="rviz" name="rviz_navi" output="screen" args="-d $(find config)/cfg/rviz_config.rviz" />
+  <!-- <node pkg="rviz" type="rviz" name="rviz_navi" output="screen" args="-d $(find config)/cfg/rviz_config.rviz" /> -->
 
 </launch>

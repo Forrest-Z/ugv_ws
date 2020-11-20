@@ -77,6 +77,7 @@ private:
   ros::Subscriber planner_manual_sub;
 
   ros::Subscriber scan_sub;
+  ros::Subscriber remote_control_sub;
 
   /** Publishers **/
   ros::Publisher cmd_vel_pub;
@@ -257,6 +258,9 @@ private:
   void ApplyNomapControl(int mission_state);
   void ApplyWaitControl(int mission_state);
   void ApplyRotationControl(int mission_state);
+  void ApplyRemoteControl(int mission_state);
+
+  geometry_msgs::Twist getRemoteCommand();
 
 
   int DecisionMaker();
@@ -571,6 +575,36 @@ private:
     planner_manual_state_ = true;
   }
 
+  void RemoteControlCallback(const std_msgs::Int32MultiArray::ConstPtr& Input) {
+    if(Input->data[0]) {
+      isRemote_ = true;
+      remote_goal_ = remote_goal_front_;
+    } else if(Input->data[1]) {
+      isRemote_ = true;
+      remote_goal_ = remote_goal_back_;
+    } else if(Input->data[2]) {
+      isRemote_ = true;
+      remote_goal_ = remote_goal_left_;
+    } else if(Input->data[3]) {
+      isRemote_ = true;
+      remote_goal_ = remote_goal_right_;
+    } else if(Input->data[4]) {
+      isRemote_ = true;
+      remote_goal_ = remote_goal_frontleft_;
+    } else if(Input->data[5]) {
+      isRemote_ = true;
+      remote_goal_ = remote_goal_frontright_;
+    } else if(Input->data[6]) {
+      isRemote_ = true;
+      remote_goal_ = remote_goal_backleft_;
+    } else if(Input->data[7]) {
+      isRemote_ = true;
+      remote_goal_ = remote_goal_backright_;
+    } else {
+      isRemote_ = false;
+    }
+  }
+
 
   //========== 增加Astar 与 RRT =======================
   geometry_msgs::Twist getNarrowCommand();
@@ -631,6 +665,17 @@ private:
   void Retreat(sensor_msgs::PointCloud Input);
   void DistanceAroundandMirror(sensor_msgs::PointCloud Input);
   void goStraightObstacleDete(sensor_msgs::PointCloud Input);
+
+  bool isRemote_;
+  geometry_msgs::Point32 remote_goal_;
+  geometry_msgs::Point32 remote_goal_front_;
+  geometry_msgs::Point32 remote_goal_back_;
+  geometry_msgs::Point32 remote_goal_left_;
+  geometry_msgs::Point32 remote_goal_right_;
+  geometry_msgs::Point32 remote_goal_frontleft_;
+  geometry_msgs::Point32 remote_goal_frontright_;
+  geometry_msgs::Point32 remote_goal_backleft_;
+  geometry_msgs::Point32 remote_goal_backright_;
 
 
 

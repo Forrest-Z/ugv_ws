@@ -25,6 +25,7 @@ enum class AutoState
   NOMAP,
   WAIT,
   ROTATION,
+  REMOTE,
 };
 
 enum class AUTO

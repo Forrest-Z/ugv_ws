@@ -1,4 +1,4 @@
-max_linear_velocity 1.5
+max_linear_velocity 0.8
 max_rotation_velocity 0.8
 
 max_linear_acceleration 0.015
@@ -34,4 +34,4 @@ spline_costmap_resolution 0.1
 RRT_costmap_resolution 0.1
 spline_map_window_radius 4
 RRT_map_window_radius 8
-spline_expand_size 3
+spline_expand_size 2

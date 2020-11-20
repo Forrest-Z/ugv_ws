@@ -122,8 +122,33 @@ bool MissionControl::Initialization() {
   temp_max_linear_acceleration_ = max_linear_acceleration_;
 
   RRT_refind_ = false;
+  isRemote_ = false;
 
   initLift();
+
+  remote_goal_front_.x = spline_map_window_radius_;
+  remote_goal_front_.y = 0;
+
+  remote_goal_back_.x = -spline_map_window_radius_;
+  remote_goal_back_.y = 0;
+
+  remote_goal_left_.x = 0;
+  remote_goal_left_.y = spline_map_window_radius_;
+
+  remote_goal_right_.x = 0;
+  remote_goal_right_.y = -spline_map_window_radius_;
+
+  remote_goal_frontleft_.x = spline_map_window_radius_;
+  remote_goal_frontleft_.y = spline_map_window_radius_;
+
+  remote_goal_frontright_.x = spline_map_window_radius_;
+  remote_goal_frontright_.y = -spline_map_window_radius_;
+
+  remote_goal_backleft_.x = -spline_map_window_radius_;
+  remote_goal_backleft_.y = spline_map_window_radius_;
+
+  remote_goal_backright_.x = -spline_map_window_radius_;
+  remote_goal_backright_.y = -spline_map_window_radius_;
 
   return(true);
 }
@@ -188,6 +213,7 @@ void MissionControl::Execute() {
       vehicle_run_state_1st_.data = "step1: mission_state was NARROW.";
       ApplyNarrowControl(mission_state);
       continue; 
+
     } 
     else if(mission_state == static_cast<int>(AutoState::ACTION)) {
       vehicle_run_state_1st_.data = "step1: mission_state was ACTION.";
@@ -213,7 +239,13 @@ void MissionControl::Execute() {
       vehicle_run_state_1st_.data = "step1: mission_state was ROTATION.";
       ApplyRotationControl(mission_state);
       continue; 
-    }  
+    }
+    else if(mission_state == static_cast<int>(AutoState::REMOTE)) {
+      vehicle_run_state_1st_.data = "step1: mission_state was REMOTE.";
+      ApplyRemoteControl(mission_state);
+      continue; 
+
+    }   
     else {
       cout << "Unknown Mission State" << endl;
       continue;
@@ -244,6 +276,7 @@ int MissionControl::DecisionMaker() {
     }
     return static_cast<int>(AutoState::LTE);
   }
+  if(isRemote_) return static_cast<int>(AutoState::REMOTE);
   if(checkMissionStage()){ 
     // if(auto_state_global_ == 1) return static_cast<int>(AutoState::NOMAP);
     // else if(auto_state_global_ == 2) return static_cast<int>(AutoState::RELOCATION);
@@ -411,6 +444,26 @@ void MissionControl::ApplyRotationControl(int mission_state) {
   publishInfo();
 }
 
+void MissionControl::ApplyRemoteControl(int mission_state) {
+  geometry_msgs::Twist safe_cmd;
+  if(!setAutoCoefficient(1,spline_costmap_resolution_,spline_map_window_radius_)) return;
+  if(!UpdateVehicleLocation()) {
+    cout << "Update Vehicle Location Failed" << endl;
+    return;
+  }
+  if(!MyPlanner_.UpdateCostmap(obstacle_in_base_)) {
+    cout << "Update Costmap Failed" << endl;
+    return;
+  }
+  local_costmap_pub.publish(MyPlanner_.costmap_local());
+  geometry_msgs::Twist raw_cmd = getRemoteCommand();
+  MySuperviser_.AutoObstaclePercept(obstacle_in_base_,MyTools_.cmd_vel());
+  checkCommandSafety(raw_cmd,safe_cmd,mission_state);
+  createCommandInfo(safe_cmd);
+  publishInfo();
+  publishCommand();
+}
+
 geometry_msgs::Twist MissionControl::getAutoCommand() {
   geometry_msgs::Twist controller_cmd;
   static bool last_plan_state = true;
@@ -526,6 +579,38 @@ geometry_msgs::Twist MissionControl::getNarrowCommand() {
       controller_cmd = PursuitRRTPathCommand();
     }    
   }
+  return controller_cmd;
+}
+
+geometry_msgs::Twist MissionControl::getRemoteCommand() {
+  geometry_msgs::Twist controller_cmd;
+
+  int path_lookahead_index;
+  double search_range = MyPlanner_.map_window_radius();
+  double search_range_min = 2;
+  double iteration_scale = 0.5;
+
+  while(search_range >= search_range_min) {
+    if(MyPlanner_.GenerateCandidatePlan(remote_goal_,obstacle_in_base_,search_range)) break;
+    else search_range *= iteration_scale;
+  }
+
+  if(search_range < search_range_min) {
+    path_lookahead_index = 0;
+  } else {
+    path_lookahead_index = MyPlanner_.sub_2_path_best().points.size()/lookahead_local_scale_;
+  }
+
+  if(MyPlanner_.sub_2_path_best().points.size() <= 0) {
+    controller_cmd.linear.x = 0.1;
+    controller_cmd.angular.z = 0;
+    return controller_cmd;
+  }
+
+  local_sub_goal_ = MyPlanner_.sub_2_path_best().points[path_lookahead_index];
+  MyController_.ComputePurePursuitCommand(remote_goal_,local_sub_goal_,controller_cmd);
+  cout << "remote_goal_ : " << remote_goal_.x << "," << remote_goal_.y << endl;
+
   return controller_cmd;
 }
 
