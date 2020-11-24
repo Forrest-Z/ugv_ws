@@ -1,5 +1,5 @@
 max_linear_velocity 0.8
-max_rotation_velocity 0.8
+max_rotation_velocity 1.5
 
 max_linear_acceleration 0.015
 max_rotation_acceleration 0.05
@@ -8,7 +8,7 @@ max_translational_velocity 1.5
 min_translational_velocity 0.1
 
 controller_linear_scale 1.5
-controller_rotation_scale 1.2
+controller_rotation_scale 4
 vehicle_radius 0.3
 
 Astar_local_map_window_radius 30
@@ -18,9 +18,9 @@ RRT_extend_step 0.2
 RRT_search_plan_num 1
 RRT_expand_size 3
 
-limit_danger_radius 0.35
-min_danger_longth 0.35
-min_danger_width 0.25
+limit_danger_radius 0.4
+min_danger_longth 0.4
+min_danger_width 0.3
 limit_route_radius 5
 limit_predict_radius 10
 buffer_radius 1
@@ -34,4 +34,4 @@ spline_costmap_resolution 0.1
 RRT_costmap_resolution 0.1
 spline_map_window_radius 4
 RRT_map_window_radius 8
-spline_expand_size 2
+spline_expand_size 3
