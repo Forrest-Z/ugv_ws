@@ -324,7 +324,8 @@ private:
     MySuperviser_.set_danger_assist_radius(danger_assist_radius_);
     
     lookahead_global_meter_ = 5;
-    lookahead_local_scale_ = 3.5;
+    // lookahead_local_scale_ = 3.5;
+    lookahead_local_scale_ = 2.5;
     return true;
   }
 

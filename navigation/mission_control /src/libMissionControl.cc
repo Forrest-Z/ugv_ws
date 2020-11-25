@@ -1102,7 +1102,8 @@ void MissionControl::LimitCommand(geometry_msgs::Twist& Cmd_vel,int mission_stat
     }
   }
 
-  if(mission_state == static_cast<int>(AutoState::AUTO) || mission_state == static_cast<int>(AutoState::NARROW)) {
+  if(mission_state == static_cast<int>(AutoState::AUTO) || mission_state == static_cast<int>(AutoState::NARROW) 
+                                                        || mission_state == static_cast<int>(AutoState::REMOTE)) {
     if(MySuperviser_.DangerObstaclepPercept()) {
       Cmd_vel.linear.x = last_cmd_vel.linear.x - 6 * max_linear_acceleration_; 
       if(Cmd_vel.linear.x < 0) Cmd_vel.linear.x = 0;

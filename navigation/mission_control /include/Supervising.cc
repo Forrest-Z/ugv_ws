@@ -181,15 +181,15 @@ void Supervising::AutoObstaclePercept(sensor_msgs::PointCloud obstacle_in_base, 
     else if(first_quadrant_num == fourth_quadrant_num) back_turn = 0;
     
     
-    // cout << "danger_num :" << danger_num << endl;
-    // cout << "route_outside_num :" << route_outside_num << endl;
-    // cout << "predict_outside_num :" << predict_outside_num << endl;
-    // cout << "buffer_num :" << buffer_num << endl;
-    // cout << "front_safe_num :" << front_safe_num << endl;
-    // cout << "first_quadrant_num :" << first_quadrant_num << endl;
-    // cout << "fourth_quadrant_num :" << fourth_quadrant_num << endl;
-    // cout << "revolute_safe_num :" << revolute_safe_num << endl;
-    // cout << "danger_assist_num :" << danger_assist_num << endl;
+    cout << "danger_num :" << danger_num << endl;
+    cout << "route_outside_num :" << route_outside_num << endl;
+    cout << "predict_outside_num :" << predict_outside_num << endl;
+    cout << "buffer_num :" << buffer_num << endl;
+    cout << "front_safe_num :" << front_safe_num << endl;
+    cout << "first_quadrant_num :" << first_quadrant_num << endl;
+    cout << "fourth_quadrant_num :" << fourth_quadrant_num << endl;
+    cout << "revolute_safe_num :" << revolute_safe_num << endl;
+    cout << "danger_assist_num :" << danger_assist_num << endl;
 
     auto_area_state_[0] = danger_num;
     auto_area_state_[1] = danger_assist_num;
