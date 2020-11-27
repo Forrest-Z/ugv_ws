@@ -586,7 +586,7 @@ geometry_msgs::Twist MissionControl::getRemoteCommand() {
   geometry_msgs::Twist controller_cmd;
 
   int path_lookahead_index;
-  double search_range = MyPlanner_.map_window_radius();
+  double search_range = MyPlanner_.map_window_radius()/2;
   double search_range_min = 2;
   double iteration_scale = 0.5;
 
