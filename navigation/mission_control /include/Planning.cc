@@ -1685,7 +1685,8 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
   sub_1_path_best_.points.clear();
   sub_2_path_best_.points.clear();
   
-  double goal_weight = 3;
+  double goal_weight = 1;
+  double middle_weight = 1.2;
   static int last_index = -1;
   int optimal_index;
   bool isLastEnable = false;
@@ -1697,13 +1698,50 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
   if(path_safe_set_.empty()) return false;
 
   // compute path group cost, choose max_feasible_pro fist group path
+  int costmap_size = costmap_local_.info.width * costmap_local_.info.height;
+  int check_around = 10;
+  double left_distance_min = 1;
+  double right_distance_min = 1;
+  vector<double> middle_cost(spline_array_num_,0);
+  vector<double> goal_cost(spline_array_num_,0);
+  double middle_cost_sum = 0; // 归一化处理
+  double goal_cost_sum = 0; // 归一化处理
+
   for(int i = 0; i < path_safe_set_.size(); i++) {
     int path_1st_group_index = path_safe_set_[i].path_id / (spline_2nd_level_*spline_3rd_level_);
+
+    geometry_msgs::Point32 middle_point = path_safe_set_[i].path_pointcloud.points[path_safe_set_[i].path_pointcloud.points.size()/2];
+    int check_id = ConvertCartesianToLocalOccupany(costmap_local_,middle_point);
+    for(int j = check_id; j < check_id+check_around*costmap_local_.info.width; j = j + costmap_local_.info.width) {
+      if(j >= costmap_size || j < 0) break;
+      if(costmap_local_.data[j] > 20) {
+        left_distance_min = (j-check_id)/costmap_local_.info.width * costmap_local_.info.resolution;
+        break;
+      }
+    }
+
+    for(int k = check_id; k < check_id-check_around*costmap_local_.info.width; k = k - costmap_local_.info.width) {
+      if(k >= costmap_size || k < 0) break;
+      if(costmap_local_.data[k] > 20) {
+        right_distance_min = (k-check_id)/costmap_local_.info.width * costmap_local_.info.resolution;
+        break;
+      }
+    }
+
+    double middle_distance_min = left_distance_min > right_distance_min ? right_distance_min : left_distance_min,middle_weight;
+    middle_cost[path_1st_group_index] += pow(middle_distance_min,middle_weight);
+    middle_cost_sum += pow(middle_distance_min,1);
+    
     geometry_msgs::Point32 candidate_point = path_safe_set_[i].path_pointcloud.points.back();
     double path_goal_distance = hypot((candidate_point.y - Goal.y),(candidate_point.x - Goal.x));
-    path_cost[path_1st_group_index] += 1.0 / pow(path_goal_distance,goal_weight);
+    goal_cost[path_1st_group_index] += 1.0 / pow(path_goal_distance,goal_weight);
+    goal_cost_sum += 1.0 / pow(path_goal_distance,3);
   }
 
+  for(int m = 0; m < path_cost.size(); m++) {
+    path_cost[m] = middle_weight * middle_cost[m]/middle_cost_sum + goal_weight * goal_cost[m]/goal_cost_sum;
+    cout << m << " : " << middle_cost[m]/middle_cost_sum << "  " << goal_cost[m]/goal_cost_sum << "  " << path_cost[m] << endl;
+  }
 
   double max_feasible_prob = -1;
   for(int j = 0; j < path_cost.size(); j++) {

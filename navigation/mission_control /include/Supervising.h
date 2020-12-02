@@ -91,6 +91,8 @@ public:
     void set_danger_assist_radius(double Input) {danger_assist_radius = Input;}
     bool DangerObstaclepPercept() {return danger_obstacle_state_;}
 
+    bool getFrontSafe() {return front_safe;}
+
 private:
     geometry_msgs::Point32 revolute_pose_;
     vector<geometry_msgs::Point32> vehicle_pose_que;         //相邻两个路径点之间的实时路径

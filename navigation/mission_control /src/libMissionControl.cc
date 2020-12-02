@@ -139,10 +139,10 @@ bool MissionControl::Initialization() {
   remote_goal_right_.y = -spline_map_window_radius_;
 
   remote_goal_frontleft_.x = spline_map_window_radius_;
-  remote_goal_frontleft_.y = spline_map_window_radius_;
+  remote_goal_frontleft_.y = spline_map_window_radius_/2;
 
   remote_goal_frontright_.x = spline_map_window_radius_;
-  remote_goal_frontright_.y = -spline_map_window_radius_;
+  remote_goal_frontright_.y = -spline_map_window_radius_/2;
 
   remote_goal_backleft_.x = -spline_map_window_radius_;
   remote_goal_backleft_.y = spline_map_window_radius_;
@@ -456,8 +456,8 @@ void MissionControl::ApplyRemoteControl(int mission_state) {
     return;
   }
   local_costmap_pub.publish(MyPlanner_.costmap_local());
-  geometry_msgs::Twist raw_cmd = getRemoteCommand();
   MySuperviser_.AutoObstaclePercept(obstacle_in_base_,MyTools_.cmd_vel());
+  geometry_msgs::Twist raw_cmd = getRemoteCommand();
   checkCommandSafety(raw_cmd,safe_cmd,mission_state);
   createCommandInfo(safe_cmd);
   publishInfo();
@@ -586,7 +586,7 @@ geometry_msgs::Twist MissionControl::getRemoteCommand() {
   geometry_msgs::Twist controller_cmd;
 
   int path_lookahead_index;
-  double search_range = MyPlanner_.map_window_radius()/2;
+  double search_range = MyPlanner_.map_window_radius();
   double search_range_min = 2;
   double iteration_scale = 0.5;
 
@@ -598,6 +598,8 @@ geometry_msgs::Twist MissionControl::getRemoteCommand() {
   if(search_range < search_range_min) {
     path_lookahead_index = 0;
   } else {
+    if(MySuperviser_.getFrontSafe()) lookahead_local_scale_ = 5;
+    else lookahead_local_scale_ = 2;
     path_lookahead_index = MyPlanner_.sub_2_path_best().points.size()/lookahead_local_scale_;
   }
 
@@ -609,7 +611,7 @@ geometry_msgs::Twist MissionControl::getRemoteCommand() {
 
   local_sub_goal_ = MyPlanner_.sub_2_path_best().points[path_lookahead_index];
   MyController_.ComputePurePursuitCommand(remote_goal_,local_sub_goal_,controller_cmd);
-  cout << "remote_goal_ : " << remote_goal_.x << "," << remote_goal_.y << endl;
+  cout << "lookahead_local_scale_ : " << lookahead_local_scale_ << endl;
 
   return controller_cmd;
 }
