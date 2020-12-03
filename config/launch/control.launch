@@ -14,8 +14,8 @@
 
    <node pkg="map_server" type="map_server" name="map_server_node_show" args="$(find config)/map/show.yaml" output="screen">
     <remap from="map" to="map_navi"/>
-  </node> -->
+  </node>
 
-  <!-- <node pkg="rviz" type="rviz" name="rviz_navi" output="screen" args="-d $(find config)/cfg/rviz_config.rviz" /> -->
+  <node pkg="rviz" type="rviz" name="rviz_navi" output="screen" args="-d $(find config)/cfg/rviz_config.rviz" /> -->
 
 </launch>

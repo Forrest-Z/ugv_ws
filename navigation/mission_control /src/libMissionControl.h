@@ -576,34 +576,22 @@ private:
     planner_manual_state_ = true;
   }
 
-  void RemoteControlCallback(const std_msgs::Int32MultiArray::ConstPtr& Input) {
-    if(Input->data[0]) {
-      isRemote_ = true;
-      remote_goal_ = remote_goal_front_;
-    } else if(Input->data[1]) {
-      isRemote_ = true;
-      remote_goal_ = remote_goal_back_;
-    } else if(Input->data[2]) {
-      isRemote_ = true;
-      remote_goal_ = remote_goal_left_;
-    } else if(Input->data[3]) {
-      isRemote_ = true;
-      remote_goal_ = remote_goal_right_;
-    } else if(Input->data[4]) {
-      isRemote_ = true;
-      remote_goal_ = remote_goal_frontleft_;
-    } else if(Input->data[5]) {
-      isRemote_ = true;
-      remote_goal_ = remote_goal_frontright_;
-    } else if(Input->data[6]) {
-      isRemote_ = true;
-      remote_goal_ = remote_goal_backleft_;
-    } else if(Input->data[7]) {
-      isRemote_ = true;
-      remote_goal_ = remote_goal_backright_;
-    } else {
-      isRemote_ = false;
-    }
+  void RemoteControlCallback(const std_msgs::String::ConstPtr& Input) {
+    int index = Input->data.find("&");
+    string head_str = Input->data.substr(0,index);
+    string end_str = Input->data.substr(index+1);
+
+    cout << "string: " << head_str << "  " << end_str << endl;
+
+    if(head_str == "1" && end_str == "UP") {isRemote_ = true;remote_goal_ = remote_goal_front_;}
+    if(head_str == "1" && end_str == "DOWN") {isRemote_ = true;remote_goal_ = remote_goal_back_;}
+    if(head_str == "1" && end_str == "LEFT") {isRemote_ = true;remote_goal_ = remote_goal_left_;}
+    if(head_str == "1" && end_str == "RIGHT") {isRemote_ = true;remote_goal_ = remote_goal_right_;}
+    if(head_str == "1" && end_str == "UPLEFT") {isRemote_ = true;remote_goal_ = remote_goal_frontleft_;}
+    if(head_str == "1" && end_str == "UPRIGHT") {isRemote_ = true;remote_goal_ = remote_goal_frontright_;}
+    if(head_str == "1" && end_str == "DOWNLEFT") {isRemote_ = true;remote_goal_ = remote_goal_backleft_;}
+    if(head_str == "1" && end_str == "DOWNRIGHT") {isRemote_ = true;remote_goal_ = remote_goal_backright_;}
+
   }
 
 

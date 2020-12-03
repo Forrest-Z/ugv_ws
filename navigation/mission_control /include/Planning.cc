@@ -1729,18 +1729,23 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
     }
 
     double middle_distance_min = left_distance_min > right_distance_min ? right_distance_min : left_distance_min,middle_weight;
-    middle_cost[path_1st_group_index] += pow(middle_distance_min,middle_weight);
+    middle_cost[path_1st_group_index] += pow(middle_distance_min,1);
     middle_cost_sum += pow(middle_distance_min,1);
     
     geometry_msgs::Point32 candidate_point = path_safe_set_[i].path_pointcloud.points.back();
     double path_goal_distance = hypot((candidate_point.y - Goal.y),(candidate_point.x - Goal.x));
-    goal_cost[path_1st_group_index] += 1.0 / pow(path_goal_distance,goal_weight);
-    goal_cost_sum += 1.0 / pow(path_goal_distance,3);
+    if(path_goal_distance == 0) path_goal_distance = pow(10,-10);
+
+    goal_cost[path_1st_group_index] += 1.0 / pow(path_goal_distance,1);
+    goal_cost_sum += 1.0 / pow(path_goal_distance,1);
+
+    
   }
 
   for(int m = 0; m < path_cost.size(); m++) {
-    path_cost[m] = middle_weight * middle_cost[m]/middle_cost_sum + goal_weight * goal_cost[m]/goal_cost_sum;
-    cout << m << " : " << middle_cost[m]/middle_cost_sum << "  " << goal_cost[m]/goal_cost_sum << "  " << path_cost[m] << endl;
+    // path_cost[m] = middle_weight * middle_cost[m]/middle_cost_sum + goal_weight * goal_cost[m]/goal_cost_sum;
+    path_cost[m] = goal_weight * goal_cost[m]/goal_cost_sum;
+    // cout << m << " : " << middle_cost[m]/middle_cost_sum << "  " << goal_cost[m]/goal_cost_sum << "  " << path_cost[m] << endl;
   }
 
   double max_feasible_prob = -1;

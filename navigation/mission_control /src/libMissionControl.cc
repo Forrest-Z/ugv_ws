@@ -15,7 +15,7 @@ MissionControl::MissionControl():pn("~") {
   map_number_sub = n.subscribe("map_number",1, &MissionControl::MapNumberCallback,this);
 
   scan_sub = n.subscribe("/lidar_scan",1, &MissionControl::ScanCallback,this);
-  remote_control_sub = n.subscribe("/remote_control",1, &MissionControl::RemoteControlCallback,this);
+  remote_control_sub = n.subscribe("/keyboard_control",1, &MissionControl::RemoteControlCallback,this);
 
   cmd_vel_pub = n.advertise<geometry_msgs::Twist> ("husky_velocity_controller/cmd_vel", 1);
   path_pred_pub = n.advertise<sensor_msgs::PointCloud>("pred_path",1);
@@ -126,28 +126,28 @@ bool MissionControl::Initialization() {
 
   initLift();
 
-  remote_goal_front_.x = spline_map_window_radius_;
+  remote_goal_front_.x = 2*spline_map_window_radius_;
   remote_goal_front_.y = 0;
 
-  remote_goal_back_.x = -spline_map_window_radius_;
+  remote_goal_back_.x = -2*spline_map_window_radius_;
   remote_goal_back_.y = 0;
 
   remote_goal_left_.x = 0;
-  remote_goal_left_.y = spline_map_window_radius_;
+  remote_goal_left_.y = 2*spline_map_window_radius_;
 
   remote_goal_right_.x = 0;
-  remote_goal_right_.y = -spline_map_window_radius_;
+  remote_goal_right_.y = -2*spline_map_window_radius_;
 
-  remote_goal_frontleft_.x = spline_map_window_radius_;
-  remote_goal_frontleft_.y = spline_map_window_radius_/2;
+  remote_goal_frontleft_.x = 2*spline_map_window_radius_;
+  remote_goal_frontleft_.y = spline_map_window_radius_;
 
-  remote_goal_frontright_.x = spline_map_window_radius_;
-  remote_goal_frontright_.y = -spline_map_window_radius_/2;
+  remote_goal_frontright_.x = 2*spline_map_window_radius_;
+  remote_goal_frontright_.y = -spline_map_window_radius_;
 
-  remote_goal_backleft_.x = -spline_map_window_radius_;
+  remote_goal_backleft_.x = -2*spline_map_window_radius_;
   remote_goal_backleft_.y = spline_map_window_radius_;
 
-  remote_goal_backright_.x = -spline_map_window_radius_;
+  remote_goal_backright_.x = -2*spline_map_window_radius_;
   remote_goal_backright_.y = -spline_map_window_radius_;
 
   return(true);
@@ -445,6 +445,7 @@ void MissionControl::ApplyRotationControl(int mission_state) {
 }
 
 void MissionControl::ApplyRemoteControl(int mission_state) {
+  ros::Time last_auto_time = ros::Time::now();
   geometry_msgs::Twist safe_cmd;
   if(!setAutoCoefficient(1,spline_costmap_resolution_,spline_map_window_radius_)) return;
   if(!UpdateVehicleLocation()) {
@@ -462,6 +463,8 @@ void MissionControl::ApplyRemoteControl(int mission_state) {
   createCommandInfo(safe_cmd);
   publishInfo();
   publishCommand();
+  ros::Time now_auto_time = ros::Time::now();
+  if(plan_state_) cout << "spline plan search time : " << (now_auto_time.nsec - last_auto_time.nsec) * pow(10,-6) << "ms" << endl;
 }
 
 geometry_msgs::Twist MissionControl::getAutoCommand() {
@@ -590,6 +593,8 @@ geometry_msgs::Twist MissionControl::getRemoteCommand() {
   double search_range_min = 2;
   double iteration_scale = 0.5;
 
+  // cout << "remote_goal_ : " << remote_goal_.x << " " << remote_goal_.y << endl;
+  ros::Time last_auto_time = ros::Time::now();
   while(search_range >= search_range_min) {
     if(MyPlanner_.GenerateCandidatePlan(remote_goal_,obstacle_in_base_,search_range)) break;
     else search_range *= iteration_scale;
@@ -608,7 +613,8 @@ geometry_msgs::Twist MissionControl::getRemoteCommand() {
     controller_cmd.angular.z = 0;
     return controller_cmd;
   }
-
+  ros::Time now_auto_time = ros::Time::now();
+  // cout << "spline plan search time : " << (now_auto_time.nsec - last_auto_time.nsec) * pow(10,-6) << "ms" << endl;
   local_sub_goal_ = MyPlanner_.sub_2_path_best().points[path_lookahead_index];
   MyController_.ComputePurePursuitCommand(remote_goal_,local_sub_goal_,controller_cmd);
   cout << "lookahead_local_scale_ : " << lookahead_local_scale_ << endl;
