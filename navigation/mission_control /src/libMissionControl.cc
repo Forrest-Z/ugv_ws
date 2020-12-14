@@ -125,32 +125,16 @@ bool MissionControl::Initialization() {
   isRemote_ = false;
 
   initLift();
-
-  remote_goal_front_.x = 2*spline_map_window_radius_;
-  remote_goal_front_.y = 0;
-
-  remote_goal_back_.x = -2*spline_map_window_radius_;
-  remote_goal_back_.y = 0;
-
-  remote_goal_left_.x = 0;
-  remote_goal_left_.y = 2*spline_map_window_radius_;
-
-  remote_goal_right_.x = 0;
-  remote_goal_right_.y = -2*spline_map_window_radius_;
-
-  remote_goal_frontleft_.x = 2*spline_map_window_radius_;
-  remote_goal_frontleft_.y = spline_map_window_radius_;
-
-  remote_goal_frontright_.x = 2*spline_map_window_radius_;
-  remote_goal_frontright_.y = -spline_map_window_radius_;
-
-  remote_goal_backleft_.x = -2*spline_map_window_radius_;
-  remote_goal_backleft_.y = spline_map_window_radius_;
-
-  remote_goal_backright_.x = -2*spline_map_window_radius_;
-  remote_goal_backright_.y = -spline_map_window_radius_;
-
   return(true);
+
+  isRemoteFront_ = false; 
+  isRemoteBack_ = false; 
+  isRemoteLeft_ = true; 
+  isRemoteRight_ = false; 
+  isRemoteFrontLeft_ = false; 
+  isRemoteFrontRight_ = false; 
+  isRemoteBackLeft_ = false; 
+  isRemoteBackRight_ = false; 
 }
 
 
@@ -452,11 +436,7 @@ void MissionControl::ApplyRemoteControl(int mission_state) {
     cout << "Update Vehicle Location Failed" << endl;
     return;
   }
-  if(!MyPlanner_.UpdateCostmap(obstacle_in_base_)) {
-    cout << "Update Costmap Failed" << endl;
-    return;
-  }
-  local_costmap_pub.publish(MyPlanner_.costmap_local());
+
   MySuperviser_.AutoObstaclePercept(obstacle_in_base_,MyTools_.cmd_vel());
   geometry_msgs::Twist raw_cmd = getRemoteCommand();
   checkCommandSafety(raw_cmd,safe_cmd,mission_state);
@@ -481,38 +461,45 @@ geometry_msgs::Twist MissionControl::getAutoCommand() {
   ConvertPoint(global_sub_goal_,global_goal_in_local,map_to_base_);
 
   int path_lookahead_index;
-  double search_range = MyPlanner_.map_window_radius();
-  double search_range_min = 2;
-  double iteration_scale = 0.5;
+  double search_range = spline_map_window_radius_;
+  double search_range_min = 1;
+  double iteration_scale = 1;
 
   ros::Time last_auto_time = ros::Time::now();
   while(search_range >= search_range_min) {
-    if(MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_,search_range)) break;
-    else search_range *= iteration_scale;
+    MyPlanner_.set_map_window_radius(search_range);
+    if(!MyPlanner_.UpdateCostmap(obstacle_in_base_)) {
+      cout << "Update Costmap Failed" << endl;
+      return controller_cmd;
+    }
+    
+    if(MyPlanner_.GenerateCandidatePlan(global_goal_in_local,obstacle_in_base_,search_range)) {
+      local_costmap_pub.publish(MyPlanner_.costmap_local());
+      break;
+    }
+    else search_range-- ;
   }
 
   if(search_range < search_range_min) {
-    now_plan_state = false;
     path_lookahead_index = 0;
+    plan_state_ = false;
   } else {
+    plan_state_ = true;
+    if(MySuperviser_.getFrontSafe()) lookahead_local_scale_ = 5;
+    else lookahead_local_scale_ = 2;
     path_lookahead_index = MyPlanner_.sub_2_path_best().points.size()/lookahead_local_scale_;
-    now_plan_state = true;
   }
 
-  if((!last_plan_state) && (!now_plan_state)) plan_state_ = false;
-  else plan_state_ = true;
-
-  last_plan_state = now_plan_state;
-
+  if(MyPlanner_.sub_2_path_best().points.size() <= 0) {
+    controller_cmd.linear.x = 0.1;
+    controller_cmd.angular.z = 0;
+    return controller_cmd;
+  }
   ros::Time now_auto_time = ros::Time::now();
-  if(plan_state_) cout << "spline plan search time : " << (now_auto_time.nsec - last_auto_time.nsec) * pow(10,-6) << "ms" << endl;
-
-  cout << "plan_state_ : " << plan_state_ << endl;
-  if(MyPlanner_.sub_2_path_best().points.size() <= 0) return controller_cmd;
-  path_lookahead_index = MyPlanner_.sub_2_path_best().points.size()/lookahead_local_scale_;
-
+  cout << "spline plan search time : " << (now_auto_time.nsec - last_auto_time.nsec) * pow(10,-6) << "ms" << endl;
   local_sub_goal_ = MyPlanner_.sub_2_path_best().points[path_lookahead_index];
   MyController_.ComputePurePursuitCommand(global_goal_in_local,local_sub_goal_,controller_cmd);
+  // cout << "lookahead_local_scale_ : " << lookahead_local_scale_ << endl;
 
   return controller_cmd;
 }
@@ -589,15 +576,25 @@ geometry_msgs::Twist MissionControl::getRemoteCommand() {
   geometry_msgs::Twist controller_cmd;
 
   int path_lookahead_index;
-  double search_range = MyPlanner_.map_window_radius();
-  double search_range_min = 2;
-  double iteration_scale = 0.5;
+  double search_range = spline_map_window_radius_;
+  double search_range_min = 1;
+  double iteration_scale = 1;
 
   // cout << "remote_goal_ : " << remote_goal_.x << " " << remote_goal_.y << endl;
   ros::Time last_auto_time = ros::Time::now();
   while(search_range >= search_range_min) {
-    if(MyPlanner_.GenerateCandidatePlan(remote_goal_,obstacle_in_base_,search_range)) break;
-    else search_range *= iteration_scale;
+    MyPlanner_.set_map_window_radius(search_range);
+    if(!MyPlanner_.UpdateCostmap(obstacle_in_base_)) {
+      cout << "Update Costmap Failed" << endl;
+      return controller_cmd;
+    }
+    
+    setRemoteGoal(search_range);
+    if(MyPlanner_.GenerateCandidatePlan(remote_goal_,obstacle_in_base_,search_range)) {
+      local_costmap_pub.publish(MyPlanner_.costmap_local());
+      break;
+    }
+    else search_range-- ;
   }
 
   if(search_range < search_range_min) {
@@ -1154,9 +1151,13 @@ bool MissionControl::ReadConfig() {
 
   std::string Spline_folder = config_folder_;
   std::string Spline_name = "/cfg/map_to_path_4m";
-  std::string Spline_name_1st = "/cfg/map_to_path_2m";
+  std::string Spline_name_1st = "/cfg/map_to_path_1m";
+  std::string Spline_name_2nd = "/cfg/map_to_path_2m";
+  std::string Spline_name_3rd = "/cfg/map_to_path_3m";
   MyPlanner_.InitSplineCurve(Spline_folder,Spline_name);
   MyPlanner_.InitSplineCurve1st(Spline_folder,Spline_name_1st);
+  MyPlanner_.InitSplineCurve2nd(Spline_folder,Spline_name_2nd);
+  MyPlanner_.InitSplineCurve3rd(Spline_folder,Spline_name_3rd);
   
   yaml_file.open(file_name_node);
   if(!yaml_file.is_open()) {

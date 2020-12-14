@@ -27,10 +27,34 @@ bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::Po
   if(path_window_radius_ <= 0) return false;
   if(path_window_radius_ > map_window_radius_) return false;
 
-  if(Path_Radius < 4) {
+  if(Path_Radius == 1) {
     ComputeSafePath(costmap_local_,path_set_1_,map_to_path_1_);
     path_result = SelectBestPath(Goal);
-  } else {
+  }
+  else if(Path_Radius == 2) {
+    ComputeSafePath(costmap_local_,path_set_2_,map_to_path_2_);
+    path_result = SelectBestPath(Goal);
+  }
+  else if(Path_Radius == 3) {
+    ComputeSafePath(costmap_local_,path_set_3_,map_to_path_3_);
+    path_result = SelectBestPath(Goal);
+
+    // Large angle low speed control
+    // if(path_result) {
+    //   geometry_msgs::Point32 sub_goal;
+    //   sub_goal.x = sub_2_path_best_.points[sub_2_path_best_.points.size()/4].x;
+    //   sub_goal.y = sub_2_path_best_.points[sub_2_path_best_.points.size()/4].y;
+
+    //   double goal_distance = hypot(Goal.x,Goal.y);
+    //   double sub_goal_distance = hypot(sub_goal.x,sub_goal.y);
+    //   double goal_to_subgoal_distance = hypot(Goal.x-sub_goal.x,Goal.y-sub_goal.y);
+
+    //   double between_goal_angle = acos((pow(goal_distance,2)+pow(sub_goal_distance,2)-pow(goal_to_subgoal_distance,2)) / (2*goal_distance*sub_goal_distance));
+
+    //   if(between_goal_angle > PI/4) path_result = false;
+    // }
+  }  
+  else {
     ComputeSafePath(costmap_local_,path_set_,map_to_path_);
     path_result = SelectBestPath(Goal);
 
@@ -48,7 +72,7 @@ bool Planning::GenerateCandidatePlan(geometry_msgs::Point32 Goal,sensor_msgs::Po
       if(between_goal_angle > PI/4) path_result = false;
     }
   }
-  cout << "sub_2_path_best_.points " << sub_2_path_best_.points.size() << endl;
+  // cout << "sub_2_path_best_.points " << sub_2_path_best_.points.size() << endl;
 
   mtx_radius_.unlock();
   
@@ -1359,6 +1383,28 @@ void Planning::InitSplineCurve1st(string Spline_folder,string Spline_name) {
   if(!ReadAdjacentListTXT(Spline_folder,Spline_name,map_to_path_1_)) return;
 }
 
+void Planning::InitSplineCurve2nd(string Spline_folder,string Spline_name) {
+  joints_set_.clear();
+  path_set_2_.clear();
+
+  InitLocalCostmap(costmap_local_);
+  GenerateSplinesJoints(joints_set_,path_window_radius_2_);
+  GenerateSplinesPath(path_set_2_,joints_set_);
+  GenerateRevoluteSplinePath(path_set_2_);
+  if(!ReadAdjacentListTXT(Spline_folder,Spline_name,map_to_path_2_)) return;
+}
+
+void Planning::InitSplineCurve3rd(string Spline_folder,string Spline_name) {
+  joints_set_.clear();
+  path_set_3_.clear();
+
+  InitLocalCostmap(costmap_local_);
+  GenerateSplinesJoints(joints_set_,path_window_radius_3_);
+  GenerateSplinesPath(path_set_3_,joints_set_);
+  GenerateRevoluteSplinePath(path_set_3_);
+  if(!ReadAdjacentListTXT(Spline_folder,Spline_name,map_to_path_3_)) return;
+}
+
 void Planning::GenerateSplinesJoints(vector<sensor_msgs::PointCloud>& Output,double Path_Radius) {
   Output.clear();
   const int temp_splines_joints_num = 3;
@@ -1675,7 +1721,7 @@ void Planning::ComputeSafePath(nav_msgs::OccupancyGrid Cost_map,vector<PathGroup
       path_safe_set_.push_back(temp_path_group);
     }
   }
-  cout << "path_safe_set_.size() : " << path_safe_set_.size() << endl;
+  // cout << "path_safe_set_.size() : " << path_safe_set_.size() << endl;
   return;
 }
 
@@ -1686,7 +1732,7 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
   sub_2_path_best_.points.clear();
   
   double goal_weight = 1;
-  double middle_weight = 1.2;
+  double middle_weight = 0.8;
   static int last_index = -1;
   int optimal_index;
   bool isLastEnable = false;
@@ -1710,6 +1756,7 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
   for(int i = 0; i < path_safe_set_.size(); i++) {
     int path_1st_group_index = path_safe_set_[i].path_id / (spline_2nd_level_*spline_3rd_level_);
 
+    // 增加路径中间点空旷度的权重,查找横向最短障碍物距离,最长为1
     geometry_msgs::Point32 middle_point = path_safe_set_[i].path_pointcloud.points[path_safe_set_[i].path_pointcloud.points.size()/2];
     int check_id = ConvertCartesianToLocalOccupany(costmap_local_,middle_point);
     for(int j = check_id; j < check_id+check_around*costmap_local_.info.width; j = j + costmap_local_.info.width) {
@@ -1732,20 +1779,31 @@ bool Planning::SelectBestPath(geometry_msgs::Point32 Goal) {
     middle_cost[path_1st_group_index] += pow(middle_distance_min,1);
     middle_cost_sum += pow(middle_distance_min,1);
     
+    // 增加goal目标点权重,朝向角在45°范围内权重为N倍
     geometry_msgs::Point32 candidate_point = path_safe_set_[i].path_pointcloud.points.back();
+    double candidate_distance = hypot(candidate_point.x,candidate_point.y);
     double path_goal_distance = hypot((candidate_point.y - Goal.y),(candidate_point.x - Goal.x));
     if(path_goal_distance == 0) path_goal_distance = pow(10,-10);
 
-    goal_cost[path_1st_group_index] += 1.0 / pow(path_goal_distance,1);
-    goal_cost_sum += 1.0 / pow(path_goal_distance,1);
+    double goal_distance = hypot(Goal.x,Goal.y);
+    double face_goal_angle = acos((pow(goal_distance,2)+pow(candidate_distance,2)-pow(path_goal_distance,2)) / (2*goal_distance*candidate_distance));
+
+    if(face_goal_angle <= PI/4) {
+      goal_cost[path_1st_group_index] += 1.0 / pow(path_goal_distance,1);
+      goal_cost_sum += 1.0 / pow(path_goal_distance,1);
+    } else {
+      goal_cost[path_1st_group_index] += 1.0 / pow(path_goal_distance,3);
+      goal_cost_sum += 1.0 / pow(path_goal_distance,3);     
+    }
 
     
   }
 
   for(int m = 0; m < path_cost.size(); m++) {
-    // path_cost[m] = middle_weight * middle_cost[m]/middle_cost_sum + goal_weight * goal_cost[m]/goal_cost_sum;
-    path_cost[m] = goal_weight * goal_cost[m]/goal_cost_sum;
-    // cout << m << " : " << middle_cost[m]/middle_cost_sum << "  " << goal_cost[m]/goal_cost_sum << "  " << path_cost[m] << endl;
+    path_cost[m] = middle_weight * middle_cost[m]/middle_cost_sum + goal_weight * goal_cost[m]/goal_cost_sum;
+    // path_cost[m] = goal_weight * goal_cost[m]/goal_cost_sum;
+    // cout << m << " : " << goal_cost[m] << "  " << path_cost[m] << endl;
+    cout << m << " : " << middle_cost[m]/middle_cost_sum << "  " << goal_cost[m]/goal_cost_sum << "  " << path_cost[m] << endl;
   }
 
   double max_feasible_prob = -1;

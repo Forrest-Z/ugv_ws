@@ -97,7 +97,9 @@ public:
 		spline_height_                = 0;
   	id_num_                       = 0;
 		path_window_radius_						= 4;
-		path_window_radius_1_					= 2;
+		path_window_radius_1_					= 1;
+		path_window_radius_2_					= 2;
+		path_window_radius_3_					= 3;
 		spline_expand_size_ 					= 1;
 
 
@@ -216,6 +218,8 @@ public:
 	void GenerateSplinesPath(vector<PathGroup>& Path_set,vector<sensor_msgs::PointCloud> Joints);
 	void InitSplineCurve(string Spline_folder,string Spline_name);
 	void InitSplineCurve1st(string Spline_folder,string Spline_name);
+	void InitSplineCurve2nd(string Spline_folder,string Spline_name);
+	void InitSplineCurve3rd(string Spline_folder,string Spline_name);
 	sensor_msgs::PointCloud ConvertVectortoPointcloud(vector<PathGroup> Input);
 	void ExpandCostmap(nav_msgs::OccupancyGrid &Grid,int expand_size);
 
@@ -228,6 +232,8 @@ private:
 	/** Parameters **/
 	double path_window_radius_;
 	double path_window_radius_1_;
+	double path_window_radius_2_;
+	double path_window_radius_3_;
 	double map_window_radius_;
 	double path_swap_range_;
 	double path_vertical_step_;
@@ -255,8 +261,14 @@ private:
 	vector<PathToMap> path_to_map_;
 	vector<MapToPath> map_to_path_;
 	vector<MapToPath> map_to_path_1_;
+	vector<MapToPath> map_to_path_2_;
+	vector<MapToPath> map_to_path_3_;
+
 	vector<PathGroup> path_set_;
 	vector<PathGroup> path_set_1_;
+	vector<PathGroup> path_set_2_;
+	vector<PathGroup> path_set_3_;
+
 	vector<PathGroup> path_safe_set_;
 	vector<PathGroup> path_set_init_;
 	vector<sensor_msgs::PointCloud> joints_set_;

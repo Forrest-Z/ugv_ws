@@ -438,12 +438,12 @@ private:
       cout << "Update Vehicle Location Failed" << endl;
       return false;
     }
-    if(!MyPlanner_.UpdateCostmap(obstacle_in_base_)) {
-      cout << "Update Costmap Failed" << endl;
-      return false;
-    }
+    // if(!MyPlanner_.UpdateCostmap(obstacle_in_base_)) {
+    //   cout << "Update Costmap Failed" << endl;
+    //   return false;
+    // }
     
-    local_costmap_pub.publish(MyPlanner_.costmap_local());
+    // local_costmap_pub.publish(MyPlanner_.costmap_local());
     if(!CheckNavigationState()) {
       return false;
     }
@@ -583,14 +583,46 @@ private:
 
     cout << "string: " << head_str << "  " << end_str << endl;
 
-    if(head_str == "1" && end_str == "UP") {isRemote_ = true;remote_goal_ = remote_goal_front_;}
-    if(head_str == "1" && end_str == "DOWN") {isRemote_ = true;remote_goal_ = remote_goal_back_;}
-    if(head_str == "1" && end_str == "LEFT") {isRemote_ = true;remote_goal_ = remote_goal_left_;}
-    if(head_str == "1" && end_str == "RIGHT") {isRemote_ = true;remote_goal_ = remote_goal_right_;}
-    if(head_str == "1" && end_str == "UPLEFT") {isRemote_ = true;remote_goal_ = remote_goal_frontleft_;}
-    if(head_str == "1" && end_str == "UPRIGHT") {isRemote_ = true;remote_goal_ = remote_goal_frontright_;}
-    if(head_str == "1" && end_str == "DOWNLEFT") {isRemote_ = true;remote_goal_ = remote_goal_backleft_;}
-    if(head_str == "1" && end_str == "DOWNRIGHT") {isRemote_ = true;remote_goal_ = remote_goal_backright_;}
+    if(head_str == "1" && end_str == "UP") {
+      isRemote_ = true;
+      isRemoteFront_ = true; isRemoteBack_ = false; isRemoteLeft_ = false; isRemoteRight_ = false; 
+      isRemoteFrontLeft_ = false; isRemoteFrontRight_ = false; isRemoteBackLeft_ = false; isRemoteBackRight_ = false;
+    }
+    if(head_str == "1" && end_str == "DOWN") {
+      isRemote_ = true;
+      isRemoteFront_ = false; isRemoteBack_ = true; isRemoteLeft_ = false; isRemoteRight_ = false; 
+      isRemoteFrontLeft_ = false; isRemoteFrontRight_ = false; isRemoteBackLeft_ = false; isRemoteBackRight_ = false;
+    }
+    if(head_str == "1" && end_str == "LEFT") {
+      isRemote_ = true;
+      isRemoteFront_ = false; isRemoteBack_ = false; isRemoteLeft_ = true; isRemoteRight_ = false; 
+      isRemoteFrontLeft_ = false; isRemoteFrontRight_ = false; isRemoteBackLeft_ = false; isRemoteBackRight_ = false;      
+    }
+    if(head_str == "1" && end_str == "RIGHT") {
+      isRemote_ = true;
+      isRemoteFront_ = false; isRemoteBack_ = false; isRemoteLeft_ = false; isRemoteRight_ = true; 
+      isRemoteFrontLeft_ = false; isRemoteFrontRight_ = false; isRemoteBackLeft_ = false; isRemoteBackRight_ = false;      
+    }
+    if(head_str == "1" && end_str == "UPLEFT") {
+      isRemote_ = true;
+      isRemoteFront_ = false; isRemoteBack_ = false; isRemoteLeft_ = false; isRemoteRight_ = false; 
+      isRemoteFrontLeft_ = true; isRemoteFrontRight_ = false; isRemoteBackLeft_ = false; isRemoteBackRight_ = false;      
+    }
+    if(head_str == "1" && end_str == "UPRIGHT") {
+      isRemote_ = true;
+      isRemoteFront_ = false; isRemoteBack_ = false; isRemoteLeft_ = false; isRemoteRight_ = false; 
+      isRemoteFrontLeft_ = false; isRemoteFrontRight_ = true; isRemoteBackLeft_ = false; isRemoteBackRight_ = false;      
+    }
+    if(head_str == "1" && end_str == "DOWNLEFT") {
+      isRemote_ = true;
+      isRemoteFront_ = false; isRemoteBack_ = false; isRemoteLeft_ = false; isRemoteRight_ = false; 
+      isRemoteFrontLeft_ = false; isRemoteFrontRight_ = false; isRemoteBackLeft_ = true; isRemoteBackRight_ = false;      
+    }
+    if(head_str == "1" && end_str == "DOWNRIGHT") {
+      isRemote_ = true;
+      isRemoteFront_ = false; isRemoteBack_ = false; isRemoteLeft_ = false; isRemoteRight_ = false; 
+      isRemoteFrontLeft_ = false; isRemoteFrontRight_ = false; isRemoteBackLeft_ = false; isRemoteBackRight_ = true;      
+    }
 
   }
 
@@ -666,7 +698,51 @@ private:
   geometry_msgs::Point32 remote_goal_backleft_;
   geometry_msgs::Point32 remote_goal_backright_;
 
+  bool isRemoteFront_; 
+  bool isRemoteBack_; 
+  bool isRemoteLeft_; 
+  bool isRemoteRight_; 
+  
+  bool isRemoteFrontLeft_; 
+  bool isRemoteFrontRight_; 
+  bool isRemoteBackLeft_; 
+  bool isRemoteBackRight_; 
 
+  inline void setRemoteGoal(double Map_radius) {
+    // 目标点越接近样条终点,所带来goal的距离差异越大
+    remote_goal_front_.x = 2*Map_radius;
+    remote_goal_front_.y = 0;
+
+    remote_goal_back_.x = -2*Map_radius;
+    remote_goal_back_.y = 0;
+
+    remote_goal_left_.x = 0;
+    remote_goal_left_.y = 2*Map_radius;
+
+    remote_goal_right_.x = 0;
+    remote_goal_right_.y = -2*Map_radius;
+
+    remote_goal_frontleft_.x = 2*Map_radius;
+    remote_goal_frontleft_.y = 2*Map_radius;
+
+    remote_goal_frontright_.x = 2*Map_radius;
+    remote_goal_frontright_.y = -2*Map_radius;
+
+    remote_goal_backleft_.x = -2*Map_radius;
+    remote_goal_backleft_.y = 2*Map_radius;
+
+    remote_goal_backright_.x = -2*Map_radius;
+    remote_goal_backright_.y = -2*Map_radius;
+
+    if(isRemoteFront_) remote_goal_ = remote_goal_front_;
+    else if(isRemoteBack_) remote_goal_ = remote_goal_back_;
+    else if(isRemoteLeft_) remote_goal_ = remote_goal_left_;
+    else if(isRemoteRight_) remote_goal_ = remote_goal_right_;
+    else if(isRemoteFrontLeft_) remote_goal_ = remote_goal_frontleft_;
+    else if(isRemoteFrontRight_) remote_goal_ = remote_goal_frontright_;
+    else if(isRemoteBackLeft_) remote_goal_ = remote_goal_backleft_;
+    else if(isRemoteBackRight_) remote_goal_ = remote_goal_backright_;
+  }
 
 
 
